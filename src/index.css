@@ -1,0 +1,262 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIQUID GLASS (Verre Liquide Teinté Émeraude)
+   Translucent emerald-tinted surfaces, refractive specular reflections in emerald-200
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.liquid-glass {
+  background-color: rgba(52, 211, 153, 0.12);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25), 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.liquid-glass-subtle {
+  background-color: rgba(52, 211, 153, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(110, 231, 183, 0.25);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.30), inset 0 -2px 4px rgba(0, 0, 0, 0.20);
+}
+
+.liquid-glass-card {
+  background-color: rgba(52, 211, 153, 0.10);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(110, 231, 183, 0.28);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25), 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MICRO-INTERACTION FLUIDE DES VIGNETTES VIDÉOS (Hover Scale & Elevated Shadow)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.video-thumb-interactive {
+  transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 320ms cubic-bezier(0.16, 1, 0.3, 1),
+              filter 320ms ease;
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+}
+
+/* Micro-interaction au survol : léger agrandissement + ombre portée plus marquée */
+.video-thumb-interactive:hover,
+.group:hover .video-thumb-interactive,
+.group\/card:hover .video-thumb-interactive {
+  transform: translateY(-4px) scale(1.04);
+  box-shadow: 
+    0 22px 45px -8px rgba(0, 0, 0, 0.88),
+    0 12px 24px -6px rgba(0, 0, 0, 0.70),
+    0 0 28px 2px rgba(16, 185, 129, 0.25),
+    inset 0 1px 1.5px rgba(167, 243, 208, 0.50),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.25) !important;
+  border-color: rgba(110, 231, 183, 0.60) !important;
+  z-index: 20;
+}
+
+/* En thème clair : ombre portée profonde et nette */
+[data-theme="light"] .video-thumb-interactive:hover,
+[data-theme="light"] .group:hover .video-thumb-interactive,
+[data-theme="light"] .group\/card:hover .video-thumb-interactive {
+  box-shadow: 
+    0 22px 40px -8px rgba(15, 23, 42, 0.32),
+    0 10px 18px -4px rgba(15, 23, 42, 0.18),
+    0 0 22px 2px rgba(16, 185, 129, 0.20),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Zoom fluide et progressif de l'image de la vignette au survol */
+.video-thumb-interactive img {
+  transition: transform 450ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  will-change: transform;
+}
+
+.video-thumb-interactive:hover img,
+.group:hover .video-thumb-interactive img,
+.group\/card:hover .video-thumb-interactive img {
+  transform: scale(1.08);
+}
+
+/* Modal and heavy panels with high contrast backing while remaining liquid glass */
+.liquid-glass-modal {
+  background-color: rgba(10, 20, 16, 0.85);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid rgba(110, 231, 183, 0.32);
+  box-shadow: inset 0 1px 1.5px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.65);
+}
+
+.liquid-glass-dropdown {
+  background-color: rgba(12, 22, 18, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25), 0 16px 36px rgba(0, 0, 0, 0.5);
+}
+
+/* Emerald accent liquid glass */
+.liquid-glass-emerald {
+  background-color: rgba(52, 211, 153, 0.15) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(110, 231, 183, 0.35) !important;
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25) !important;
+  color: #a7f3d0 !important;
+}
+
+/* Form Inputs */
+.liquid-glass-input {
+  background-color: rgba(52, 211, 153, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(110, 231, 183, 0.28);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.25), inset 0 -1px 2px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.liquid-glass-input:focus {
+  background-color: rgba(52, 211, 153, 0.14);
+  border-color: rgba(110, 231, 183, 0.6);
+  box-shadow: inset 0 1px 1.5px rgba(167, 243, 208, 0.4), 0 0 0 2px rgba(16, 185, 129, 0.25);
+  outline: none;
+}
+
+/* Badges & Pills */
+.liquid-glass-badge {
+  background-color: rgba(52, 211, 153, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25);
+  color: #a7f3d0;
+}
+
+.liquid-glass-badge-emerald {
+  background-color: rgba(52, 211, 153, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25);
+  color: #a7f3d0;
+}
+
+.liquid-glass-badge-amber {
+  background-color: rgba(245, 158, 11, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(252, 211, 77, 0.30);
+  box-shadow: inset 0 1px 1px rgba(254, 240, 138, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25);
+  color: #fde68a;
+}
+
+/* ── Hide scrollbars globally across all elements while keeping scroll active ── */
+* {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+  width: 0px;
+  height: 0px;
+  background: transparent;
+}
+
+html, body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  overflow-x: hidden;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  height: 0px;
+}
+
+/* ── Light Mode Color Overrides & Adaptations ── */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Light Theme Styling for Containers, Headers and Typography */
+[data-theme="light"] [data-scroll-container] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] nav {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] nav a,
+[data-theme="light"] nav button,
+[data-theme="light"] nav span:not(.no-theme-override) {
+  color: #1e293b;
+}
+
+[data-theme="light"] footer {
+  background-color: #f1f5f9 !important;
+  border-top: 1px solid #e2e8f0 !important;
+  color: #64748b !important;
+}
+
+[data-theme="light"] footer p.text-white {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] footer button {
+  color: #475569 !important;
+}
+
+[data-theme="light"] footer button:hover {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3,
+[data-theme="light"] h4 {
+  color: #0f172a;
+}
+
+/* Modal and surface elevation in light theme */
+[data-theme="light"] .bg-zinc-950\/85,
+[data-theme="light"] .bg-zinc-950\/80,
+[data-theme="light"] .bg-zinc-900\/95,
+[data-theme="light"] .bg-zinc-900\/90,
+[data-theme="light"] .bg-zinc-900\/60,
+[data-theme="light"] .bg-zinc-900 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #0f172a;
+}
+
+[data-theme="light"] .text-zinc-400 {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .text-zinc-500 {
+  color: #94a3b8 !important;
+}
+
+[data-theme="light"] .border-zinc-800,
+[data-theme="light"] .border-zinc-800\/80,
+[data-theme="light"] .border-zinc-900 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Smooth theme transition */
+html, body, [data-scroll-container], nav, footer {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}

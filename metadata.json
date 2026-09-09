@@ -1,0 +1,6 @@
+{
+  "name": "SiratStream",
+  "description": "SiratStream (sirat-stream, siratstreamapp, siratstreamapp.com) - Plateforme de streaming vidéo et audio islamique avec lecteur interactif, doublage vocal IA multilingue en direct (comme YouTube), catalogue Coran & Tarawih historiques (1980-2000), support hors-ligne et mode lecture apaisée.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

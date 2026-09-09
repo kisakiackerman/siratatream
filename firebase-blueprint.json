@@ -1,0 +1,183 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile, favorites, watch history, and religious preferences",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's Google or Apple account email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User avatar image URL"
+        },
+        "myList": {
+          "type": "string",
+          "description": "JSON array of saved favorite video IDs"
+        },
+        "history": {
+          "type": "string",
+          "description": "JSON array of watched video history items"
+        },
+        "notes": {
+          "type": "string",
+          "description": "JSON array of personal spiritual notes and reflections"
+        },
+        "preferences": {
+          "type": "string",
+          "description": "JSON serialized user preferences (location, notifications, theme, adhan preference)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when account was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last update"
+        }
+      },
+      "required": ["userId", "email"]
+    },
+    "VideoSuggestion": {
+      "title": "VideoSuggestion",
+      "description": "Community user video suggestions with upvote counter",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique suggestion ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Video title or topic"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the video (YouTube, MP4, Vimeo, Dailymotion)"
+        },
+        "videoSourceType": {
+          "type": "string",
+          "description": "Source platform of the video"
+        },
+        "category": {
+          "type": "string",
+          "description": "Suggested category"
+        },
+        "note": {
+          "type": "string",
+          "description": "Additional note or description"
+        },
+        "submittedBy": {
+          "type": "string",
+          "description": "Name or handle of submitter"
+        },
+        "submitterEmail": {
+          "type": "string",
+          "description": "Email of submitter"
+        },
+        "voteCount": {
+          "type": "number",
+          "description": "Total number of people who requested/voted for this video"
+        },
+        "voters": {
+          "type": "array",
+          "description": "Array of user IDs or voter fingerprints"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of suggestion: pending, approved, published"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of submission"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last vote or edit"
+        }
+      },
+      "required": ["id", "title", "url"]
+    },
+    "CreatorMessage": {
+      "title": "CreatorMessage",
+      "description": "Direct messages sent by community users to the creator",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message ID"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Name or pseudonym of sender"
+        },
+        "senderEmail": {
+          "type": "string",
+          "description": "Optional contact email of sender"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Subject or topic of the message"
+        },
+        "content": {
+          "type": "string",
+          "description": "Body of the message"
+        },
+        "category": {
+          "type": "string",
+          "description": "Message category: feedback, question, idea, thanks, technical"
+        },
+        "videoContext": {
+          "type": "string",
+          "description": "Optional video title or ID related to the message"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the message: unread, read, archived"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when message was submitted"
+        }
+      },
+      "required": ["id", "senderName", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Document holding user specific preferences, saved list, notes, and history"
+    },
+    "/video_suggestions/{suggestionId}": {
+      "schema": "VideoSuggestion",
+      "description": "Community video suggestions for admin moderation and import"
+    },
+    "/creator_messages/{messageId}": {
+      "schema": "CreatorMessage",
+      "description": "Messages sent by users to the content creator"
+    },
+    "/app_config/{configId}": {
+      "schema": "AppConfig",
+      "description": "Global application configuration (announcements, spotlight, etc.)"
+    },
+    "/creator_content/{contentId}": {
+      "schema": "ContentItem",
+      "description": "Published creator videos and catalog items"
+    }
+  }
+}

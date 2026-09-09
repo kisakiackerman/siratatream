@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is owner of the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Helper function to check if authenticated user is a verified creator/admin
+    function isCreator() {
+      return isAuthenticated() && (
+        request.auth.token.email != null && (
+          request.auth.token.email.lower() == "kisakiackerman744@gmail.com" ||
+          request.auth.token.email.lower() == "zelephackerman3@gmail.com"
+        )
+      );
+    }
+
+    // User personal space & preferences
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) || isCreator();
+    }
+
+    // App configurations (announcements, spotlight, deleted videos, metadata, etc.)
+    // Read is public so app UI functions for all visitors; Write is strictly restricted to Creators
+    match /app_config/{configId} {
+      allow read: if true;
+      allow write: if isCreator();
+    }
+
+    // Creator published videos and catalog items
+    // Read is public; modifications are strictly restricted to Creators
+    match /creator_content/{contentId} {
+      allow read: if true;
+      allow write: if isCreator();
+    }
+
+    // Video suggestions:
+    // Anyone can read and suggest videos with validation;
+    // Voting is allowed for community members; Moderation/deletion is reserved to Creators
+    match /video_suggestions/{suggestionId} {
+      allow read: if true;
+      allow create: if request.resource.data.title is string &&
+                       request.resource.data.title.size() > 0 &&
+                       request.resource.data.title.size() <= 250 &&
+                       request.resource.data.url is string &&
+                       request.resource.data.url.size() > 0 &&
+                       request.resource.data.url.size() <= 600;
+      allow update: if isCreator() || (
+        // Allow community upvoting: title, url and status cannot be altered by non-creators
+        request.resource.data.title == resource.data.title &&
+        request.resource.data.url == resource.data.url &&
+        request.resource.data.status == resource.data.status
+      );
+      allow delete: if isCreator();
+    }
+
+    // Messages sent to the creator:
+    // Only the creator can read the incoming inbox (protects sender privacy);
+    // Anyone can send a valid message with size and type safety
+    match /creator_messages/{messageId} {
+      allow read: if isCreator();
+      allow create: if request.resource.data.content is string &&
+                       request.resource.data.content.size() > 0 &&
+                       request.resource.data.content.size() <= 5000 &&
+                       request.resource.data.subject is string &&
+                       request.resource.data.subject.size() > 0 &&
+                       request.resource.data.subject.size() <= 300;
+      allow update, delete: if isCreator();
+    }
+
+    // Connection health check
+    match /test/{testId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
+

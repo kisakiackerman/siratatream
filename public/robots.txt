@@ -1,0 +1,9 @@
+# Robots.txt for SiratStream (siratstreamapp.com)
+User-agent: *
+Allow: /
+
+# Googlebot specific directives
+User-agent: Googlebot
+Allow: /
+
+Sitemap: https://siratstreamapp.com/sitemap.xml
