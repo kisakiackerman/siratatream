@@ -47,12 +47,14 @@ export const DEFAULT_PRAYER_PREFERENCES: PrayerReminderPreferences = {
 export const DEFAULT_CHANNEL_PREFERENCES: ChannelNotificationPreferences = {
   enabled: true,
   subscribedChannels: {
+    "Din-ul-Qayyima": true,
     "NARRO DIN": true,
     "Towards Eternity": true,
     "Récitations Haramain": true,
     "NARRO": true,
     "Yacine": true,
     "Croyant Rationnel": true,
+    "Sur le chemin de la prophétie": true,
     "Minute Islam": true,
   },
   notifyNewEpisodes: true,

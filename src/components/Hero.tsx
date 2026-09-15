@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Play, Info, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { catalog as defaultCatalog, type ContentItem, type Category } from "@/data/catalog";
 import { useCreatorCatalog } from "@/hooks/useCreatorCatalog";
+import { getDiversifiedHeroPool } from "@/lib/catalogDiversity";
 
 interface HeroProps {
   onPlay: (id: string, startSec?: number) => void;
@@ -25,21 +26,9 @@ function gradientFor(id: string) {
 export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: HeroProps) {
   const { catalog, spotlightId } = useCreatorCatalog();
 
-  // Pool of available items for the hero banner depending on current genre/tab
+  // Pool of available items for the hero banner, diversified across creators
   const pool = useMemo(() => {
-    if (spotlightId && categoryTab === "all") {
-      const spot = catalog.find((c) => c.id === spotlightId);
-      if (spot) {
-        return [spot, ...catalog.filter((c) => c.id !== spotlightId)];
-      }
-    }
-    if (categoryTab === "all") {
-      return catalog;
-    }
-    const catFiltered = catalog.filter((c) =>
-      c.categories.some((cat) => cat.toLowerCase() === categoryTab.toLowerCase())
-    );
-    return catFiltered.length > 0 ? catFiltered : catalog;
+    return getDiversifiedHeroPool(catalog, categoryTab, spotlightId);
   }, [categoryTab, catalog, spotlightId]);
 
   const [currentIndex, setCurrentIndex] = useState(0);

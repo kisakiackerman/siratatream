@@ -1,5 +1,6 @@
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { catalog } from "@/data/catalog";
+import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
 import ContentRow from "@/components/ContentRow";
 
 type PreferenceRowProps = {
@@ -13,9 +14,10 @@ export default function PreferenceRow({ onPlay, onInfo }: PreferenceRowProps) {
 
   if (!categories || categories.length === 0) return null;
 
-  const items = catalog
-    .filter((item) => item.categories.some((category) => categories.includes(category as any)))
-    .slice(0, 12);
+  const rawItems = catalog.filter((item) =>
+    item.categories.some((category) => categories.includes(category as any))
+  );
+  const items = diversifyCatalogByChannel(rawItems, { prioritizeQuality: true }).slice(0, 12);
 
   if (items.length === 0) return null;
 

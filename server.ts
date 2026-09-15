@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -12,8 +13,20 @@ import {
   aiEndpointLimiter,
   inputSanitizerMiddleware,
 } from "./src/middleware/security.ts";
+import { dailyChannelSyncAgent } from "./src/server/dailyChannelSyncAgent.ts";
+import { rawCatalog } from "./src/data/catalog.ts";
 
 dotenv.config();
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Promise Rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+// Enregistrer les vidéos déjà connues du catalogue pour que l'agent n'exporte que les NOUVELLES vidéos
+dailyChannelSyncAgent.registerKnownCatalogIds(rawCatalog.map((c) => c.youtubeId));
 
 const app = express();
 const PORT = 3000;
@@ -58,18 +71,157 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// ============================================================================
+// AGENT QUOTIDIEN AUTONOME (Mode Silencieux — Export des Vidéos >= 10 min)
+// ============================================================================
+
+// Obtenir le statut et l'état actuel de l'agent
+app.get("/api/agent/status", (req, res) => {
+  try {
+    const state = dailyChannelSyncAgent.getState();
+    res.json(state);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtenir la liste des nouvelles vidéos exportées (>= 10 minutes)
+app.get("/api/agent/exported-videos", (req, res) => {
+  try {
+    const videos = dailyChannelSyncAgent.getExportedVideos();
+    res.json({
+      success: true,
+      count: videos.length,
+      videos,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Télécharger les vidéos exportées en fichier JSON ou CSV
+app.get("/api/agent/download-export", (req, res) => {
+  try {
+    const format = req.query.format === "csv" ? "csv" : "json";
+    const timestamp = new Date().toISOString().split("T")[0];
+
+    if (format === "csv") {
+      const csv = dailyChannelSyncAgent.generateCsv();
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="siratstream_agent_export_${timestamp}.csv"`);
+      res.send(csv);
+    } else {
+      const videos = dailyChannelSyncAgent.getExportedVideos();
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="siratstream_agent_export_${timestamp}.json"`);
+      res.send(JSON.stringify(videos, null, 2));
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route d'exportation dédiée pour Minute Islam (@MinuteIslam)
+app.get("/api/export/minute-islam", (req, res) => {
+  try {
+    const filter = (req.query.filter as string) || "over10min";
+    const format = req.query.format as string;
+
+    if (format === "csv") {
+      const csvPath = path.join(process.cwd(), "minute_islam_videos_over_10min.csv");
+      if (fs.existsSync(csvPath)) {
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", 'attachment; filename="minute_islam_videos_over_10min.csv"');
+        return res.sendFile(csvPath);
+      }
+    }
+
+    const jsonPath = filter === "all"
+      ? path.join(process.cwd(), "minute_islam_all_videos.json")
+      : path.join(process.cwd(), "minute_islam_videos_over_10min.json");
+
+    if (fs.existsSync(jsonPath)) {
+      const content = fs.readFileSync(jsonPath, "utf-8");
+      if (req.query.download === "true") {
+        res.setHeader("Content-Disposition", `attachment; filename="minute_islam_${filter}.json"`);
+      }
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return res.send(content);
+    }
+
+    res.status(404).json({ error: "Fichier d'export Minute Islam non trouvé" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route d'exportation dédiée pour Sur le chemin de la prophétie (@Surlecheminde)
+app.get("/api/export/sur-le-chemin", (req, res) => {
+  try {
+    const filter = (req.query.filter as string) || "over10min";
+    const format = req.query.format as string;
+
+    if (format === "csv") {
+      const csvPath = path.join(process.cwd(), "sur_le_chemin_videos_over_10min.csv");
+      if (fs.existsSync(csvPath)) {
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", 'attachment; filename="sur_le_chemin_videos_over_10min.csv"');
+        return res.sendFile(csvPath);
+      }
+    }
+
+    const jsonPath = filter === "all"
+      ? path.join(process.cwd(), "sur_le_chemin_all_videos.json")
+      : path.join(process.cwd(), "sur_le_chemin_videos_over_10min.json");
+
+    if (fs.existsSync(jsonPath)) {
+      const content = fs.readFileSync(jsonPath, "utf-8");
+      if (req.query.download === "true") {
+        res.setHeader("Content-Disposition", `attachment; filename="sur_le_chemin_${filter}.json"`);
+      }
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return res.send(content);
+    }
+
+    res.status(404).json({ error: "Fichier d'export Sur le chemin non trouvé" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Déclencher une vérification silencieuse immédiate
+app.post("/api/agent/sync-now", async (req, res) => {
+  try {
+    // Exécute la vérification silencieuse sans bloquer ni notifier avec alerte
+    const result = await dailyChannelSyncAgent.runSilentSync("Déclenchement sécurisé API");
+    res.json({
+      success: true,
+      message: "Synchronisation silencieuse terminée avec succès",
+      result,
+      state: dailyChannelSyncAgent.getState(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // SEO & Googlebot indexation routes
+app.get("/googlef1e946b6d80588ed.html", (req, res) => {
+  res.type("text/html");
+  res.send("google-site-verification: googlef1e946b6d80588ed.html\n");
+});
+
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain");
   res.send(
-    "User-agent: *\nAllow: /\n\nUser-agent: Googlebot\nAllow: /\n\nSitemap: https://siratstreamapp.com/sitemap.xml\n"
+    "User-agent: *\nAllow: /\n\nUser-agent: Googlebot\nAllow: /\n\nSitemap: https://sirat-stream.ai.studio/sitemap.xml\n"
   );
 });
 
 app.get("/sitemap.xml", (req, res) => {
   res.type("application/xml");
   res.send(
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://siratstreamapp.com/</loc>\n    <lastmod>2026-09-04</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>`
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://sirat-stream.ai.studio/</loc>\n    <lastmod>2026-09-15</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>`
   );
 });
 
@@ -1398,7 +1550,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
     console.log(`SiratStream Server running on http://0.0.0.0:${PORT}`);
+    // Démarrage du planificateur de l'agent quotidien silencieux
+    dailyChannelSyncAgent.startScheduler();
   });
 }
 

@@ -46,6 +46,10 @@ import {
   Bell,
   Cloud,
   Server,
+  Zap,
+  Mic,
+  MicOff,
+  CheckCircle2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/hooks/useAuth";
@@ -68,6 +72,7 @@ import { useConnectedDevices } from "@/hooks/useConnectedDevices";
 import { formatRelativeTime, DeviceType } from "@/lib/deviceSessions";
 import UserStatsSection from "@/components/UserStatsSection";
 import NotificationsSettingsSection from "@/components/NotificationsSettingsSection";
+import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
 import { GlassPanel } from "@/components/GlassSurface";
 
 type AccountSettingsModalProps = {
@@ -102,6 +107,7 @@ export default function AccountSettingsModal({
     user,
     firebaseUser,
     userSpace,
+    isCreator,
     signInWithGoogle,
     signInWithApple,
     signOut,
@@ -119,6 +125,26 @@ export default function AccountSettingsModal({
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // --- Microphone permission state ---
+  const [micStatus, setMicStatus] = useState<"checking" | "granted" | "prompt" | "denied" | "unsupported">("prompt");
+  const [showMicModal, setShowMicModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
+      setMicStatus("unsupported");
+      return;
+    }
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions
+        .query({ name: "microphone" as PermissionName })
+        .then((status) => {
+          setMicStatus(status.state as any);
+          status.onchange = () => setMicStatus(status.state as any);
+        })
+        .catch(() => setMicStatus("prompt"));
+    }
+  }, []);
 
   // --- Profile edition state ---
   const [editingDisplayName, setEditingDisplayName] = useState(false);
@@ -204,6 +230,16 @@ export default function AccountSettingsModal({
   const [downloadWifiOnly, setDownloadWifiOnly] = useState<boolean>(() => {
     return localStorage.getItem("nexstream_download_wifi_only") !== "false";
   });
+  const [shortsEnabled, setShortsEnabled] = useState<boolean>(() => {
+    return localStorage.getItem("sirat_shorts_enabled") === "true";
+  });
+
+  const handleToggleShorts = () => {
+    const next = !shortsEnabled;
+    setShortsEnabled(next);
+    localStorage.setItem("sirat_shorts_enabled", next ? "true" : "false");
+    window.dispatchEvent(new Event("shorts_enabled_changed"));
+  };
 
   // --- Storage & History items ---
   const [historyItems, setHistoryItems] = useState<StoredHistoryEntry[]>([]);
@@ -1435,6 +1471,43 @@ export default function AccountSettingsModal({
                 </button>
               </GlassPanel>
 
+              {/* Activation / Désactivation des Formats Courts (Shorts) - Réservé aux comptes Créateurs */}
+              {isCreator && (
+                <GlassPanel variant="card" className="p-5 border border-emerald-500/25 bg-emerald-950/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-white text-sm font-semibold flex items-center gap-2">
+                          <Zap size={16} className={shortsEnabled ? "text-emerald-400" : "text-zinc-500"} />
+                          <span>Section Shorts &amp; Formats Courts</span>
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                          Option Créateur
+                        </span>
+                      </div>
+                      <p className="text-zinc-300 text-xs mt-1 max-w-sm">
+                        {shortsEnabled
+                          ? "La rangée Shorts de l'accueil, les boutons de navigation et le lecteur vertical 9:16 sont activés."
+                          : "Les Shorts sont actuellement masqués et désactivés de l'ensemble de l'interface."}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleToggleShorts}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors flex-shrink-0 ${
+                        shortsEnabled ? "bg-emerald-500" : "bg-white/15"
+                      }`}
+                      aria-label="Activer ou désactiver la section Shorts"
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                          shortsEnabled ? "translate-x-6" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </GlassPanel>
+              )}
+
               {/* Sous-titres & Typographie */}
               <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1629,6 +1702,75 @@ export default function AccountSettingsModal({
                         downloadWifiOnly ? "translate-x-6" : "translate-x-0"
                       }`}
                     />
+                  </button>
+                </div>
+              </GlassPanel>
+
+              {/* Permission Navigateur Microphone & Commandes Vocales */}
+              <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                      <Mic size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-white text-sm font-semibold flex items-center gap-2">
+                        <span>Permission Microphone Navigateur</span>
+                        {micStatus === "granted" && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold flex items-center gap-1">
+                            <CheckCircle2 size={10} />
+                            Autorisé
+                          </span>
+                        )}
+                        {micStatus === "denied" && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold flex items-center gap-1">
+                            <MicOff size={10} />
+                            Bloqué
+                          </span>
+                        )}
+                        {micStatus === "prompt" && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                            En attente
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-zinc-400 text-xs mt-0.5">
+                        Nécessaire pour dicter vos recherches de sourates, récits prophétiques et piloter Noor IA.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!navigator?.mediaDevices?.getUserMedia) {
+                          setNotice("Votre navigateur ne supporte pas le micro.");
+                          return;
+                        }
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        stream.getTracks().forEach((t) => t.stop());
+                        setMicStatus("granted");
+                        setNotice("Microphone autorisé par le navigateur avec succès !");
+                      } catch {
+                        setShowMicModal(true);
+                      }
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
+                  >
+                    <Mic size={14} />
+                    <span>Demander la permission au navigateur</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowMicModal(true)}
+                    className="py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 border border-zinc-800 transition-colors"
+                  >
+                    <Sliders size={14} />
+                    <span>Tester & Gérer</span>
                   </button>
                 </div>
               </GlassPanel>
@@ -2244,6 +2386,13 @@ export default function AccountSettingsModal({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de demande et gestion de permission microphone */}
+      <MicrophonePermissionModal
+        isOpen={showMicModal}
+        onClose={() => setShowMicModal(false)}
+        onPermissionGranted={() => setMicStatus("granted")}
+      />
     </div>
   );
 }

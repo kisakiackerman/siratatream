@@ -24,6 +24,10 @@ service cloud.firestore {
     // User personal space & preferences
     match /users/{userId} {
       allow read, write: if isOwner(userId) || isCreator();
+
+      match /notes/{noteId} {
+        allow read, write: if isOwner(userId) || isCreator();
+      }
     }
 
     // App configurations (announcements, spotlight, deleted videos, metadata, etc.)

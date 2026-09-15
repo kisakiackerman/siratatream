@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Compass,
   Bell,
+  Zap,
 } from "lucide-react";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,6 +41,7 @@ type ProfileMenuProps = {
   onOpenOffline: () => void;
   onOpenStats?: () => void;
   onOpenSuggestions?: () => void;
+  onOpenShorts?: () => void;
 };
 
 export default function ProfileMenu({
@@ -54,6 +56,7 @@ export default function ProfileMenu({
   onOpenOffline,
   onOpenStats,
   onOpenSuggestions,
+  onOpenShorts,
 }: ProfileMenuProps) {
   const { activeProfile } = useViewerProfile();
   const { firebaseUser, userSpace, isCreator, signOut, signInWithGoogle, signInWithApple } = useAuth();
@@ -255,8 +258,15 @@ export default function ProfileMenu({
             </div>
           )}
 
-          {/* Section: Espace Pratique & Suggestions */}
+          {/* Section: Short, Espace Pratique & Suggestions */}
           <div className="p-1">
+            {onOpenShorts && (
+              <MenuItem
+                icon={<Zap size={16} className="text-emerald-400 fill-emerald-400/60" />}
+                label="⚡ Short"
+                onClick={() => handleAction(onOpenShorts)}
+              />
+            )}
             <MenuItem
               icon={<Sparkles size={16} className="text-emerald-400" />}
               label="Espace Pratique (Prières, Qibla, Douas)"

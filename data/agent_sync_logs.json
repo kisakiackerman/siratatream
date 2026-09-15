@@ -1,0 +1,38 @@
+[
+  {
+    "id": "sync_1789419287124",
+    "timestamp": "2026-09-14T20:54:47.124Z",
+    "status": "success",
+    "channelsChecked": 9,
+    "newVideosExported": 0,
+    "videosUnderTenMinIgnored": 72,
+    "details": "Déclenchement sécurisé API : 0 nouvelle(s) vidéo(s) >= 10 min exportée(s), 72 vidéo(s) < 10 min ignorée(s)."
+  },
+  {
+    "id": "sync_1789419239030",
+    "timestamp": "2026-09-14T20:53:59.030Z",
+    "status": "success",
+    "channelsChecked": 9,
+    "newVideosExported": 0,
+    "videosUnderTenMinIgnored": 77,
+    "details": "Démarrage automatique du serveur : 0 nouvelle(s) vidéo(s) >= 10 min exportée(s), 77 vidéo(s) < 10 min ignorée(s)."
+  },
+  {
+    "id": "sync_1789418868187",
+    "timestamp": "2026-09-14T20:47:48.187Z",
+    "status": "success",
+    "channelsChecked": 9,
+    "newVideosExported": 3,
+    "videosUnderTenMinIgnored": 77,
+    "details": "Démarrage automatique du serveur : 3 nouvelle(s) vidéo(s) >= 10 min exportée(s), 77 vidéo(s) < 10 min ignorée(s)."
+  },
+  {
+    "id": "sync_1789418642403",
+    "timestamp": "2026-09-14T20:44:02.403Z",
+    "status": "success",
+    "channelsChecked": 8,
+    "newVideosExported": 6,
+    "videosUnderTenMinIgnored": 73,
+    "details": "Démarrage automatique du serveur : 6 nouvelle(s) vidéo(s) >= 10 min exportée(s), 73 vidéo(s) < 10 min ignorée(s)."
+  }
+]

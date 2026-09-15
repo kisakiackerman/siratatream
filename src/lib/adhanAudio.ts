@@ -151,7 +151,7 @@ export function playAdhanAudio(
     onError?: (err: unknown) => void;
   }
 ): HTMLAudioElement | null {
-  // Stop existing audio if playing
+  // Stop existing audio cleanly first
   stopAdhanAudio();
 
   if (soundId === "silent") {
@@ -189,51 +189,63 @@ export function playAdhanAudio(
 
   try {
     const audio = new Audio();
-    audio.src = streamUrl;
-    audio.preload = "auto";
     currentAudio = audio;
     currentPlayingId = soundId;
     onStopCallback = callbacks?.onEnded || null;
 
+    let hasFallbackAttempted = false;
+
     audio.onplay = () => {
-      callbacks?.onStart?.();
+      if (currentAudio === audio) {
+        callbacks?.onStart?.();
+      }
     };
 
     audio.onended = () => {
-      currentAudio = null;
-      currentPlayingId = null;
-      callbacks?.onEnded?.();
+      if (currentAudio === audio) {
+        stopAdhanAudio();
+      }
     };
 
     audio.onerror = (e) => {
-      // If proxied failed, try rawUrl fallback
-      if (audio.src !== rawUrl) {
+      // If audio was already stopped or replaced, do nothing!
+      if (currentAudio !== audio) {
+        return;
+      }
+
+      // If proxied failed, try rawUrl fallback once
+      if (!hasFallbackAttempted && rawUrl && streamUrl !== rawUrl) {
+        hasFallbackAttempted = true;
         console.warn("Proxied stream failed, trying raw URL fallback:", e);
         audio.src = rawUrl;
         audio.play().catch((err) => {
-          currentAudio = null;
-          currentPlayingId = null;
-          callbacks?.onError?.(err);
-          callbacks?.onEnded?.();
+          if (currentAudio === audio) {
+            stopAdhanAudio();
+            callbacks?.onError?.(err);
+          }
         });
         return;
       }
-      currentAudio = null;
-      currentPlayingId = null;
+
+      stopAdhanAudio();
       callbacks?.onError?.(e);
-      callbacks?.onEnded?.();
     };
 
+    audio.src = streamUrl;
+    audio.preload = "auto";
+
     audio.play().catch((err) => {
-      console.warn("Auto-play restriction or network issue:", err);
-      callbacks?.onError?.(err);
-      callbacks?.onEnded?.();
+      if (currentAudio === audio) {
+        console.warn("Auto-play restriction or network issue:", err);
+        stopAdhanAudio();
+        callbacks?.onError?.(err);
+      }
     });
 
     return audio;
   } catch (err) {
+    stopAdhanAudio();
     callbacks?.onError?.(err);
-    callbacks?.onEnded?.();
     return null;
   }
 }
@@ -259,24 +271,44 @@ export function getAdhanDownloadUrl(rawUrl: string, filename: string): string {
 }
 
 /**
- * Stop currently playing Adhan audio
+ * Stop currently playing Adhan audio cleanly and prevent any restart
  */
 export function stopAdhanAudio(): void {
   if (currentAudio) {
-    try {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      currentAudio.src = "";
-    } catch {
-      // Ignore
-    }
+    const audioToStop = currentAudio;
     currentAudio = null;
+    currentPlayingId = null;
+
+    try {
+      // 1. Detach all event handlers so no onerror or onended can trigger playback
+      audioToStop.onerror = null;
+      audioToStop.onended = null;
+      audioToStop.onplay = null;
+      audioToStop.ontimeupdate = null;
+      audioToStop.onloadedmetadata = null;
+
+      // 2. Pause and reset position
+      audioToStop.pause();
+      audioToStop.currentTime = 0;
+
+      // 3. Remove source and load empty
+      audioToStop.removeAttribute("src");
+      audioToStop.load();
+    } catch (err) {
+      console.warn("Error stopping adhan audio:", err);
+    }
+  } else {
+    currentPlayingId = null;
   }
-  currentPlayingId = null;
+
   if (onStopCallback) {
     const cb = onStopCallback;
     onStopCallback = null;
-    cb();
+    try {
+      cb();
+    } catch {
+      // Ignore
+    }
   }
 }
 

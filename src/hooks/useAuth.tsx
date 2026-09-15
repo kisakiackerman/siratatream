@@ -23,6 +23,20 @@ export const KNOWN_CREATOR_EMAILS = [
   "kisakiackerman744@gmail.com",
 ];
 
+export interface UserSpiritualNote {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  contentId?: string;
+  contentTitle?: string;
+  verseReference?: string;
+  verseText?: string;
+  timestamp?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserPersonalSpace {
   userId: string;
   email: string;
@@ -32,7 +46,7 @@ export interface UserPersonalSpace {
   isCreator?: boolean;
   myList: string[]; // Content IDs
   history: Array<{ contentId: string; watchedAt: number; progress?: number }>;
-  notes: Array<{ id: string; title: string; content: string; date: string }>;
+  notes: UserSpiritualNote[];
   preferences: {
     theme?: string;
     city?: string;

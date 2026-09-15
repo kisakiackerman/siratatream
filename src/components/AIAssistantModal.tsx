@@ -33,6 +33,8 @@ import {
   type ParsedQuiz,
 } from "@/lib/aiService";
 import { catalog, type ContentItem } from "@/data/catalog";
+import { useVoiceSearch } from "@/hooks/useVoiceSearch";
+import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
 
 interface AIAssistantModalProps {
   isOpen: boolean;
@@ -73,14 +75,12 @@ export default function AIAssistantModal({
 
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
 
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
@@ -93,58 +93,6 @@ export default function AIAssistantModal({
       setTimeout(() => inputRef.current?.focus(), 150);
     }
   }, [isOpen, messages]);
-
-  // Handle Speech Recognition
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.lang = "fr-FR";
-        recognition.interimResults = false;
-
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          if (transcript) {
-            setInputValue(transcript);
-            handleSend(transcript);
-          }
-          setIsListening(false);
-        };
-
-        recognition.onerror = () => {
-          setIsListening(false);
-        };
-
-        recognition.onend = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current = recognition;
-      }
-    }
-  }, []);
-
-  const toggleSpeechRecognition = () => {
-    if (!recognitionRef.current) {
-      alert("La reconnaissance vocale n'est pas supportée par votre navigateur.");
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch {
-        setIsListening(false);
-      }
-    }
-  };
 
   // Text-To-Speech
   const handleSpeakText = (text: string) => {
@@ -227,6 +175,30 @@ export default function AIAssistantModal({
       setIsLoading(false);
     }
   };
+
+  // Upgraded Voice Search integration
+  const handleVoiceResult = useCallback(
+    (transcript: string) => {
+      if (transcript && transcript.trim().length > 0) {
+        setInputValue(transcript);
+        handleSend(transcript);
+      }
+    },
+    [messages, isLoading]
+  );
+
+  const {
+    supported: voiceSupported,
+    listening: isListening,
+    permissionState: micPermissionState,
+    error: voiceError,
+    transcript: liveTranscript,
+    toggle: toggleSpeechRecognition,
+    requestPermission: requestMicPermission,
+    clearError: clearVoiceError,
+  } = useVoiceSearch(handleVoiceResult);
+
+  const [showMicModal, setShowMicModal] = useState(false);
 
   const handleExecuteAction = (action: ParsedAction) => {
     if (action.type === "open_tool" && action.tool) {
@@ -569,6 +541,49 @@ export default function AIAssistantModal({
 
         {/* Input Bar */}
         <div className="p-3 sm:p-5 bg-black/40 border-t border-white/10 backdrop-blur-xl">
+          {/* Live listening pill */}
+          {isListening && (
+            <div className="mb-2.5 px-3.5 py-1.5 rounded-xl bg-rose-950/80 border border-rose-500/40 text-xs text-rose-200 flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping flex-shrink-0" />
+                <span className="font-medium truncate">
+                  {liveTranscript ? `"${liveTranscript}"` : "Écoute active... Parlez à Noor IA"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleSpeechRecognition}
+                className="text-[10px] font-bold bg-rose-600 hover:bg-rose-500 px-2 py-0.5 rounded text-white"
+              >
+                Envoyer
+              </button>
+            </div>
+          )}
+
+          {/* Voice error banner */}
+          {voiceError && (
+            <div className="mb-2.5 px-3 py-2 rounded-xl bg-amber-950/90 border border-amber-500/40 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in">
+              <span>{voiceError}</span>
+              <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowMicModal(true)}
+                  className="text-[10px] font-bold text-zinc-950 bg-emerald-400 hover:bg-emerald-300 px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <Mic size={11} />
+                  <span>Autoriser le micro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={clearVoiceError}
+                  className="p-1 hover:bg-white/10 rounded text-amber-300 hover:text-white"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -578,11 +593,34 @@ export default function AIAssistantModal({
           >
             <button
               type="button"
-              onClick={toggleSpeechRecognition}
-              title={isListening ? "Arrêter la dictée" : "Parler à l'IA"}
+              onClick={async () => {
+                if (isListening) {
+                  toggleSpeechRecognition();
+                } else if (micPermissionState === "prompt") {
+                  const ok = await requestMicPermission();
+                  if (ok) {
+                    toggleSpeechRecognition();
+                  } else {
+                    setShowMicModal(true);
+                  }
+                } else if (micPermissionState === "denied") {
+                  setShowMicModal(true);
+                } else {
+                  toggleSpeechRecognition();
+                }
+              }}
+              title={
+                isListening
+                  ? "Arrêter la dictée"
+                  : micPermissionState === "granted"
+                  ? "Parler à l'IA (Microphone autorisé)"
+                  : "Demander l'accès au microphone"
+              }
               className={`p-2.5 rounded-xl transition-all ${
                 isListening
                   ? "bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-900/40"
+                  : micPermissionState === "granted"
+                  ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
                   : "text-zinc-400 hover:text-white hover:bg-white/10"
               }`}
             >
@@ -612,6 +650,16 @@ export default function AIAssistantModal({
           </p>
         </div>
       </div>
+
+      {/* Modal de demande et gestion de permission microphone */}
+      <MicrophonePermissionModal
+        isOpen={showMicModal}
+        onClose={() => setShowMicModal(false)}
+        onPermissionGranted={() => {
+          setShowMicModal(false);
+          toggleSpeechRecognition();
+        }}
+      />
     </div>
   );
 }

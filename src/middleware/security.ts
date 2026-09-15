@@ -23,18 +23,17 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
   // IE/Edge download restriction
   res.setHeader("X-Download-Options", "noopen");
 
-  // Restrict sensitive device APIs
+  // Restrict sensitive device APIs (allow microphone and geolocation for Islamic app features and voice search)
   res.setHeader(
     "Permissions-Policy",
-    "camera=(), microphone=(), payment=(), usb=(), display-capture=()"
+    "camera=(), microphone=*, geolocation=*, payment=(), usb=(), display-capture=()"
   );
 
-  // Content-Security-Policy with safe frame-ancestors for AI Studio preview & YouTube/Google integrations
+  // Content-Security-Policy: allow required resources while allowing Nginx to handle frame-ancestors
   res.setHeader(
     "Content-Security-Policy",
     [
       "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'",
-      "frame-ancestors 'self' https://*.google.com https://*.run.app https://ai.studio https://*.aistudio.google.com",
       "img-src 'self' https: data: blob:",
       "media-src 'self' https: blob: data:",
       "connect-src 'self' https: wss: data:",

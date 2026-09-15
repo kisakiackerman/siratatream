@@ -130,6 +130,7 @@ function PosterCard({
             alt={item.title}
             className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
             loading="lazy"
+            decoding="async"
             onLoad={handleImageLoad}
             onError={handleImageError}
           />

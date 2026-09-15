@@ -507,6 +507,27 @@ export async function enrichCatalogWithYouTubeAPI(
       const meta = metaMap[item.youtubeId];
       if (!meta) return item;
 
+      const viewCount = meta.viewCount || item.viewsCount || 0;
+      const likeCount = meta.likeCount || item.likesCount || (viewCount > 0 ? Math.round(viewCount * 0.065) : 0);
+
+      const viewsStr =
+        viewCount > 0
+          ? viewCount >= 1000000
+            ? `${(viewCount / 1000000).toFixed(1).replace(".0", "")}M vues`
+            : viewCount >= 1000
+            ? `${(viewCount / 1000).toFixed(0)}k vues`
+            : `${viewCount} vues`
+          : item.viewsStr;
+
+      const likesStr =
+        likeCount > 0
+          ? likeCount >= 1000000
+            ? `${(likeCount / 1000000).toFixed(1).replace(".0", "")}M`
+            : likeCount >= 1000
+            ? `${(likeCount / 1000).toFixed(1).replace(".0", "")}k`
+            : `${likeCount}`
+          : item.likesStr;
+
       return {
         ...item,
         title: meta.title || item.title,
@@ -515,10 +536,93 @@ export async function enrichCatalogWithYouTubeAPI(
         thumbnail: meta.thumbnail || item.thumbnail,
         image: meta.thumbnail || item.image,
         heroImage: item.featured ? (meta.thumbnail || item.heroImage) : item.heroImage,
+        viewsCount: viewCount > 0 ? viewCount : item.viewsCount,
+        viewsStr: viewsStr || item.viewsStr,
+        likesCount: likeCount > 0 ? likeCount : item.likesCount,
+        likesStr: likesStr || item.likesStr,
       };
     });
   } catch (err) {
     console.debug("Enrich catalog notice:", err);
     return items;
   }
+}
+
+/**
+ * Formats a YouTube like number into a compact string (e.g. 1.4k, 12k, 1.2M)
+ */
+export function formatYouTubeLikes(count: number | undefined | null): string {
+  if (!count || count <= 0) return "J'aime";
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1).replace(".0", "")}M`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1).replace(".0", "")}k`;
+  return `${count}`;
+}
+
+/**
+ * Returns cached YouTube metadata if present
+ */
+export function getCachedYouTubeMeta(youtubeId: string): YouTubeVideoMeta | null {
+  try {
+    const cached = localStorage.getItem(`${CACHE_KEY_PREFIX}${youtubeId}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.data) return parsed.data;
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+/**
+ * Exports video YouTube stats (Likes, Views, Titles, Links) into a CSV file
+ */
+export function exportYouTubeStatsToCSV(items: ContentItem[], filename = "youtube_shorts_likes_stats.csv") {
+  const headers = ["ID YouTube", "Titre", "Chaîne", "Catégorie", "Likes YouTube", "Vues YouTube", "Durée", "Lien YouTube"];
+  const rows = items.map((it) => {
+    const ytLink = `https://www.youtube.com/watch?v=${it.youtubeId}`;
+    const cleanTitle = `"${(it.title || "").replace(/"/g, '""')}"`;
+    const cleanChannel = `"${(it.channel || "").replace(/"/g, '""')}"`;
+    const cleanCat = `"${(it.categories?.[0] || "").replace(/"/g, '""')}"`;
+    const likes = it.likesCount || 0;
+    const views = it.viewsCount || 0;
+    const duration = it.duration || "00:59";
+    return [it.youtubeId, cleanTitle, cleanChannel, cleanCat, likes, views, duration, ytLink].join(",");
+  });
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Exports video YouTube stats (Likes, Views, Titles, Links) into a JSON file
+ */
+export function exportYouTubeStatsToJSON(items: ContentItem[], filename = "youtube_shorts_likes_stats.json") {
+  const exportData = items.map((it) => ({
+    youtubeId: it.youtubeId,
+    title: it.title,
+    channel: it.channel,
+    categories: it.categories,
+    likesCount: it.likesCount || 0,
+    likesStr: it.likesStr || formatYouTubeLikes(it.likesCount),
+    viewsCount: it.viewsCount || 0,
+    viewsStr: it.viewsStr || "0 vues",
+    duration: it.duration,
+    youtubeUrl: `https://www.youtube.com/watch?v=${it.youtubeId}`,
+  }));
+
+  const jsonContent = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([jsonContent], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }

@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Ne pas réécrire si le fichier ou le dossier existe réellement
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Rediriger toutes les autres requêtes vers index.html pour le routage client React
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Désactiver le listage des dossiers
+Options -Indexes

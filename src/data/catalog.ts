@@ -1,3 +1,18 @@
+import { towardsEternityRaw, towardsEternityMeta } from "./towardsEternityVideos";
+import { dinulQayyimaRaw, dinulQayyimaMeta } from "./dinulQayyimaVideos";
+import { minuteIslamRaw, minuteIslamMeta } from "./minuteIslamVideos";
+import { surLeCheminRaw, surLeCheminMeta } from "./surLeCheminVideos";
+import { averroesHistoireRaw, averroesHistoireMeta } from "./averroesHistoireVideos";
+import { minhajAnNubuwwahRaw, minhajAnNubuwwahMeta } from "./minhajAnNubuwwahVideos";
+import { dariftonProdRaw, dariftonProdMeta } from "./dariftonProdVideos";
+import { lislamSimplementRaw, lislamSimplementMeta } from "./lislamSimplementVideos";
+import { blueCasquetteRaw, blueCasquetteMeta } from "./blueCasquetteVideos";
+import { laQueteRaw, laQueteMeta } from "./laQueteVideos";
+import { savantsSunnahRaw, savantsSunnahMeta } from "./savantsSunnahVideos";
+import { channelVideoDurations } from "./channelVideoDurations";
+import { deduplicateCatalog } from "../lib/catalogDeduplication";
+import { diversifyCatalogByChannel } from "../lib/catalogDiversity";
+
 export type Category =
   | "Coran"
   | "Prophètes"
@@ -9,6 +24,7 @@ export type Category =
   | "Histoire & Mystère";
 
 export type Channel =
+  | "Din-ul-Qayyima"
   | "NARRO"
   | "NARRO DIN"
   | "Yacine"
@@ -16,7 +32,14 @@ export type Channel =
   | "Croyant Rationnel"
   | "Récitations Haramain"
   | "Minute Islam"
-  | string;
+  | "Sur le chemin de la prophétie"
+  | "Averroès Histoire"
+  | "Minhaj An-Nubuwwah"
+  | "Darifton Prod"
+  | "L'Islam Simplement"
+  | "Blue Casquette"
+  | "La Quête"
+  | "Les Savants de la Sunnah";
 
 export type SkipSegment = {
   start: number; // in seconds (e.g. 15)
@@ -55,6 +78,11 @@ export type ContentItem = {
   featured?: boolean;
   isNew?: boolean;
   isTrending?: boolean;
+  isShort?: boolean;
+  viewsCount?: number;
+  viewsStr?: string;
+  likesCount?: number;
+  likesStr?: string;
   skipSegments?: SkipSegment[];
   seriesId?: string;
   seriesTitle?: string;
@@ -78,6 +106,7 @@ type MetaRecord = Record<
     featured?: boolean;
     isNew?: boolean;
     isTrending?: boolean;
+    duration?: string;
     audioUrl?: string;
     skipSegments?: SkipSegment[];
     seriesId?: string;
@@ -348,89 +377,7 @@ const yacineMeta: MetaRecord = {
   "_HV3aU0cx-g": { cats: ["Héros & Personnages"], year: 2026, isNew: true },
 };
 
-const towardsEternityMeta: MetaRecord = {
-  c01ys_5EKSI: {
-    cats: ["Prophètes"],
-    year: 2024,
-    featured: true,
-    isTrending: true,
-    skipSegments: [{ start: 0, end: 42, label: "Passer l'intro & annonce", type: "intro" }],
-  },
-  "vT-GmNItVJo": { cats: ["Prophètes"], year: 2024 },
-  EeFh25K24x8: { cats: ["Prophètes", "Compagnons"], year: 2024 },
-  LmLo4CO0LNw: { cats: ["Prophètes", "Miracles du Coran"], year: 2024 },
-  "52C7ExmyPTw": { cats: ["Prophètes", "Histoire & Mystère"], year: 2024 },
-  SFXsnEfVC1s: {
-    cats: ["Prophètes", "Histoire & Mystère"],
-    year: 2024,
-    isTrending: true,
-    skipSegments: [{ start: 15, end: 68, label: "Passer la pub créateur", type: "sponsor" }],
-  },
-  D9RaH5IoMCU: { cats: ["Prophètes", "Compagnons", "Héros & Personnages"], year: 2024 },
-  yfF7IXb1q9Q: { cats: ["Prophètes", "Histoire & Mystère"], year: 2024 },
-  YwOFj8edxaU: { cats: ["Prophètes"], year: 2024, isNew: true },
-  TJL2ganDyBc: {
-    cats: ["Compagnons"],
-    year: 2024,
-    isNew: true,
-    isTrending: true,
-    skipSegments: [{ start: 0, end: 32, label: "Passer l'intro", type: "intro" }],
-  },
-  "3C4U5WGmFs0": { cats: ["Héros & Personnages", "Histoire & Mystère"], year: 2024 },
-  Yst8jgGviA8: { cats: ["Histoire & Mystère"], year: 2024 },
-  "7NKz_Ixu4kc": { cats: ["Prophètes", "Histoire & Mystère"], year: 2024, isNew: true },
-  nISqIWdpYQ8: {
-    cats: ["Prophètes"],
-    year: 2024,
-    isTrending: true,
-    skipSegments: [{ start: 10, end: 58, label: "Passer le sponsor", type: "sponsor" }],
-  },
-  WgPuTsCwhpc: { cats: ["Compagnons", "Héros & Personnages"], year: 2024, isTrending: true },
-  aM14o1R2fkk: { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  APx0E7O0x6c: { cats: ["Héros & Personnages", "Histoire & Mystère"], year: 2025, isNew: true },
-  IjNfRBnR3Pk: { cats: ["Héros & Personnages", "Histoire & Mystère"], year: 2025, isNew: true },
-  "8JcKbq06HRM": { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  "6nYvhq7rtaU": { cats: ["Prophètes"], year: 2024 },
-  DnP3qd_Qwcs: { cats: ["Prophètes"], year: 2024 },
-  yo4FjML2RKw: { cats: ["Prophètes", "Histoire & Mystère"], year: 2024 },
-  jdqsiFw74Jk: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  "50ExPJin0Ho": { cats: ["Miracles du Coran"], year: 2024 },
-  "9Nig8R3mHh4": { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  HPlRgzr3g_c: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  HVoEpbeehnU: {
-    cats: ["Histoire & Mystère"],
-    year: 2025,
-    isTrending: true,
-    skipSegments: [{ start: 25, end: 82, label: "Passer l'annonce de soutien", type: "promo" }],
-  },
-  LR3rQ8EG498: { cats: ["Héros & Personnages", "Histoire & Mystère"], year: 2025, isNew: true },
-  Pcwmler30yk: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true },
-  QwN7qtPeOBg: { cats: ["Compagnons", "Héros & Personnages"], year: 2025, isNew: true },
-  RyH0Ic_xMnw: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  TottSdGMDfM: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  U_KEkklNgE8: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  WXHW3Ac4CWo: { cats: ["Histoire & Mystère"], year: 2025, isTrending: true },
-  bUsQT_fDBdw: { cats: ["Prophètes", "Héros & Personnages"], year: 2025, isNew: true },
-  guKvNzcL4rQ: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  hFKDclO3EY0: { cats: ["Prophètes"], year: 2025, isNew: true },
-  sW1m8S1plOw: { cats: ["Prophètes", "Miracles du Coran"], year: 2025, isNew: true },
-  vnLKa4RkpAA: { cats: ["Prophètes", "Histoire & Mystère"], year: 2025, isTrending: true },
-  xsQmE7GAGyA: { cats: ["Prophètes", "Héros & Personnages"], year: 2025, isNew: true },
-  y2mevKuOKjo: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  AKfptpvAI1g: { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  BYsk3Lz27Ho: { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  EkfZS5kCUVY: { cats: ["Miracles du Coran", "Prophètes"], year: 2025, isNew: true },
-  GN71AKyWUbg: { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  "VUAaZoCe-bc": { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  X3RLnBVL8Jc: { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  qTUhSeWtCis: { cats: ["Miracles du Coran"], year: 2025, isNew: true },
-  x3On4hWht00: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  "5q2o6PpwGbI": { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  wCqt7QOA2QA: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true },
-  wCstYQKX8U8: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true, isTrending: true },
-  DtQp7r7e_J8: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  XNqzrQlLLFY: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true, isTrending: true },
-};
+// towardsEternityMeta is imported from ./towardsEternityVideos (199 videos catalogued)
 
 const croyantRationnelMeta: MetaRecord = {
   "E-3Opi2yDjs": {
@@ -474,82 +421,6 @@ const croyantRationnelMeta: MetaRecord = {
   n4st3dqnY9M: { cats: ["Histoire & Mystère"], year: 2026, isNew: true, isTrending: true },
   XkMbsl9j4nE: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
   IoGqok1BLX0: { cats: ["Histoire & Mystère", "Prophètes"], year: 2026, isNew: true },
-};
-
-const minuteIslamMeta: MetaRecord = {
-  NDxEgz2oIqE: { cats: ["Miracles du Coran", "Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  uMUhKIlTf6E: { cats: ["Eschatologie"], year: 2025, isNew: true, isTrending: true },
-  IQgrEqyaUag: { cats: ["Histoire & Mystère", "Miracles du Coran"], year: 2025, isNew: true },
-  BxgVOKxyh2w: { cats: ["Miracles du Coran", "Histoire & Mystère"], year: 2025, isNew: true },
-  Evr8LYo8Dt0: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true },
-  ljWrUUQ3DdI: { cats: ["Miracles du Coran", "Histoire & Mystère"], year: 2025, isNew: true },
-  "-Kgkfuzuhwc": { cats: ["Histoire & Mystère", "Prophètes"], year: 2025, isNew: true },
-  eGVYv7oZMm8: { cats: ["Miracles du Coran", "Coran"], year: 2025, isNew: true, isTrending: true },
-  LfTkK6ktk5w: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  DefDLFdk7QQ: { cats: ["Histoire & Mystère", "Miracles du Coran"], year: 2025, isNew: true, isTrending: true },
-  nkvx27zE6Mo: { cats: ["Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  guwErCKlbO4: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true },
-  YOu1on5c3kw: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  CRPlrOuJxT0: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  YuIDtvYwtz0: { cats: ["Histoire & Mystère", "Anges & Djinns"], year: 2025, isNew: true },
-  "jJAA60-14u0": { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true },
-  INr0y5Np4Y8: { cats: ["Eschatologie"], year: 2025, isNew: true, isTrending: true },
-  rgtxZuJmwMc: { cats: ["Eschatologie"], year: 2025, isNew: true, isTrending: true },
-  "6Z-umY6WInU": { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true },
-  UeRjMfySejA: { cats: ["Histoire & Mystère", "Miracles du Coran"], year: 2025, isNew: true },
-  WZnTMTwxVN0: {
-    cats: ["Anges & Djinns", "Histoire & Mystère"],
-    year: 2025,
-    isNew: true,
-    isTrending: true,
-    skipSegments: [
-      { start: 82, end: 151, label: "Présentation du Qarin", type: "intro" },
-      { start: 151, end: 316, label: "Les murmures et influences" },
-      { start: 316, end: 645, label: "Les invocations protectrices" },
-      { start: 645, end: 720, label: "Conclusion spirituelle" },
-    ],
-  },
-  "16NoYOXm8CA": { cats: ["Miracles du Coran", "Histoire & Mystère"], year: 2025, isNew: true },
-  hF_VXUaKjGk: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  X19CsM5BH6A: { cats: ["Eschatologie"], year: 2025, isNew: true, isTrending: true },
-  "_6m-BRNc34Y": { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  "5l2-NAG0w7c": { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true },
-  ZwY6Gx4KD1s: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  "K4-DNtDbAfQ": { cats: ["Histoire & Mystère", "Eschatologie"], year: 2025, isNew: true, isTrending: true },
-  W7C4KfbEt2M: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  "Zyy_5-d-Y9c": { cats: ["Eschatologie", "Histoire & Mystère"], year: 2025, isNew: true },
-  n3YzO8nGUUs: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  SPICJxNcXQo: { cats: ["Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  uJpsa3dUxdg: { cats: ["Eschatologie"], year: 2025, isNew: true, isTrending: true },
-  AU9a8VYpwZI: { cats: ["Coran", "Histoire & Mystère"], year: 2025, isNew: true },
-  p1h8Uv2i2l4: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  CgmRciPEgV0: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true, isTrending: true },
-};
-
-const communityMeta: MetaRecord = {
-  pn5Kk1JY93g: { cats: ["Coran", "Prophètes", "Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  toSgPWX87W8: { cats: ["Coran", "Miracles du Coran"], year: 2025, isNew: true },
-  DWeJaNN8Bhk: { cats: ["Anges & Djinns", "Histoire & Mystère"], year: 2025, isNew: true, isTrending: true },
-  "IqKm0gRu-_Y": { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
-  ugt2m2UDs9A: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true },
-  Y3ukppFaVBU: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  "0V3v_uPAOBw": { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  H9VKNw4cwKA: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  xKRD5Lmba0o: { cats: ["Héros & Personnages"], year: 2026, isNew: true },
-  FCxUXtdN1pU: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  kBmWOcJKIko: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
-  hcxV40rupDE: { cats: ["Héros & Personnages"], year: 2026, isNew: true },
-  dwK5F_PXV_I: { cats: ["Héros & Personnages"], year: 2026, isNew: true },
-  wQREAw7Jl5o: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
-  QAKB5JPjU6I: { cats: ["Héros & Personnages"], year: 2026, isNew: true },
-  xKXPtDz6eyM: { cats: ["Héros & Personnages"], year: 2026, isNew: true },
-  OaX_qWLNPWs: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  I7hVt0VVKJE: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  qzDosOe0mgo: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  "7gh9PPAZI0c": { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  hAvbpCBDgDM: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  xFenpNBdxj0: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  "2j0T2Ty36Go": { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
 };
 
 const narroDinRaw: [string, string, string][] = [
@@ -862,62 +733,7 @@ const haramainRaw: [string, string, string][] = [
   ],
 ];
 
-const towardsEternityRaw: [string, string, string][] = [
-  ["c01ys_5EKSI", "La Vie du Prophète Muhammad ﷺ — Ô Messager (Ép.1)", "La toute première série au monde retraçant la Sîra du Prophète ﷺ, visualisée par intelligence artificielle. Le début d'un voyage extraordinaire à travers sa vie."],
-  ["vT-GmNItVJo", "Les Jours les Plus Durs de l'Islam — Ô Messager (Ép.2)", "Les premières années de la Révélation furent marquées par la persécution. Revivez les épreuves des tout premiers musulmans."],
-  ["EeFh25K24x8", "Hamza et Omar Deviennent Musulmans — Ô Messager (Ép.3)", "Deux hommes redoutés se convertissent à l'Islam, changeant à jamais le destin de la communauté naissante à La Mecque."],
-  ["LmLo4CO0LNw", "Le Miracle Qui Choqua Quraysh — Ô Messager (Ép.4)", "Un événement surnaturel bouleverse les Quraysh et confirme aux yeux de tous la véracité du message du Prophète ﷺ."],
-  ["52C7ExmyPTw", "Le Prophète Muhammad ﷺ a Dû Quitter La Mecque — Ô Messager (Ép.5)", "Face à une persécution croissante, le Prophète ﷺ et ses compagnons entament l'Hégire vers Médine, un tournant décisif de l'Islam."],
-  ["SFXsnEfVC1s", "Bataille de Badr – 2 Miracles d'Allah pour Son Messager — Ô Messager (Ép.6)", "Une armée en infériorité numérique triomphe grâce à l'aide divine. Le récit de la bataille de Badr et de ses miracles."],
-  ["D9RaH5IoMCU", "Hamza (RA) est Tombé en Martyr — Bataille d'Uhud — Ô Messager (Ép.7)", "La bataille d'Uhud coûte la vie à Hamza, l'oncle du Prophète ﷺ et Lion d'Allah. Un moment de grand sacrifice pour l'Islam naissant."],
-  ["yfF7IXb1q9Q", "La Forteresse de Khaybar est Tombée ! — Ô Messager (Ép.9)", "La prise de la forteresse de Khaybar marque une victoire décisive pour la communauté musulmane grandissante."],
-  ["YwOFj8edxaU", "Le Dernier Sermon du Prophète ﷺ — Ô Messager (Ép.11)", "Les derniers mots du Prophète ﷺ à son peuple lors du Pèlerinage d'Adieu, un testament spirituel pour toute l'humanité."],
-  ["TJL2ganDyBc", "L'Histoire de Khadijah (RA) en IA — Mères du Paradis (Ép.1)", "Première épouse du Prophète ﷺ et première croyante, Khadijah incarna la foi, le soutien et le sacrifice dès les premiers instants de l'Islam."],
-  ["3C4U5WGmFs0", "\"Je préférerais que tu sois une pr*stituée plutôt qu'une musulmane\" — Juive convertie à l'Islam", "Le témoignage bouleversant d'une femme juive dont la conversion à l'Islam provoqua le rejet total de sa famille."],
-  ["Yst8jgGviA8", "La Nouvelle Preuve Irréfutable de l'Existence de Dieu ! — La Fin de l'Agnosticisme", "Une argumentation qui bouscule l'agnosticisme moderne et propose une preuve renouvelée de l'existence de Dieu."],
-  ["7NKz_Ixu4kc", "Le Miracle Du Déluge De Noé — L'Incroyable Histoire du Prophète Noé et Son Arche", "Plongez dans l'histoire fascinante du Prophète Noé (psl), du grand déluge et de la construction de son arche. Un récit captivant sur la foi et la persévérance."],
-  ["nISqIWdpYQ8", "La Vie du Prophète Muhammad ﷺ en 21 Minutes", "La vie complète du Prophète Muhammad ﷺ résumée en 21 minutes : de sa naissance à la Révélation, un parcours extraordinaire."],
-  ["WgPuTsCwhpc", "L'Histoire des Plus Grands Compagnons du Prophète ﷺ", "Une compilation des récits des plus grands compagnons du Prophète ﷺ, un travail réalisé avec passion et dévotion."],
-  ["aM14o1R2fkk", "Les Miracles du Coran Que Vous Allez Entendre pour la Première Fois", "Des miracles scientifiques du Coran que vous n'avez jamais entendus. Une exploration fascinante des preuves divines."],
-  ["APx0E7O0x6c", "\"Mon Père M'a Renié Après L'Islam…\" — Un Ex-Chrétien Raconte Son Histoire", "Le témoignage bouleversant d'un ex-chrétien dont la conversion à l'Islam provoqua le rejet de sa famille. Une histoire de foi et de sacrifice."],
-  ["IjNfRBnR3Pk", "\"Je me Suis Converti à L'Islam à Hollywood\" — Un Rêve du Propos Divin", "L'histoire incroyable d'une conversion à l'Islam à Hollywood. Quand le rêve divin guide vers la vérité."],
-  ["8JcKbq06HRM", "Futur Prêtre se Convertit à L'Islam — \"J'ai Défié le Coran\"", "L'histoire émouvante de la conversion de Yusha Evans, futur prêtre qui défia le Coran avant de trouver la vérité de l'Islam."],
-  ["6nYvhq7rtaU", "L'Histoire Complète du Prophète Youssouf (Joseph) — Un Récit Émouvant", "L'histoire complète du Prophète Youssouf (Joseph), trahi par ses frères, vendu comme esclave, puis élevé au plus haut rang par la volonté d'Allah."],
-  ["DnP3qd_Qwcs", "L'Histoire du Prophète ﷺ — Épisode 18", "Un épisode de la série retraçant la vie du Prophète Muhammad ﷺ, ses enseignements et les événements marquants de sa mission."],
-  ["yo4FjML2RKw", "L'Histoire du Prophète — Récit Complet en Français", "Un récit complet et détaillé sur la vie du Prophète, ses enseignements et son héritage spirituel pour l'humanité."],
-  ["jdqsiFw74Jk", "D'une Carrière au FBI à un Imam Musulman — Pour l'Islam", "Le parcours incroyable d'un agent du FBI qui quitta sa carrière pour devenir imam. Une histoire de transformation et de dévotion."],
-  ["50ExPJin0Ho", "Les Miracles du Coran Que Vous Découvrirez pour la Première Fois", "Une exploration fascinante de miracles du Coran encore méconnus, qui renforcent la foi et émerveillent l'esprit."],
-  ["9Nig8R3mHh4", "Allah a Caché ce Miracle dans ta Respiration — Cela va Renforcer ta Foi", "Un miracle divin caché dans l'acte le plus naturel de la vie : la respiration. Une réflexion qui va renforcer votre foi."],
-  ["HPlRgzr3g_c", "Un Bouddhiste se Convertit à l'Islam — « Je ne Peux pas Voir Dieu, Pourquoi Croire ? »", "Le témoignage d'un bouddhiste qui trouva la vérité de l'Islam malgré ses questions existentielles sur l'existence de Dieu."],
-  ["HVoEpbeehnU", "La Jeunesse qu'Israël Craint — La Génération Z", "Une analyse de la génération Z qui se tourne vers l'Islam en nombre, un phénomène qui inquiète les puissances dominantes."],
-  ["LR3rQ8EG498", "La Génération Z se Convertit à l'Islam — La Jeunesse que l'Occident N'attendait Pas", "Un phénomène de masse : les jeunes de la génération Z embrassent l'Islam dans le monde entier. Une révolution spirituelle silencieuse."],
-  ["Pcwmler30yk", "Un Bon Non-Musulman en Enfer, Un Musulman Pécheur au Paradis ? — La Réponse Islamique", "Une question philosophique profonde : la justice divine face à la foi et aux actes. La réponse islamique à un dilemme éternel."],
-  ["QwN7qtPeOBg", "Fatima (RA) : La Fille du Prophète Muhammad ﷺ — Mères du Paradis (Ép.7)", "Fatima, la fille bien-aimée du Prophète ﷺ, l'une des quatre femmes parfaites de l'histoire. Sa vie, sa foi et son héritage spirituel."],
-  ["RyH0Ic_xMnw", "J'ai Abandonné une Vie de Millionnaire pour l'Islam — Histoire de Conversion Émouvante", "Le témoignage d'un homme qui quitta tout — richesse, statut, confort — pour embrasser l'Islam. Un sacrifice inspirant."],
-  ["TottSdGMDfM", "De la Boîte de Nuit à l'Islam — Un Entrepreneur de 23 ans se Convertit", "L'histoire d'un jeune entrepreneur de 23 ans qui quitta une vie de fêtes et de nuit pour trouver la vérité dans l'Islam."],
-  ["U_KEkklNgE8", "Comment Allah m'a Sauvé — L'Histoire d'un Reconversion Spirituelle", "Un témoignage puissant sur la manière dont Allah guide et sauve ceux qui Le cherchent sincèrement."],
-  ["WXHW3Ac4CWo", "J'ai Été Viré de la Mosquée à Cause de mes Tatouages — Non-Croyant vs Musulman", "Un échange fascinant entre un non-croyant et un musulman sur les préjugés, l'apparence et la foi."],
-  ["bUsQT_fDBdw", "Bataille de la Tranchée : le Duel Épique d'Ali (RA) — Ô Messager (Ép.8)", "La bataille de la Tranchée et le duel héroïque d'Ali ibn Abi Talib (RA) face au guerrier Amr ibn Abd-Wudd. Un moment de légende."],
-  ["guKvNzcL4rQ", "Je chantais dans des églises… jusqu'au jour où j'ai découvert l'islam — Noor Saadeh", "Le témoignage de Noor Saadeh, qui grandit en chantant dans les églises avant de trouver la vérité de l'Islam."],
-  ["hFKDclO3EY0", "La Première Série de Sîra Visualisée par IA au Monde — Bande-annonce Ô Messager", "La bande-annonce officielle de la première série au monde retraçant la vie du Prophète ﷺ visualisée par intelligence artificielle."],
-  ["sW1m8S1plOw", "Hajar (AS) : Seule dans le Désert avec Ismaïl (AS) — Le Miracle de Zamzam (Ép.6)", "Hajar, seule dans le désert avec son bébé Ismaïl, et le miracle de Zamzam. Un récit de patience et de confiance en Allah."],
-  ["vnLKa4RkpAA", "La Conquête de la Mecque — Personne Ne S'attendait à Cela — Ô Messager (Ép.10)", "La conquête de la Mecque par le Prophète ﷺ : un retour triomphal sans effusion de sang. Un tournant historique de l'Islam."],
-  ["xsQmE7GAGyA", "Eve (AS) — La Première Femme sur Terre — Mères du Paradis (Ép.8)", "Eve (Hawwa), la première femme de l'humanité. Son histoire, son rôle dans la création et les leçons éternelles de sa vie."],
-  ["y2mevKuOKjo", "La Mort Tragique de Ma Mère M'a Conduit à l'Islam — Le Témoignage d'un Ex-Athée Suédois", "L'histoire bouleversante d'un athée suédois dont le deuil maternel fut le point de départ d'un voyage spirituel vers l'Islam."],
-  ["AKfptpvAI1g", "Le Scientifique Musulman qui a Découvert la Gravité avant Newton", "Un short fascinant sur les savants musulmans qui ont découvert la gravité bien avant Newton. Un héritage scientifique oublié."],
-  ["BYsk3Lz27Ho", "Le Miracle du Coran : Pourquoi la Fourmi a Dit « Écrase-la »", "Un miracle linguistique du Coran dans l'histoire de la fourmi et du Prophète Souleyman. La précision divine des mots du Coran."],
-  ["EkfZS5kCUVY", "Pourquoi le Coran N'Appelle Jamais le Souverain de Joseph « Pharaon »", "Une précision étonnante du Coran : il ne nomme jamais « Pharaon » le souverain de l'époque de Joseph. Un miracle historique."],
-  ["GN71AKyWUbg", "Le Coran Décrivait Déjà le Ciel Protecteur de la Terre il y a 1 400 Ans", "Le Coran décrivait le rôle protecteur de l'atmosphère terrestre 14 siècles avant la science moderne. Un miracle scientifique."],
-  ["VUAaZoCe-bc", "Le Miracle des Montagnes dans le Coran", "Les montagnes, décrites dans le Coran comme des pieux stabilisateurs de la Terre. Un miracle scientifique confirmé par la géologie."],
-  ["X3RLnBVL8Jc", "Pourquoi le Coran Parle d'un Moustique Femelle ?", "Pourquoi le Coran mentionne-t-il spécifiquement le moustique femelle ? Une précision biologique étonnante du Livre Saint."],
-  ["qTUhSeWtCis", "Le Miracle du Coran : La Lettre qui Révèle la Fin du Soleil", "Une lettre du Coran qui décrit la fin du Soleil. Un miracle linguistique et scientifique qui défie l'entendement."],
-  ["x3On4hWht00", "Gagne des Hassanates Pendant que tu Dors — Sunnahs du Coucher ﷺ", "Les sunnahs du coucher du Prophète ﷺ : comment gagner des bonnes actions même pendant son sommeil."],
-  ["5q2o6PpwGbI", "SIGNS OF THE END OF TIMES VISIBLE IN 2025", "Une analyse visuelle et spirituelle frappante des signes de la Fin des Temps observés dans les bouleversements climatiques, géopolitiques et sociétaux actuels."],
-  ["wCqt7QOA2QA", "Why do some women choose to leave this mosque?", "Une enquête poignante et bienveillante explorant les raisons pour lesquelles certaines femmes s'éloignent des mosquées et comment restaurer l'accueil prophétique."],
-  ["wCstYQKX8U8", "INCREDIBLE CONVERSION AT 69 YEARS OLD", "Le récit poignant et inspirant d'une conversion à l'Islam à l'âge de 69 ans. Une preuve vivante que la guidance d'Allah n'a pas d'âge."],
-  ["DtQp7r7e_J8", "Life After Death in Islam: Step by Step", "Le voyage complet de l'âme après la mort étape par étape : de l'agonie et la tombe (Barzakh) au Jour de la Résurrection, la Balance et l'Éternité."],
-  ["XNqzrQlLLFY", "I Was Kidnapped for Accepting Islam! - Hindu Converts to Islam", "Le récit bouleversant d'un converti hindou à l'Islam confronté aux épreuves et à la persécution, guidé par la vérité inébranlable du Tawhid."],
-];
+// towardsEternityRaw is imported from ./towardsEternityVideos (199 videos catalogued)
 
 const croyantRationnelRaw: [string, string, string][] = [
   ["E-3Opi2yDjs", "EBO Noah : Il Annonce la Fin du Monde sur TikTok et Arnaque des Milliers de Personnes", "Une enquête sur EBO Noah, ce influenceur qui annonça la fin du monde sur TikTok et trompa des milliers de croyants. Un rappel sur les faux prophètes."],
@@ -953,71 +769,6 @@ const croyantRationnelRaw: [string, string, string][] = [
   ["IoGqok1BLX0", "Les critiques des hadiths : qui sont ceux qui ne les acceptent pas", "Une réfutation argumentée et pédagogique du courant coraniste et des sceptiques qui rejettent la Sunnah et l'autorité des recueils prophétiques authentiques."],
 ];
 
-const minuteIslamRaw: [string, string, string][] = [
-  ["NDxEgz2oIqE", "THE 7 DEADLY SINS - @Minute Islam", "Les 7 grands péchés destructeurs (Al-Mubiqat) mis en garde par le Prophète ﷺ : explications concises, gravité spirituelle et remèdes pour s'en préserver."],
-  ["uMUhKIlTf6E", "END OF TIMES - IMMINENT SIGNS - Minute Islam", "Rappel court, intense et captivant sur les signes imminents de l'Heure : la sécheresse, les épreuves et les annonces de la Révélation."],
-  ["IQgrEqyaUag", "THE INTERPRETATION OF DREAMS - Minute Islam", "L'art et la science de l'interprétation des rêves (Tafsir Al-Ahlam) en Islam : distinguer le songe véridique de la ruse satanique et des pensées de l'âme."],
-  ["BxgVOKxyh2w", "WOULD YOU BE ATHEIST? - Minute Islam", "Un questionnement philosophique et rationnel percutant sur les limites logiques de l'athéisme face à la complexité harmonieuse de l'Univers et de la vie."],
-  ["Evr8LYo8Dt0", "4 things to do before you die - minute Islam", "Quatre actions indispensables et prioritaires à accomplir de son vivant avant que l'Heure n'arrive pour garantir un bilan favorable auprès du Créateur."],
-  ["ljWrUUQ3DdI", "INVISIBLE SINS - MEDITANCE - Minute Islam", "La médisance, la jalousie et les péchés de la langue : ces fautes invisibles qui détruisent les bonnes actions à notre insu. Comment purifier son cœur."],
-  ["-Kgkfuzuhwc", "INTIMATE RELATIONS BEFORE ISLAM - Minute Islam", "Une rétrospective historique sur les coutumes et pratiques relationnelles de l'époque préislamique (Jahiliyya) et la noblesse apportée par les préceptes de l'Islam."],
-  ["eGVYv7oZMm8", "WHO IS ALLAH ? - Minute Islam", "Qui est Allah ? La définition sublime de l'Unicité Divine (Tawhid), Ses Plus Beaux Noms et Attributs expliqués avec une simplicité bouleversante."],
-  ["LfTkK6ktk5w", "VIRGINITY - Minute Islam", "La pureté, la chasteté et la préservation de soi dans les enseignements islamiques face aux dérives de l'hypersexualisation moderne."],
-  ["DefDLFdk7QQ", "Tu n'es Peut Être Plus Musulman Sans le savoir", "Explication claire et percutante des annulatifs de l'Islam (Nawaqid Al-Islam) et des pièges subtils qui peuvent menacer la foi."],
-  ["nkvx27zE6Mo", "J'ai Enquêté sur Les Dessous du Poulet KFC Halal en France (AVS? ACHAHADA? MOSQUÉE DE LYON?)", "Grande enquête d'investigation sur la traçabilité de la viande et les organismes de certification halal (AVS, Achahada, Mosquée de Lyon) dans les fast-foods en France."],
-  ["guwErCKlbO4", "L'ISLAM AU SÉNÉGAL ( Épisode 1: La route du Tawhid)", "Documentaire immersif retraçant l'histoire glorieuse de l'Islam au Sénégal, la transmission du Tawhid et l'héritage des grands savants de l'Afrique de l'Ouest."],
-  ["YOu1on5c3kw", "CE QU'IL SE PASSERA LE JOUR DU JUGEMENT DERNIER", "Description saisissante des étapes du Jour du Jugement Dernier : le souffle de la Trompe, le rassemblement, les comptes et la traversée du pont As-Sirat."],
-  ["CRPlrOuJxT0", "J'ai enquêté sur les INFLUENCEURS MUSULMANS qui vous mentent", "Décryptage salutaire sur le business, les placements de produits douteux et les dérives de certains influenceurs musulmans sur les réseaux sociaux."],
-  ["YuIDtvYwtz0", "Tu as ces 5 choses chez toi ? Il est temps de s’en débarrasser !", "5 objets ou pratiques souvent présents dans les foyers qui empêchent l'entrée des anges de miséricorde selon les hadiths prophétiques."],
-  ["jJAA60-14u0", "QUE DEVIENDRONT LES ANIMAUX APRÈS LE JUGEMENT ( PARADIS, ENFER OU POUSSIÈRE )", "Que dit l'Islam sur le sort des animaux lors du Jour de la Résurrection ? Rétablissement de la justice entre les créatures puis retour en poussière."],
-  ["INr0y5Np4Y8", "LA FIN DES TEMPS 1 - INTRODUCTION", "Premier volet de la grande série sur la Fin des Temps : panorama général, signes précurseurs et attitudes du croyant face aux troubles (Fitna)."],
-  ["rgtxZuJmwMc", "LA FIN DES TEMPS 2 - MAHDI, DAJJAL, ISA, GOG & MAGOG", "Deuxième volet consacré aux signes majeurs : l'apparition du Mahdi, la venue de l'Antéchrist (Dajjal), la descente de Jésus ('Isa) et les peuples Gog et Magog."],
-  ["6Z-umY6WInU", "CANICULE : LA DÉRANGEANTE VÉRITÉ QUE NOUS CACHENT LES MÉDIAS", "Les chaleurs extrêmes et la canicule à la lumière des enseignements islamiques : un souffle de l'Enfer et un rappel des réalités de l'Au-delà."],
-  ["UeRjMfySejA", "Quel est le sens de la vie ? Médite avant de mourir", "Méditation profonde sur la raison d'être de l'être humain, l'épreuve de l'ici-bas et la préparation lucide du départ vers l'éternité."],
-  ["WZnTMTwxVN0", "Ce Djinn te Suit jusqu'à la Mort - Et ce n'est pas le plus Choquant", "Les révélations authentiques sur le Qarin (le compagnon djinn assigné à chaque individu), ses murmures (waswas) et les moyens spirituels de s'en protéger."],
-  ["16NoYOXm8CA", "Cro-Magnon et évolution : ce que l'Islam en dit", "Confronter la théorie de l'évolution, l'homme de Cro-Magnon et les découvertes archéologiques avec le récit coranique de la création d'Adam."],
-  ["hF_VXUaKjGk", "D'où vient l'Obsession des Hommes à l'Infidélité ?", "Analyse des causes psychologiques et spirituelles de la trahison et de la tromperie, et comment la foi fortifie le foyer et le respect des engagements."],
-  ["X19CsM5BH6A", "CE QU'IL SE PASSERA LE JOUR DE LA FIN DES TEMPS", "Le bouleversement de l'Univers, l'effondrement des cieux et des montagnes : les descriptions bibliques et coraniques de la fin du monde."],
-  ["_6m-BRNc34Y", "J'ai enquêté sur l'HORREUR des Imams 2.0 égareurs", "Enquête critique sur les faux prédicateurs et pseudo-savants du web qui déforment les textes et égarent la jeunesse pour des vues et des abonnés."],
-  ["5l2-NAG0w7c", "Ce qu'Allah a Mis Sur Notre Route En Bosnie Nous a CHOQUÉ", "Carnet de voyage et témoignage poignant en Bosnie-Herzégovine sur les traces de l'histoire musulmane européenne et les leçons de résilience."],
-  ["ZwY6Gx4KD1s", "Omra à petit prix : partir seul sans agence pour moins de 500€", "Guide complet et conseils pratiques pour accomplir son pèlerinage de l'Omra en toute autonomie à moindre coût, sans compromettre sa dévotion."],
-  ["K4-DNtDbAfQ", "J'ai Enquêté sur Trump, les Rothschild et Le Pacte Secret Des Sionistes Chrétiens Contre l’islam", "Enquête géopolitique approfondie sur les alliances évangéliques, le sionisme chrétien aux États-Unis et leurs ambitions eschatologiques au Moyen-Orient."],
-  ["W7C4KfbEt2M", "J'ai Enquêté sur La Colonisation Française et sa Stratégie pour Supprimer l'islam d'Algerie", "Recherche historique détaillée sur les politiques de défrancisation et de tentative d'éradication de l'identité islamique durant la colonisation en Algérie."],
-  ["Zyy_5-d-Y9c", "Le conflit Iran-Israël : signes d’un changement global à venir ?", "Analyse stratégique et eschatologique sur l'escalade militaire entre l'Iran et Israël et ses répercussions sur l'équilibre mondial."],
-  ["n3YzO8nGUUs", "Un Rabbin Révèle La VÉRITÉ sur La Guerre Actuelle et le Si0nisme", "Témoignage et analyse d'un rabbin orthodoxe antisioniste distinguant le judaïsme traditionnel des visées politiques et militaires nationalistes."],
-  ["SPICJxNcXQo", "4 CONSEILS CONTRE LE PORNO", "Quatre étapes concrètes, psychologiques et spirituelles pour briser l'addiction à la pornographie et purifier son regard et son cœur."],
-  ["uJpsa3dUxdg", "LA FIN DES TEMPS 6 - LES SIGNES VISIBLES", "Sixième volet de la série Eschatologie : les signes mineurs déjà réalisés et observables sous nos yeux au XXIe siècle."],
-  ["AU9a8VYpwZI", "INVOCATION DU VOYAGE - Minute Islam - Ecouter, Apprendre, Comprendre.", "Dua du voyage (Dou'a As-Safar) avec prononciation claire en arabe, translittération, traduction française et explication de ses mérites."],
-  ["p1h8Uv2i2l4", "Rappel Spirituel & Méditation — Minute Islam", "Méditation sur la constance dans l'adoration, la purification de l'intention et le détachement des futilités de la vie d'ici-bas."],
-  ["CgmRciPEgV0", "J'OFFRE DES IPAD À DES NON MUSULMANS QUI RÉPONDENT CORRECTEMENT À NOS QUESTIONS !", "Micro-trottoir éducatif et bienveillant dans la rue pour faire découvrir l'Islam, déconstruire les stéréotypes et récompenser les participants."],
-];
-
-const communityRaw: [string, string, string, string][] = [
-  ["pn5Kk1JY93g", "Un chrétien lit le Coran : Jésus et Marie dans la Sourate Al-Imran", "Une lecture attentive et respectueuse des versets coraniques dédiés à 'Isa (Jésus) et Maryam (Marie), mettant en lumière la vénération de leurs figures en Islam.", "La Quête"],
-  ["toSgPWX87W8", "Une grande perte si vous lisez rarement cette sourate - Cheikh Souleyman bin Salimullah Ar-Rouhayli", "Explication des mérites incommensurables et des bénédictions associées à la récitation fréquente des sourates protectrices et fondamentales.", "As-Sunnah"],
-  ["DWeJaNN8Bhk", "LA PARALYSIE DU SOMMEIL : Ce Phénomène Terrifiant Que Personne N'arrive à Expliquer", "Entre explications scientifiques et enseignements islamiques sur le monde invisible : que se passe-t-il lors de la paralysie du sommeil et comment s'en prémunir ?", "Ousstaz"],
-  ["IqKm0gRu-_Y", "Psfprime : Amulettes de protection, Cherté de la vie au Sénégal, le regard de l'islam", "Émission spéciale décryptant l'usage traditionnel des amulettes (gris-gris), les questions socio-économiques et les réponses du fiqh islamique.", "2stvsenegal"],
-  ["ugt2m2UDs9A", "Voici pourquoi j'ai quitté la France pour la Malaisie. 🇲🇾🇫🇷", "Retour d'expérience et témoignage inspirant sur la Hijra, le coût de la vie et l'épanouissement familial dans un pays musulman moderne.", "RayGdr"],
-  ["Y3ukppFaVBU", "SAMA YAAY - Saison 1 - Episode 23 : Bande Annonce", "Bande-annonce officielle de la série sénégalaise Sama Yaay mettant en scène les liens familiaux, les épreuves et les valeurs morales.", "EvenProd"],
-  ["0V3v_uPAOBw", "Série - Kër Gu Mag - Episode 23 - VOSTFR", "Épisode de la série sociétale Kër Gu Mag abordant les dynamiques familiales, la sagesse des aînés et les traditions.", "Marodi TV Sénégal"],
-  ["H9VKNw4cwKA", "VEO Sprint - Fitness & Découverte", "Session dynamique d'entraînement physique et conseils de discipline corporelle au quotidien.", "Découvertes"],
-  ["xKRD5Lmba0o", "Récital XXL de Lamine Camara contre le PSG", "Retour en images et analyse sportive de la prestation étincelante du milieu de terrain sénégalais Lamine Camara.", "Sport & Société"],
-  ["FCxUXtdN1pU", "Training at the Most Dangerous Gym in America", "Immersion et séance intensive de musculation et de dépassement de soi dans une salle mythique.", "Découvertes"],
-  ["kBmWOcJKIko", "Vibe Coding with Gemini 3 in Google AI Studio", "Démonstration du développement assisté par intelligence artificielle pour concevoir rapidement des applications modernes.", "Tech & Savoir"],
-  ["hcxV40rupDE", "Un choc de Premier League 2026/27 (J3)", "Résumé des temps forts, buts et analyse tactique de la grande affiche du championnat anglais.", "Sport & Société"],
-  ["dwK5F_PXV_I", "Al-Ittihad étouffe Al-Nassr | Al-Ittihad vs Al-Nassr", "Debrief passionné et analyse du duel au sommet entre les géants de la Saudi Pro League.", "Sport & Société"],
-  ["wQREAw7Jl5o", "Test des Nouveaux Modèles Audio & IA Musicale", "Test complet des nouveaux modèles de génération audio et intelligence artificielle créative.", "Tech & Savoir"],
-  ["QAKB5JPjU6I", "Valence 0-5 Barcelone - Analyse Tactique", "Analyse tactique et retour sur le match entre le Barça et Valence.", "Sport & Société"],
-  ["xKXPtDz6eyM", "Le début de saison enchanté du Barça à Mestalla", "Analyse détaillée de la rencontre de Liga espagnole et des enjeux de la saison.", "Sport & Société"],
-  ["OaX_qWLNPWs", "Routine Diète + Entraînement Fitness & Santé", "Conseils diététiques simples et programme d'exercices physiques pour reprendre sa santé en main.", "Santé & Bien-être"],
-  ["I7hVt0VVKJE", "Ces applications m'ont payé (preuve à l'appui)", "Enquête et tests pratiques sur les applications de micro-rémunération et de productivité en ligne.", "Tech & Savoir"],
-  ["qzDosOe0mgo", "Le Diable s'habille en Rick Owens : son incroyable histoire", "Récit documentaire sur les coulisses de la mode, les influences artistiques et les dérives de l'extravagance.", "Société"],
-  ["7gh9PPAZI0c", "Iliman Ndiaye - Débuts Remarquables", "Compilations des meilleurs gestes techniques et du parcours exemplaire d'Iliman Ndiaye.", "Sport & Société"],
-  ["hAvbpCBDgDM", "Astuces et Soins Quotidiens : Hacks Indispensables", "Guide pratique de soins corporels simples et efficaces au quotidien.", "Santé & Bien-être"],
-  ["xFenpNBdxj0", "Surviving The World's Most Dangerous Gym!", "Aventure et défi sportif immersif dans une salle d'entraînement extrême.", "Découvertes"],
-  ["2j0T2Ty36Go", "Last Minute Goal FIFA vs PES (1999 - 2025)", "Rétrospective nostalgique sur 25 ans d'évolution graphique et de gameplay entre les simulations de football.", "Tech & Savoir"],
-];
-
 function buildItem(
   id: string,
   youtubeId: string,
@@ -1030,6 +781,8 @@ function buildItem(
     featured?: boolean;
     isNew?: boolean;
     isTrending?: boolean;
+    isShort?: boolean;
+    duration?: string;
     audioUrl?: string;
     skipSegments?: SkipSegment[];
     seriesId?: string;
@@ -1068,6 +821,8 @@ function buildItem(
     }
   }
 
+  const resolvedDuration = channelVideoDurations[youtubeId]?.duration || meta.duration || "—";
+
   return {
     id,
     youtubeId,
@@ -1077,7 +832,7 @@ function buildItem(
     categories,
     year: meta.year ?? 2024,
     rating: "TV-PG",
-    duration: "—",
+    duration: resolvedDuration,
     score: 85 + Math.floor(Math.random() * 14),
     thumbnail: getThumbnail(youtubeId),
     image: getThumbnail(youtubeId),
@@ -1086,12 +841,31 @@ function buildItem(
     featured: meta.featured,
     isNew: meta.isNew,
     isTrending: meta.isTrending,
+    isShort: meta.isShort,
     skipSegments: meta.skipSegments,
     seriesId,
     seriesTitle,
     episodeNumber,
     totalEpisodes,
   };
+}
+
+export function parseDurationToSeconds(dur: string | undefined): number {
+  if (!dur || dur === "—") return 0;
+  const str = dur.trim();
+  if (str.includes(":")) {
+    const parts = str.split(":").map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+  }
+  const hourMatch = str.match(/(\d+)\s*h/);
+  const minMatch = str.match(/(\d+)\s*min/);
+  const secMatch = str.match(/(\d+)\s*s/);
+  let total = 0;
+  if (hourMatch) total += parseInt(hourMatch[1], 10) * 3600;
+  if (minMatch) total += parseInt(minMatch[1], 10) * 60;
+  if (secMatch) total += parseInt(secMatch[1], 10);
+  return total;
 }
 
 const narroDinItems: ContentItem[] = narroDinRaw.map(([ytId, title, desc], i) => {
@@ -1129,12 +903,61 @@ const minuteIslamItems: ContentItem[] = minuteIslamRaw.map(([ytId, title, desc],
   return buildItem(`mi${i + 1}`, ytId, title, desc, "Minute Islam", meta);
 });
 
-const communityItems: ContentItem[] = communityRaw.map(([ytId, title, desc, ch], i) => {
-  const meta = communityMeta[ytId] ?? {};
-  return buildItem(`com${i + 1}`, ytId, title, desc, ch, meta);
+const dinulQayyimaItems: ContentItem[] = dinulQayyimaRaw.map(([ytId, title, desc], i) => {
+  const meta = dinulQayyimaMeta[ytId] ?? {};
+  return buildItem(`dq${i + 1}`, ytId, title, desc, "Din-ul-Qayyima", meta);
 });
 
-export const catalog: ContentItem[] = [
+const surLeCheminItems: ContentItem[] = surLeCheminRaw.map(([ytId, title, desc], i) => {
+  const meta = surLeCheminMeta[ytId] ?? {};
+  return buildItem(`slc${i + 1}`, ytId, title, desc, "Sur le chemin de la prophétie", meta);
+});
+
+const averroesHistoireItems: ContentItem[] = averroesHistoireRaw.map(([ytId, title, desc], i) => {
+  const meta = averroesHistoireMeta[ytId] ?? {};
+  return buildItem(`av${i + 1}`, ytId, title, desc, "Averroès Histoire", meta);
+});
+
+const minhajAnNubuwwahItems: ContentItem[] = minhajAnNubuwwahRaw.map(([ytId, title, desc], i) => {
+  const meta = minhajAnNubuwwahMeta[ytId] ?? {};
+  return buildItem(`mn${i + 1}`, ytId, title, desc, "Minhaj An-Nubuwwah", meta);
+});
+
+const dariftonProdItems: ContentItem[] = dariftonProdRaw.map(([ytId, title, desc], i) => {
+  const meta = dariftonProdMeta[ytId] ?? {};
+  return buildItem(`dp${i + 1}`, ytId, title, desc, "Darifton Prod", meta);
+});
+
+const lislamSimplementItems: ContentItem[] = lislamSimplementRaw.map(([ytId, title, desc], i) => {
+  const meta = lislamSimplementMeta[ytId] ?? {};
+  return buildItem(`lis${i + 1}`, ytId, title, desc, "L'Islam Simplement", meta);
+});
+
+const blueCasquetteItems: ContentItem[] = blueCasquetteRaw.map(([ytId, title, desc], i) => {
+  const meta = blueCasquetteMeta[ytId] ?? {};
+  return buildItem(`bc${i + 1}`, ytId, title, desc, "Blue Casquette", meta);
+});
+
+const laQueteItems: ContentItem[] = laQueteRaw.map(([ytId, title, desc], i) => {
+  const meta = laQueteMeta[ytId] ?? {};
+  return buildItem(`lq${i + 1}`, ytId, title, desc, "La Quête", meta);
+});
+
+const savantsSunnahItems: ContentItem[] = savantsSunnahRaw.map(([ytId, title, desc], i) => {
+  const meta = savantsSunnahMeta[ytId] ?? {};
+  return buildItem(`ss${i + 1}`, ytId, title, desc, "Les Savants de la Sunnah", meta);
+});
+
+export const rawCatalog: ContentItem[] = [
+  ...dinulQayyimaItems,
+  ...surLeCheminItems,
+  ...averroesHistoireItems,
+  ...minhajAnNubuwwahItems,
+  ...dariftonProdItems,
+  ...lislamSimplementItems,
+  ...blueCasquetteItems,
+  ...laQueteItems,
+  ...savantsSunnahItems,
   ...narroDinItems,
   ...narroItems,
   ...yacineItems,
@@ -1142,8 +965,35 @@ export const catalog: ContentItem[] = [
   ...croyantRationnelItems,
   ...haramainItems,
   ...minuteIslamItems,
-  ...communityItems,
 ];
+
+// Règle stricte de l'application : SUPPRIMER toutes les vidéos de moins de 10 minutes (< 600s)
+// Exception accordée pour "Les Savants de la Sunnah" (extraits et fatwas de savants)
+const filteredCatalog: ContentItem[] = rawCatalog.filter((item) => {
+  // Dérogation pour Les Savants de la Sunnah (extraits courts de savants autorisés)
+  if (item.channel === "Les Savants de la Sunnah") {
+    return true;
+  }
+  // Exclure les vidéos dont la durée est strictement inférieure à 10 minutes (< 600 secondes)
+  const sec = parseDurationToSeconds(item.duration);
+  if (sec > 0 && sec < 600) {
+    return false; // Supprimée car < 10 min
+  }
+  // Exclure les bandes-annonces ou teasers
+  const titleLower = item.title.toLowerCase();
+  if (titleLower.includes("bande-annonce") || titleLower.includes("bande annonce") || titleLower.includes("teaser")) {
+    return false;
+  }
+  return true;
+});
+
+// Déduplication par ID YouTube : conserve la vidéo la plus complète et affiche un témoin dans le log
+const dedupedInitialCatalog = deduplicateCatalog(filteredCatalog, "Catalogue Initial");
+
+// Diversification et mélange équitable entre créateurs : évite la domination d'un seul auteur
+export const catalog: ContentItem[] = diversifyCatalogByChannel(dedupedInitialCatalog, {
+  prioritizeQuality: true,
+});
 
 export const allCategories: Category[] = [
   "Coran",
@@ -1163,7 +1013,8 @@ export function getFeaturedContent(): ContentItem {
 }
 
 export function getContentByCategory(cat: Category): ContentItem[] {
-  return catalog.filter((c) => c.categories.includes(cat));
+  const items = catalog.filter((c) => c.categories.includes(cat));
+  return diversifyCatalogByChannel(items, { prioritizeQuality: true });
 }
 
 export function getContentByChannel(channel: Channel): ContentItem[] {
@@ -1180,7 +1031,7 @@ export const rows: ContentRowData[] = [
   {
     id: "trending",
     label: "Tendances",
-    items: catalog.filter((c) => c.isTrending),
+    items: diversifyCatalogByChannel(catalog.filter((c) => c.isTrending), { prioritizeQuality: true }),
   },
   {
     id: "coran-tarawih",
@@ -1192,8 +1043,13 @@ export const rows: ContentRowData[] = [
     .map((cat) => ({
       id: cat.toLowerCase().replace(/[^a-z]/g, "-"),
       label: cat,
-      items: catalog.filter((c) => c.categories.includes(cat)),
+      items: diversifyCatalogByChannel(catalog.filter((c) => c.categories.includes(cat)), { prioritizeQuality: true }),
     })),
+  {
+    id: "din-ul-qayyima",
+    label: "📚 Din-ul-Qayyima — Mohamed Nadhir (Enseignements & Fiqh)",
+    items: catalog.filter((c) => c.channel === "Din-ul-Qayyima"),
+  },
   {
     id: "recitations-haramain",
     label: "🕌 Récitations & Tarawih des Grands Imams (1980 - 2000)",
@@ -1225,9 +1081,49 @@ export const rows: ContentRowData[] = [
     items: catalog.filter((c) => c.channel === "Croyant Rationnel"),
   },
   {
+    id: "sur-le-chemin",
+    label: "🧭 Sur le chemin de la prophétie — Récits & Témoignages",
+    items: catalog.filter((c) => c.channel === "Sur le chemin de la prophétie"),
+  },
+  {
     id: "minute-islam",
     label: "⏱️ Minute Islam — Rappels & Sagesses",
     items: catalog.filter((c) => c.channel === "Minute Islam"),
+  },
+  {
+    id: "averroes-histoire",
+    label: "🏛️ Averroès Histoire — Civilisation & Histoire de l'Islam",
+    items: catalog.filter((c) => c.channel === "Averroès Histoire"),
+  },
+  {
+    id: "minhaj-an-nubuwwah",
+    label: "📖 Minhaj An-Nubuwwah — Enseignements & Rappels Prophétiques",
+    items: catalog.filter((c) => c.channel === "Minhaj An-Nubuwwah"),
+  },
+  {
+    id: "darifton-prod",
+    label: "🎬 Darifton Prod — Documentaires, Récits & Histoire",
+    items: catalog.filter((c) => c.channel === "Darifton Prod"),
+  },
+  {
+    id: "lislam-simplement",
+    label: "💡 L'Islam Simplement — Apprentissage & Rappels Accessibles",
+    items: catalog.filter((c) => c.channel === "L'Islam Simplement"),
+  },
+  {
+    id: "blue-casquette",
+    label: "🧢 Blue Casquette — Enquêtes, Réflexions & Société",
+    items: catalog.filter((c) => c.channel === "Blue Casquette"),
+  },
+  {
+    id: "la-quete",
+    label: "🔍 La Quête — Découverte, Récits & Dialogue",
+    items: catalog.filter((c) => c.channel === "La Quête"),
+  },
+  {
+    id: "savants-sunnah",
+    label: "💎 Les Savants de la Sunnah — Extraits, Fatwas & Rappels",
+    items: catalog.filter((c) => c.channel === "Les Savants de la Sunnah"),
   },
   {
     id: "new",

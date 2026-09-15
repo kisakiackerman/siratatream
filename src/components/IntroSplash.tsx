@@ -16,11 +16,11 @@ export default function IntroSplash({ onComplete }: IntroSplashProps) {
     setIsExiting(true);
   }, []);
 
-  // Automatic transition after 3 seconds
+  // Transition rapide vers l'application
   useEffect(() => {
     const autoTimer = setTimeout(() => {
       handleSkip();
-    }, 3000);
+    }, 1200);
 
     return () => clearTimeout(autoTimer);
   }, [handleSkip]);

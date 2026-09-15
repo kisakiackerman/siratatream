@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
 import { AnimatePresence } from "motion/react";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ViewerProfileProvider, useViewerProfile } from "@/hooks/useViewerProfile";
@@ -15,25 +15,33 @@ import PreferenceRow from "@/components/PreferenceRow";
 import PlayerModal from "@/components/PlayerModal";
 import MiniPlayer from "@/components/MiniPlayer";
 import InfoModal from "@/components/InfoModal";
-import OfflineModal from "@/components/OfflineModal";
-import MyListModal from "@/components/MyListModal";
-import WatchHistoryModal from "@/components/WatchHistoryModal";
-import AccountSettingsModal, { type SettingsTab } from "@/components/AccountSettingsModal";
-import ProfileSelector from "@/components/ProfileSelector";
-import CatalogPage from "@/components/CatalogPage";
-import RandomPage from "@/components/RandomPage";
-import LegalModal from "@/components/LegalModal";
-import IslamicHubModal, { type HubTab } from "@/components/IslamicHubModal";
-import AIAssistantModal from "@/components/AIAssistantModal";
-import PersonalSpaceModal from "@/components/PersonalSpaceModal";
-import CreatorStudioModal from "@/components/CreatorStudioModal";
-import VideoSuggestionModal from "@/components/VideoSuggestionModal";
-import GoogleMapsExplorerModal from "@/components/GoogleMapsExplorerModal";
+import ShortsRow from "@/components/ShortsRow";
 import VideoTitleTooltip from "@/components/VideoTitleTooltip";
 import IntroSplash from "@/components/IntroSplash";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import DailyReminder from "@/components/DailyReminder";
 import PrayerTimes from "@/components/PrayerTimes";
+import ProfileSelector from "@/components/ProfileSelector";
+
+// Dynamic lazy imports for heavy on-demand modals (reduces initial JS bundle size and speeds up launch)
+const OfflineModal = lazy(() => import("@/components/OfflineModal"));
+const MyListModal = lazy(() => import("@/components/MyListModal"));
+const WatchHistoryModal = lazy(() => import("@/components/WatchHistoryModal"));
+const AccountSettingsModal = lazy(() => import("@/components/AccountSettingsModal"));
+const CatalogPage = lazy(() => import("@/components/CatalogPage"));
+const RandomPage = lazy(() => import("@/components/RandomPage"));
+const LegalModal = lazy(() => import("@/components/LegalModal"));
+const IslamicHubModal = lazy(() => import("@/components/IslamicHubModal"));
+const AIAssistantModal = lazy(() => import("@/components/AIAssistantModal"));
+const PersonalSpaceModal = lazy(() => import("@/components/PersonalSpaceModal"));
+const CreatorStudioModal = lazy(() => import("@/components/CreatorStudioModal"));
+const VideoSuggestionModal = lazy(() => import("@/components/VideoSuggestionModal"));
+const GoogleMapsExplorerModal = lazy(() => import("@/components/GoogleMapsExplorerModal"));
+const ShortsPage = lazy(() => import("@/components/ShortsPage"));
+const ShortsCatalogPage = lazy(() => import("@/components/ShortsCatalogPage"));
+
+import { type SettingsTab } from "@/components/AccountSettingsModal";
+import { type HubTab } from "@/components/IslamicHubModal";
 import { RECITERS_DATA } from "@/lib/reciterData";
 import {
   catalog as defaultCatalog,
@@ -175,19 +183,6 @@ function AuthScreen() {
   );
 }
 
-const CATALOGUE_TABS: { id: string; label: string; icon?: string }[] = [
-  { id: "all", label: "🌟 Tous les Catalogues" },
-  { id: "Coran", label: "📖 Coran (1980-2000)" },
-  { id: "Prophètes", label: "📜 Prophètes & Sîra" },
-  { id: "Compagnons", label: "🛡️ Compagnons" },
-  { id: "Miracles du Coran", label: "🔬 Miracles & Science" },
-  { id: "Histoire & Mystère", label: "🏛️ Histoire & Mystère" },
-  { id: "Héros & Personnages", label: "⚔️ Héros & Figures" },
-  { id: "Eschatologie", label: "⚡ Fin des Temps" },
-  { id: "Anges & Djinns", label: "🌌 Monde Invisible" },
-  { id: "creators", label: "🎥 Par Créateur / Chaîne" },
-];
-
 function MainStreamingApp() {
   const { activeProfile, switchProfile } = useViewerProfile();
   const { isCreator } = useAuth();
@@ -213,6 +208,22 @@ function MainStreamingApp() {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showGoogleMaps, setShowGoogleMaps] = useState(false);
+  const [showShorts, setShowShorts] = useState(false);
+  const [showShortsCatalog, setShowShortsCatalog] = useState(false);
+  const [initialShortId, setInitialShortId] = useState<string | undefined>(undefined);
+
+  // Configuration: Shorts désactivé par défaut suite à la demande de l'utilisateur
+  const [shortsEnabled, setShortsEnabled] = useState<boolean>(() => {
+    return localStorage.getItem("sirat_shorts_enabled") === "true";
+  });
+
+  useEffect(() => {
+    const handleShortsToggle = () => {
+      setShortsEnabled(localStorage.getItem("sirat_shorts_enabled") === "true");
+    };
+    window.addEventListener("shorts_enabled_changed", handleShortsToggle);
+    return () => window.removeEventListener("shorts_enabled_changed", handleShortsToggle);
+  }, []);
   const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
 
   const [islamicHubTab, setIslamicHubTab] = useState<HubTab | null>(null);
@@ -279,6 +290,12 @@ function MainStreamingApp() {
   const miniItem = useMemo(() => (minimizedItem ? catalog.find((c) => c.id === minimizedItem.id) : null), [minimizedItem, catalog]);
   const infoItem = useMemo(() => (infoId ? catalog.find((c) => c.id === infoId) : null), [infoId, catalog]);
 
+  // Memoized category slices to avoid recalculating during user scrolls or tab switches
+  const quranItems = useMemo(() => getContentByCategory("Coran"), [catalog]);
+  const prophetsItems = useMemo(() => getContentByCategory("Prophètes"), [catalog]);
+  const eschatologyItems = useMemo(() => getContentByCategory("Eschatologie"), [catalog]);
+  const miraclesItems = useMemo(() => getContentByCategory("Miracles du Coran"), [catalog]);
+
   return (
     <div className="fixed inset-0 bg-black text-white selection:bg-white selection:text-black">
       {/* Fond d'ambiance derrière le cadre — masqué maintenant que la carte occupe tout l'écran */}
@@ -303,6 +320,7 @@ function MainStreamingApp() {
 
         {/* Navbar with unified hub launcher & catalog selector */}
         <Navbar
+          isCatalogOpen={showCatalog}
           currentCategoryTab={currentCategoryTab}
           onSelectCategoryTab={setCurrentCategoryTab}
           onSelectContent={handleInfo}
@@ -325,6 +343,17 @@ function MainStreamingApp() {
           onOpenAIAssistant={() => setShowAIAssistant(true)}
           onOpenSuggestions={() => setShowSuggestions(true)}
           onOpenGoogleMaps={() => setShowGoogleMaps(true)}
+          onOpenShorts={
+            shortsEnabled
+              ? () => {
+                  setInitialShortId(undefined);
+                  setShowShorts(true);
+                }
+              : undefined
+          }
+          onOpenShortsCatalog={
+            shortsEnabled ? () => setShowShortsCatalog(true) : undefined
+          }
         />
 
         {/* Hero Banner */}
@@ -337,51 +366,6 @@ function MainStreamingApp() {
 
         {/* Main content body */}
         <main className="relative z-10 -mt-6 sm:-mt-10 space-y-6 pb-20">
-          {/* Catalogues Selection Bar (Categorized Navigation) */}
-          <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-12">
-            <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800/80 p-2 rounded-2xl flex items-center justify-between gap-2.5 sm:gap-3 shadow-xl">
-              <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto scrollbar-none min-w-0 flex-1 py-0.5 pr-1">
-                {CATALOGUE_TABS.map((tab) => {
-                  const isActive = currentCategoryTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setCurrentCategoryTab(tab.id)}
-                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all flex-shrink-0 whitespace-nowrap ${
-                        isActive
-                          ? "bg-white text-black font-semibold shadow-lg"
-                          : "text-zinc-400 hover:text-white hover:bg-zinc-800/80"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  onClick={() => setShowGoogleMaps(true)}
-                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex-shrink-0 whitespace-nowrap shadow-sm"
-                  title="Explorer les Lieux Saints et Historiques sur Google Maps"
-                >
-                  <MapPin size={14} className="text-emerald-400" />
-                  <span className="hidden xs:inline">Carte des Lieux</span>
-                  <span className="xs:hidden">Carte</span>
-                </button>
-
-                <button
-                  onClick={() => openHubWithTab("prayer")}
-                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 bg-zinc-800/60 hover:bg-zinc-700/80 text-zinc-200 border border-zinc-700/60 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex-shrink-0 whitespace-nowrap"
-                >
-                  <Sparkles size={14} />
-                  <span className="hidden xs:inline">Espace Spiritualité</span>
-                  <span className="xs:hidden">Spiritualité</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
           {/* VIEW 1: GLOBAL OVERVIEW (ALL) */}
           {currentCategoryTab === "all" && (
             <div className="space-y-4">
@@ -395,6 +379,17 @@ function MainStreamingApp() {
 
               {/* Continue watching */}
               <ContinueWatchingRow onPlay={handlePlay} />
+
+              {/* ⚡ Shorts & Formats Courts Vertical Shelf (Désactivé par défaut) */}
+              {shortsEnabled && (
+                <ShortsRow
+                  onOpenShorts={(id) => {
+                    setInitialShortId(id);
+                    setShowShorts(true);
+                  }}
+                  onOpenCatalog={() => setShowShortsCatalog(true)}
+                />
+              )}
 
               {/* Custom Creator Content Row if available */}
               {customItems.length > 0 && (
@@ -416,7 +411,7 @@ function MainStreamingApp() {
               {/* Featured Selection: Coran & Tarawih (1980-2000) */}
               <ContentRow
                 label="📖 Tarawih Historiques de La Mecque & Médine (1980 - 2000)"
-                items={getContentByCategory("Coran")}
+                items={quranItems}
                 onPlay={handlePlay}
                 onInfo={handleInfo}
                 limit={8}
@@ -425,7 +420,7 @@ function MainStreamingApp() {
               {/* Featured Selection: Prophètes */}
               <ContentRow
                 label="Récits des Prophètes (Sélection majeure)"
-                items={getContentByCategory("Prophètes")}
+                items={prophetsItems}
                 onPlay={handlePlay}
                 onInfo={handleInfo}
                 limit={8}
@@ -435,7 +430,7 @@ function MainStreamingApp() {
               {!isKid && (
                 <ContentRow
                   label="Eschatologie & Fin des Temps"
-                  items={getContentByCategory("Eschatologie")}
+                  items={eschatologyItems}
                   onPlay={handlePlay}
                   onInfo={handleInfo}
                   limit={8}
@@ -445,7 +440,7 @@ function MainStreamingApp() {
               {/* Featured Selection: Miracles */}
               <ContentRow
                 label="Miracles du Coran & Sciences"
-                items={getContentByCategory("Miracles du Coran")}
+                items={miraclesItems}
                 onPlay={handlePlay}
                 onInfo={handleInfo}
                 limit={8}
@@ -688,6 +683,12 @@ function MainStreamingApp() {
               </div>
 
               <ContentRow
+                label="📚 Din-ul-Qayyima — Mohamed Nadhir (Enseignements & Fiqh)"
+                items={getContentByChannel("Din-ul-Qayyima")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
                 label="🌟 NARRO DIN (Voyages & Histoires Prophétiques)"
                 items={getContentByChannel("NARRO DIN")}
                 onPlay={handlePlay}
@@ -724,8 +725,56 @@ function MainStreamingApp() {
                 onInfo={handleInfo}
               />
               <ContentRow
+                label="🧭 Sur le chemin de la prophétie (Témoignages & Récits)"
+                items={getContentByChannel("Sur le chemin de la prophétie")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
                 label="Minute Islam (Rappels Courts & Sagesses)"
                 items={getContentByChannel("Minute Islam")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="🏛️ Averroès Histoire (Histoire & Civilisation Islamique)"
+                items={getContentByChannel("Averroès Histoire")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="📖 Minhaj An-Nubuwwah (Enseignements & Rappels Prophétiques)"
+                items={getContentByChannel("Minhaj An-Nubuwwah")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="🎬 Darifton Prod (Documentaires, Récits & Histoire)"
+                items={getContentByChannel("Darifton Prod")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="💡 L'Islam Simplement (Apprentissage & Rappels Accessibles)"
+                items={getContentByChannel("L'Islam Simplement")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="🧢 Blue Casquette (Enquêtes, Réflexions & Société)"
+                items={getContentByChannel("Blue Casquette")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="🔍 La Quête (Découverte, Réactions & Dialogue)"
+                items={getContentByChannel("La Quête")}
+                onPlay={handlePlay}
+                onInfo={handleInfo}
+              />
+              <ContentRow
+                label="💎 Les Savants de la Sunnah (Extraits, Fatwas & Rappels)"
+                items={getContentByChannel("Les Savants de la Sunnah")}
                 onPlay={handlePlay}
                 onInfo={handleInfo}
               />
@@ -899,32 +948,32 @@ function MainStreamingApp() {
               </div>
             </div>
 
-            {/* Brand & SEO Identity for Google indexing (sirat-stream, siratstreamapp, siratstreamapp.com) */}
+            {/* Brand & SEO Identity for Google indexing (https://sirat-stream.ai.studio, sirat-stream, siratstreamapp) */}
             <div className="pt-6 border-t border-zinc-900/80 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-zinc-400">
               <div className="space-y-1.5 md:col-span-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm text-white tracking-tight">SiratStream</span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[10px] font-semibold">
-                    sirat-stream · siratstreamapp
+                    sirat-stream · sirat-stream.ai.studio
                   </span>
                 </div>
                 <p className="text-zinc-400 text-xs leading-relaxed max-w-2xl">
-                  <strong>SiratStream</strong> (<a href="https://siratstreamapp.com/" className="text-emerald-400 hover:underline">siratstreamapp.com</a>) est la plateforme de référence (connue sous <em>sirat-stream</em> et <em>siratstreamapp</em>) pour le visionnage et l'écoute de récits islamiques, du Coran, des Tarawih historiques (1980-2000) et des horaires de prière.
+                  <strong>SiratStream</strong> (<a href="https://sirat-stream.ai.studio/" className="text-emerald-400 hover:underline">sirat-stream.ai.studio</a>) est la plateforme de référence (connue sous <em>sirat-stream</em>) pour le visionnage et l'écoute de récits islamiques, du Coran, des Tarawih historiques (1980-2000) et des horaires de prière.
                 </p>
               </div>
               <div className="flex md:justify-end items-start gap-3">
                 <a
-                  href="https://siratstreamapp.com/"
+                  href="https://sirat-stream.ai.studio/"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors"
                 >
-                  <span>siratstreamapp.com</span>
+                  <span>sirat-stream.ai.studio</span>
                 </a>
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-zinc-900 text-xs">
               <p className="flex items-center gap-1.5">
-                <span>© {new Date().getFullYear()} SiratStream (siratstreamapp.com) · sirat-stream · Fait pour la communauté</span>
+                <span>© {new Date().getFullYear()} SiratStream (sirat-stream.ai.studio) · sirat-stream · Fait pour la communauté</span>
               </p>
               <p className="text-zinc-600">
                 Contenus vidéos issus de créateurs YouTube indépendants
@@ -971,136 +1020,205 @@ function MainStreamingApp() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showOffline && (
-          <OfflineModal
-            key="offline-modal"
-            onClose={() => setShowOffline(false)}
-            onPlay={handlePlay}
-          />
-        )}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {showOffline && (
+            <OfflineModal
+              key="offline-modal"
+              onClose={() => setShowOffline(false)}
+              onPlay={handlePlay}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showPersonalSpace && (
-          <PersonalSpaceModal
-            key="personal-space-modal"
-            onClose={() => setShowPersonalSpace(false)}
-            onPlayVideo={handlePlay}
-            onOpenIslamicHub={() => openHubWithTab("prayer")}
-            onOpenCreatorStudio={() => setShowCreatorStudio(true)}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showPersonalSpace && (
+            <PersonalSpaceModal
+              key="personal-space-modal"
+              onClose={() => setShowPersonalSpace(false)}
+              onPlayVideo={handlePlay}
+              onOpenIslamicHub={() => openHubWithTab("prayer")}
+              onOpenCreatorStudio={() => setShowCreatorStudio(true)}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showSuggestions && (
-          <VideoSuggestionModal
-            key="suggestions-modal"
-            onClose={() => setShowSuggestions(false)}
-            onPlayVideo={handlePlay}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showSuggestions && (
+            <VideoSuggestionModal
+              key="suggestions-modal"
+              onClose={() => setShowSuggestions(false)}
+              onPlayVideo={handlePlay}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showMyList && (
-          <MyListModal
-            key="mylist-modal"
-            onClose={() => setShowMyList(false)}
-            onPlay={handlePlay}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showMyList && (
+            <MyListModal
+              key="mylist-modal"
+              onClose={() => setShowMyList(false)}
+              onPlay={handlePlay}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showWatchHistory && (
-          <WatchHistoryModal
-            key="history-modal"
-            onClose={() => setShowWatchHistory(false)}
-            onPlay={handlePlay}
-          />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {showWatchHistory && (
+            <WatchHistoryModal
+              key="history-modal"
+              onClose={() => setShowWatchHistory(false)}
+              onPlay={handlePlay}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {showAccountSettings && (
-          <AccountSettingsModal
-            key="settings-modal"
-            initialTab={accountSettingsTab}
-            onClose={() => setShowAccountSettings(false)}
-            onPlayVideo={handlePlay}
-            onOpenLegal={(type) => {
-              setShowAccountSettings(false);
-              setLegalModal(type);
+        <AnimatePresence>
+          {showAccountSettings && (
+            <AccountSettingsModal
+              key="settings-modal"
+              initialTab={accountSettingsTab}
+              onClose={() => setShowAccountSettings(false)}
+              onPlayVideo={handlePlay}
+              onOpenLegal={(type) => {
+                setShowAccountSettings(false);
+                setLegalModal(type);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showCatalog && (
+            <CatalogPage
+              key="catalog-page"
+              initialCategories={catalogInitialCategories}
+              onClose={() => {
+                setShowCatalog(false);
+                setCatalogInitialCategories(undefined);
+              }}
+              onPlay={handlePlay}
+              onInfo={handleInfo}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showRandomPage && (
+            <RandomPage
+              key="random-page"
+              onClose={() => setShowRandomPage(false)}
+              onPlay={(id) => {
+                setShowRandomPage(false);
+                handlePlay(id);
+              }}
+              onBrowseCatalog={(cats) => {
+                setCatalogInitialCategories(cats);
+                setShowRandomPage(false);
+                setShowCatalog(true);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {islamicHubTab && (
+            <IslamicHubModal
+              key="hub-modal"
+              initialTab={islamicHubTab}
+              onClose={() => setIslamicHubTab(null)}
+              onPlayVideo={(video) => handlePlay(video.id)}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showGoogleMaps && (
+            <GoogleMapsExplorerModal
+              key="google-maps-explorer-modal"
+              isOpen={showGoogleMaps}
+              onClose={() => setShowGoogleMaps(false)}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {shortsEnabled && showShorts && (
+            <ShortsPage
+              key="shorts-page"
+              initialShortId={initialShortId}
+              onClose={() => {
+                setShowShorts(false);
+                setInitialShortId(undefined);
+              }}
+              onSelectContent={(id) => {
+                setShowShorts(false);
+                handlePlay(id);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {shortsEnabled && showShortsCatalog && (
+            <ShortsCatalogPage
+              key="shorts-catalog-modal"
+              onClose={() => setShowShortsCatalog(false)}
+              onPlayShort={(id) => {
+                setShowShortsCatalog(false);
+                setInitialShortId(id);
+                setShowShorts(true);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {legalModal && (
+            <LegalModal
+              key="legal-modal"
+              type={legalModal}
+              onClose={() => setLegalModal(null)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Creator Studio & AI Assistant Modal */}
+        <AnimatePresence>
+          {showCreatorStudio && (
+            <CreatorStudioModal
+              key="creator-studio-dialog"
+              onClose={() => setShowCreatorStudio(false)}
+              onPlayVideo={(item) => handlePlay(item.id)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Universal AI Assistant Modal */}
+        {showAIAssistant && (
+          <AIAssistantModal
+            isOpen={showAIAssistant}
+            onClose={() => setShowAIAssistant(false)}
+            onSelectContent={handlePlay}
+            onOpenIslamicHubTab={(tab) => {
+              setShowAIAssistant(false);
+              openHubWithTab(tab as any);
             }}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showCatalog && (
-          <CatalogPage
-            key="catalog-page"
-            initialCategories={catalogInitialCategories}
-            onClose={() => {
-              setShowCatalog(false);
-              setCatalogInitialCategories(undefined);
+            onOpenMyList={() => {
+              setShowAIAssistant(false);
+              setShowMyList(true);
             }}
-            onPlay={handlePlay}
-            onInfo={handleInfo}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showRandomPage && (
-          <RandomPage
-            key="random-page"
-            onClose={() => setShowRandomPage(false)}
-            onPlay={(id) => {
-              setShowRandomPage(false);
-              handlePlay(id);
+            onOpenOffline={() => {
+              setShowAIAssistant(false);
+              setShowOffline(true);
             }}
-            onBrowseCatalog={(cats) => {
-              setCatalogInitialCategories(cats);
-              setShowRandomPage(false);
+            onOpenCatalog={() => {
+              setShowAIAssistant(false);
               setShowCatalog(true);
             }}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {islamicHubTab && (
-          <IslamicHubModal
-            key="hub-modal"
-            initialTab={islamicHubTab}
-            onClose={() => setIslamicHubTab(null)}
-            onPlayVideo={(video) => handlePlay(video.id)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showGoogleMaps && (
-          <GoogleMapsExplorerModal
-            key="google-maps-explorer-modal"
-            isOpen={showGoogleMaps}
-            onClose={() => setShowGoogleMaps(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {legalModal && (
-          <LegalModal
-            key="legal-modal"
-            type={legalModal}
-            onClose={() => setLegalModal(null)}
-          />
-        )}
-      </AnimatePresence>
+      </Suspense>
 
       {/* Floating Creator Studio Button (Discreet, hidden on mobile to avoid layout crowding; accessible in ProfileMenu) */}
       {isCreator && (
@@ -1131,40 +1249,6 @@ function MainStreamingApp() {
           <span className="text-xs sm:text-sm font-bold tracking-tight">Noor IA</span>
         </button>
       )}
-
-      {/* Creator Studio & AI Assistant Modal */}
-      <AnimatePresence>
-        {showCreatorStudio && (
-          <CreatorStudioModal
-            key="creator-studio-dialog"
-            onClose={() => setShowCreatorStudio(false)}
-            onPlayVideo={(item) => handlePlay(item.id)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Universal AI Assistant Modal */}
-      <AIAssistantModal
-        isOpen={showAIAssistant}
-        onClose={() => setShowAIAssistant(false)}
-        onSelectContent={handlePlay}
-        onOpenIslamicHubTab={(tab) => {
-          setShowAIAssistant(false);
-          openHubWithTab(tab as any);
-        }}
-        onOpenMyList={() => {
-          setShowAIAssistant(false);
-          setShowMyList(true);
-        }}
-        onOpenOffline={() => {
-          setShowAIAssistant(false);
-          setShowOffline(true);
-        }}
-        onOpenCatalog={() => {
-          setShowAIAssistant(false);
-          setShowCatalog(true);
-        }}
-      />
     </div>
   );
 }

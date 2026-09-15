@@ -6,6 +6,7 @@ import { useMyList } from "@/lib/useMyList";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useContentStats } from "@/hooks/useContentStats";
 import RatingStars from "@/components/RatingStars";
+import VideoNotesSection from "@/components/VideoNotesSection";
 import { isDownloadedOffline, saveOfflineDownload, removeOfflineDownload } from "@/lib/offlineStorage";
 import { getReciterForItem } from "@/lib/reciterData";
 import { getLocalWatchHistory } from "@/lib/watchHistory";
@@ -116,21 +117,13 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+      <div
+        className="absolute inset-0 bg-black/80"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 24 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 16 }}
-        transition={{ type: "spring", damping: 28, stiffness: 350 }}
+      <div
         className="relative z-10 w-full sm:max-w-2xl max-h-[90vh] liquid-glass-modal rounded-3xl overflow-hidden flex flex-col shadow-2xl"
       >
         {/* Hero */}
@@ -302,7 +295,7 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
           </p>
 
           {/* Genre tags */}
-          <div className="flex flex-wrap gap-2 mb-8">
+          <div className="flex flex-wrap gap-2 mb-6">
             {item.categories.map((g) => (
               <span
                 key={g}
@@ -312,6 +305,9 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
               </span>
             ))}
           </div>
+
+          {/* Mes Notes et Réflexions Spirituelles Firestore */}
+          <VideoNotesSection contentId={item.id} contentTitle={item.title} />
 
           {/* Episodes list if series, otherwise recommendations */}
           {item.seriesId && seriesEpisodes.length > 0 ? (
@@ -464,7 +460,7 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
             )
           )}
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

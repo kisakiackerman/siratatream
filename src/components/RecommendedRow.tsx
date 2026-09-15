@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { catalog, type ContentItem } from "@/data/catalog";
+import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
 import ContentRow from "@/components/ContentRow";
 
 type RecommendedRowProps = {
@@ -50,8 +51,11 @@ export default function RecommendedRow({ onPlay, onInfo }: RecommendedRowProps) 
         : null;
 
       if (!watchedContent) {
-        // Default smart top picks recommendation
-        const defaultTop = catalog.filter((item) => item.score >= 90).slice(0, 10);
+        // Default smart top picks recommendation (diversified across creators)
+        const defaultTop = diversifyCatalogByChannel(
+          catalog.filter((item) => item.score >= 90),
+          { prioritizeQuality: true }
+        ).slice(0, 10);
         setSource({
           id: "top",
           title: "les plus populaires",
@@ -70,17 +74,21 @@ export default function RecommendedRow({ onPlay, onInfo }: RecommendedRowProps) 
         return;
       }
 
-      const similar = catalog
+      const rawSimilar = catalog
         .filter((item) => item.id !== watchedContent.id)
         .filter(
           (item) =>
             item.channel === watchedContent.channel ||
             item.categories.some((category) => watchedContent.categories.includes(category))
-        )
-        .slice(0, 12);
+        );
+      const similar = diversifyCatalogByChannel(rawSimilar, { prioritizeQuality: true }).slice(0, 12);
 
       setSource(watchedContent);
-      setRecommendations(similar.length > 0 ? similar : catalog.slice(0, 10));
+      setRecommendations(
+        similar.length > 0
+          ? similar
+          : diversifyCatalogByChannel(catalog, { prioritizeQuality: true }).slice(0, 10)
+      );
     }
 
     loadRecommendations();

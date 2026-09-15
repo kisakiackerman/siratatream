@@ -15,12 +15,16 @@ import {
   Dices,
   Sliders,
   MapPin,
+  Zap,
+  LayoutGrid,
+  AlertCircle,
 } from "lucide-react";
 import { type ContentItem } from "@/data/catalog";
 import { useCreatorCatalog } from "@/hooks/useCreatorCatalog";
 import { smartSearch, searchSuggestions } from "@/lib/smartSearch";
 import ProfileMenu from "@/components/ProfileMenu";
 import { useVoiceSearch } from "@/hooks/useVoiceSearch";
+import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -38,12 +42,15 @@ type NavbarProps = {
   onOpenAccountSettings: (tab?: SettingsTab) => void;
   onSwitchProfile: () => void;
   onOpenCatalog: () => void;
+  isCatalogOpen?: boolean;
   onOpenRandom?: () => void;
   onOpenIslamicHub: () => void;
   onOpenOffline: () => void;
   onOpenAIAssistant?: () => void;
   onOpenSuggestions?: () => void;
   onOpenGoogleMaps?: () => void;
+  onOpenShorts?: () => void;
+  onOpenShortsCatalog?: () => void;
 };
 
 const CATALOG_MENU = [
@@ -116,12 +123,15 @@ export default function Navbar({
   onOpenAccountSettings,
   onSwitchProfile,
   onOpenCatalog,
+  isCatalogOpen = false,
   onOpenRandom,
   onOpenIslamicHub,
   onOpenOffline,
   onOpenAIAssistant,
   onOpenSuggestions,
   onOpenGoogleMaps,
+  onOpenShorts,
+  onOpenShortsCatalog,
 }: NavbarProps) {
   const { isCreator } = useAuth();
   const [scrolled, setScrolled] = useState(false);
@@ -324,9 +334,22 @@ export default function Navbar({
 
   const handleVoiceResult = useCallback((transcript: string) => {
     setSearchQuery(transcript);
+    setSearchOpen(true);
   }, []);
 
-  const { supported: voiceSupported, listening, start: startVoice } = useVoiceSearch(handleVoiceResult);
+  const {
+    supported: voiceSupported,
+    listening,
+    permissionState: micPermissionState,
+    error: voiceError,
+    transcript: voiceTranscript,
+    toggle: toggleVoice,
+    start: startVoice,
+    requestPermission: requestMicPermission,
+    clearError: clearVoiceError,
+  } = useVoiceSearch(handleVoiceResult);
+
+  const [showMicModal, setShowMicModal] = useState(false);
 
   const isThematicActive = currentCategoryTab !== "all";
   const activeGenreLabel = CATALOG_MENU.find((m) => m.id === currentCategoryTab)?.label;
@@ -348,7 +371,7 @@ export default function Navbar({
               onSelectCategoryTab?.("all");
               scrollAppToTop();
             }}
-            aria-label="SiratStream (sirat-stream / siratstreamapp) - siratstreamapp.com"
+            aria-label="SiratStream (sirat-stream) - https://sirat-stream.ai.studio"
           >
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-6 bg-emerald-400 rounded-sm group-hover/logo:scale-y-110 transition-transform shadow-[0_0_12px_rgba(52,211,153,0.5)]" />
@@ -356,31 +379,50 @@ export default function Navbar({
               <div className="w-1.5 h-7 bg-white rounded-sm group-hover/logo:scale-y-110 transition-transform" />
             </div>
             <span className="text-white font-black text-lg sm:text-xl tracking-tight ml-1 whitespace-nowrap">
-              SiratStream<span className="text-emerald-400 text-xs sm:text-sm font-semibold">.com</span>
+              SiratStream<span className="text-emerald-400 text-xs sm:text-sm font-semibold">.ai</span>
             </span>
           </div>
-          <NavTooltip label="SiratStream (siratstreamapp)" sublabel="siratstreamapp.com" align="left" />
+          <NavTooltip label="SiratStream (sirat-stream)" sublabel="sirat-stream.ai.studio" align="left" />
         </div>
 
-        {/* Navigation Capsule: 4 liens max (Accueil, Genres, Aléatoire, Suggestions) - Visible à partir de l'écran md */}
+        {/* Bouton Short Mobile Rapide - Liquid Glass */}
+        {onOpenShorts && (
+          <button
+            type="button"
+            onClick={onOpenShorts}
+            className="md:hidden flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.12] hover:bg-white/[0.22] border border-white/30 text-emerald-300 text-xs font-bold backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95"
+            aria-label="Ouvrir le flux Short"
+          >
+            <Zap size={12} className="text-emerald-400 fill-emerald-400" />
+            <span>Short</span>
+          </button>
+        )}
+
+        {/* Navigation Capsule: 4-5 liens max (Accueil, Genres, Short, Aléatoire, Suggestions) - Visible à partir de l'écran md */}
         <div className="hidden md:flex items-center justify-center flex-1 min-w-0 max-w-xl">
-          <div className="flex items-center gap-1 sm:gap-1.5 bg-emerald-400/10 border border-emerald-300/30 backdrop-blur-xl rounded-full px-1.5 py-1 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
-            {/* 1. Accueil */}
+          <div className="flex items-center gap-1 sm:gap-1.5 px-1.5 py-1">
+            {/* 1. Catalogue */}
             <div className="relative group">
               <button
-                onClick={() => {
-                  onSelectCategoryTab?.("all");
-                  scrollAppToTop();
-                }}
-                className={`flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
-                  currentCategoryTab === "all"
-                    ? "bg-emerald-400 text-zinc-950 shadow-md font-bold"
-                    : "text-emerald-100/80 hover:text-white hover:bg-emerald-400/15"
+                onClick={onOpenCatalog}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors border-b-2 ${
+                  isCatalogOpen
+                    ? "text-emerald-400 border-emerald-400 font-bold"
+                    : "text-zinc-300 hover:text-white border-transparent font-medium"
                 }`}
+                aria-label="Ouvrir le catalogue"
               >
-                Accueil
+                <Film
+                  size={14}
+                  className={
+                    isCatalogOpen
+                      ? "text-emerald-400"
+                      : "text-zinc-300 group-hover:text-white transition-colors"
+                  }
+                />
+                <span>Catalogue</span>
               </button>
-              <NavTooltip label="Accueil" sublabel="Toutes les vidéos" />
+              <NavTooltip label="Catalogue" sublabel="Tous les programmes & filtres" />
             </div>
 
             {/* 2. Genres & Dropdown thématique */}
@@ -391,10 +433,10 @@ export default function Navbar({
                   e.stopPropagation();
                   setCatDropdownOpen((prev) => !prev);
                 }}
-                className={`flex items-center gap-1 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1 px-3 sm:px-4 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors border-b-2 ${
                   isThematicActive
-                    ? "bg-emerald-400 text-zinc-950 shadow-md font-bold"
-                    : "text-emerald-100/80 hover:text-white hover:bg-emerald-400/15"
+                    ? "text-emerald-400 border-emerald-400 font-bold"
+                    : "text-zinc-300 hover:text-white border-transparent font-medium"
                 }`}
                 aria-label="Choisir un genre"
               >
@@ -458,15 +500,45 @@ export default function Navbar({
               )}
             </div>
 
+            {/* 3. Short (Format vertical & Catalogue) - Liquid Glass */}
+            {onOpenShorts && (
+              <div className="relative group flex items-center">
+                <button
+                  type="button"
+                  onClick={onOpenShorts}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 font-bold whitespace-nowrap text-xs sm:text-sm text-emerald-300 hover:text-white bg-white/[0.10] hover:bg-white/[0.20] border border-white/30 hover:border-emerald-300/60 backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95 ${
+                    onOpenShortsCatalog ? "rounded-l-full pr-2.5" : "rounded-full"
+                  }`}
+                  aria-label="Short - Flux vidéo vertical"
+                >
+                  <Zap size={14} className="text-emerald-400 fill-emerald-400" />
+                  <span>Short</span>
+                </button>
+                {onOpenShortsCatalog && (
+                  <button
+                    type="button"
+                    onClick={onOpenShortsCatalog}
+                    className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-r-full text-xs font-semibold whitespace-nowrap text-zinc-300 hover:text-emerald-300 bg-white/[0.07] hover:bg-white/[0.16] border-y border-r border-white/30 hover:border-emerald-300/60 backdrop-blur-2xl transition-all active:scale-95"
+                    aria-label="Catalogue des Shorts"
+                    title="Ouvrir le catalogue des Shorts"
+                  >
+                    <LayoutGrid size={12} className="text-emerald-400" />
+                    <span className="hidden xl:inline text-[11px]">Catalogue</span>
+                  </button>
+                )}
+                <NavTooltip label="Short" sublabel="Flux vertical & Catalogue dédié" />
+              </div>
+            )}
+
             {/* 3. Aléatoire */}
             {onOpenRandom && (
               <div className="relative group">
                 <button
                   onClick={onOpenRandom}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap text-emerald-300 hover:text-emerald-200 hover:bg-emerald-400/15 border border-emerald-300/30 transition-colors"
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium whitespace-nowrap text-zinc-300 hover:text-white border-b-2 border-transparent transition-colors"
                   aria-label="Découvrir un média aléatoire"
                 >
-                  <Dices size={14} className="text-emerald-400" />
+                  <Dices size={14} className="text-zinc-300 group-hover:text-white transition-colors" />
                   <span>Aléatoire</span>
                 </button>
                 <NavTooltip label="Aléatoire" sublabel="Lecture surprise" />
@@ -478,10 +550,10 @@ export default function Navbar({
               <div className="relative group">
                 <button
                   onClick={onOpenSuggestions}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap text-emerald-200 hover:text-white hover:bg-emerald-400/15 transition-colors hidden sm:flex"
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium whitespace-nowrap text-zinc-300 hover:text-white border-b-2 border-transparent transition-colors hidden sm:flex"
                   aria-label="Suggérer une vidéo"
                 >
-                  <Sparkles size={13} className="text-emerald-300" />
+                  <Sparkles size={13} className="text-zinc-300 group-hover:text-white transition-colors" />
                   <span>Suggestions</span>
                 </button>
                 <NavTooltip label="Suggestions" sublabel="Proposer une vidéo" />
@@ -493,10 +565,10 @@ export default function Navbar({
               <div className="relative group">
                 <button
                   onClick={onOpenGoogleMaps}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap text-emerald-300 hover:text-white hover:bg-emerald-400/20 border border-emerald-400/30 transition-colors"
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium whitespace-nowrap text-zinc-300 hover:text-white border-b-2 border-transparent transition-colors"
                   aria-label="Explorer les Lieux Saints sur Google Maps"
                 >
-                  <MapPin size={13} className="text-emerald-400" />
+                  <MapPin size={13} className="text-zinc-300 group-hover:text-white transition-colors" />
                   <span>Carte</span>
                 </button>
                 <NavTooltip label="Google Maps" sublabel="Lieux Saints & Récits" />
@@ -507,7 +579,7 @@ export default function Navbar({
 
         {/* Right controls */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-          {/* Recherche */}
+          {/* Recherche & Recherche Vocale */}
           <div className="relative" data-search-area>
             {searchOpen ? (
               <div className="flex items-center bg-zinc-900/95 border border-zinc-700 rounded-full overflow-hidden shadow-2xl">
@@ -520,42 +592,166 @@ export default function Navbar({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="bg-transparent text-white text-sm px-3 py-2 w-36 sm:w-64 outline-none placeholder-zinc-500"
                 />
-                {voiceSupported && (
-                  <button
-                    onClick={startVoice}
-                    className={`px-2 flex-shrink-0 transition-colors ${
-                      listening ? "text-white animate-pulse" : "text-zinc-400 hover:text-white"
-                    }`}
-                    title={listening ? "Écoute en cours..." : "Recherche vocale"}
-                  >
-                    <Mic size={16} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (listening) {
+                      toggleVoice();
+                    } else if (micPermissionState === "prompt") {
+                      const ok = await requestMicPermission();
+                      if (ok) {
+                        startVoice();
+                      } else {
+                        setShowMicModal(true);
+                      }
+                    } else if (micPermissionState === "denied") {
+                      setShowMicModal(true);
+                    } else {
+                      toggleVoice();
+                    }
+                  }}
+                  className={`px-2 py-1 mx-0.5 rounded-full flex-shrink-0 transition-all flex items-center gap-1 ${
+                    listening
+                      ? "text-white bg-rose-600 animate-pulse shadow-[0_0_12px_rgba(225,29,72,0.7)]"
+                      : micPermissionState === "granted"
+                      ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                      : "text-zinc-400 hover:text-white hover:bg-white/10"
+                  }`}
+                  title={
+                    listening
+                      ? "Arrêter l'écoute (écoute en cours...)"
+                      : micPermissionState === "granted"
+                      ? "Recherche vocale (microphone autorisé)"
+                      : "Demander la permission au navigateur pour le micro"
+                  }
+                  aria-label="Recherche vocale"
+                >
+                  <Mic size={16} />
+                  {listening && (
+                    <span className="text-[10px] font-bold pr-1 hidden sm:inline">Écoute...</span>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     setSearchOpen(false);
                     setSearchQuery("");
+                    clearVoiceError();
                   }}
-                  className="pr-3 text-zinc-400 hover:text-white"
+                  className="pr-3 pl-1 text-zinc-400 hover:text-white"
+                  title="Fermer la recherche"
                 >
                   <X size={15} />
                 </button>
               </div>
             ) : (
-              <div className="relative group">
-                <button
-                  onClick={() => setSearchOpen(true)}
-                  className="text-zinc-300 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
-                  aria-label="Rechercher"
-                >
-                  <Search size={18} />
-                </button>
-                <NavTooltip label="Recherche" sublabel="Titre, récit ou catégorie" align="right" />
+              <div className="flex items-center gap-1">
+                {/* Search text button */}
+                <div className="relative group">
+                  <button
+                    onClick={() => setSearchOpen(true)}
+                    className="text-zinc-300 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+                    aria-label="Rechercher"
+                  >
+                    <Search size={18} />
+                  </button>
+                  <NavTooltip label="Recherche" sublabel="Titre, récit ou catégorie" align="right" />
+                </div>
+
+                {/* Direct Voice search button */}
+                <div className="relative group">
+                  <button
+                    onClick={async () => {
+                      setSearchOpen(true);
+                      if (micPermissionState === "prompt") {
+                        const ok = await requestMicPermission();
+                        if (ok) {
+                          startVoice();
+                        } else {
+                          setShowMicModal(true);
+                        }
+                      } else if (micPermissionState === "denied") {
+                        setShowMicModal(true);
+                      } else {
+                        startVoice();
+                      }
+                    }}
+                    className={`p-2 rounded-full transition-all ${
+                      listening
+                        ? "text-rose-300 bg-rose-600/30 animate-pulse border border-rose-500/50"
+                        : micPermissionState === "granted"
+                        ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                        : "text-zinc-300 hover:text-white hover:bg-white/10"
+                    }`}
+                    aria-label="Recherche vocale"
+                    title={
+                      micPermissionState === "granted"
+                        ? "Recherche vocale (Micro autorisé)"
+                        : "Demander la permission du micro au navigateur"
+                    }
+                  >
+                    <Mic size={18} />
+                  </button>
+                  <NavTooltip
+                    label="Recherche vocale"
+                    sublabel={
+                      micPermissionState === "granted"
+                        ? "Microphone autorisé (parlez directement)"
+                        : micPermissionState === "denied"
+                        ? "Micro bloqué (cliquez pour débloquer)"
+                        : "Demander l'accès au microphone"
+                    }
+                    align="right"
+                  />
+                </div>
               </div>
             )}
 
             {searchOpen && (
               <div className="absolute top-full mt-2 right-0 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[70vh] overflow-y-auto z-50">
+                {/* Active listening banner */}
+                {listening && (
+                  <div className="px-3.5 py-2 bg-rose-950/80 border-b border-rose-500/30 text-xs text-rose-200 flex items-center justify-between gap-2 animate-in fade-in">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping flex-shrink-0" />
+                      <span className="font-medium truncate">
+                        {voiceTranscript ? `"${voiceTranscript}"` : "Écoute en cours... Parlez maintenant"}
+                      </span>
+                    </div>
+                    <button
+                      onClick={toggleVoice}
+                      className="text-[10px] font-bold bg-rose-500/30 hover:bg-rose-500/50 px-2 py-0.5 rounded text-white flex-shrink-0"
+                    >
+                      Terminer
+                    </button>
+                  </div>
+                )}
+
+                {/* Voice error banner with browser permission button */}
+                {voiceError && (
+                  <div className="px-3.5 py-2.5 bg-amber-950/90 border-b border-amber-500/40 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={15} className="text-amber-400 flex-shrink-0" />
+                      <span className="text-[11px] leading-tight">{voiceError}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => setShowMicModal(true)}
+                        className="text-[10px] font-bold text-zinc-950 bg-emerald-400 hover:bg-emerald-300 px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 shadow-sm"
+                      >
+                        <Mic size={11} />
+                        <span>Autoriser le micro</span>
+                      </button>
+                      <button
+                        onClick={clearVoiceError}
+                        className="p-1 hover:bg-white/10 rounded text-amber-300 hover:text-white"
+                        title="Fermer l'alerte"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {searchQuery.trim().length <= 1 ? (
                   <div className="p-4">
                     <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold mb-3">
@@ -881,9 +1077,21 @@ export default function Navbar({
             onOpenIslamicHub={onOpenIslamicHub}
             onOpenOffline={onOpenOffline}
             onOpenSuggestions={onOpenSuggestions}
+            onOpenShorts={onOpenShorts}
           />
         </div>
       </div>
+
+      {/* Modal de demande et gestion de permission microphone */}
+      <MicrophonePermissionModal
+        isOpen={showMicModal}
+        onClose={() => setShowMicModal(false)}
+        onPermissionGranted={() => {
+          setShowMicModal(false);
+          setSearchOpen(true);
+          startVoice();
+        }}
+      />
     </nav>
   );
 }

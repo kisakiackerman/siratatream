@@ -140,6 +140,7 @@ export default function AssabileAdhanModal({
     if (playingId === adhan.id) {
       stopAdhanAudio();
       setPlayingId(null);
+      setCurrentTime(0);
     } else {
       stopAdhanAudio();
       setPlayingId(adhan.id);
@@ -158,10 +159,17 @@ export default function AssabileAdhanModal({
         },
         onError: () => {
           setPlayingId(null);
+          setCurrentTime(0);
           onShowToast?.("Erreur lors de la lecture audio.");
         },
       });
     }
+  };
+
+  const handleStopAudio = () => {
+    stopAdhanAudio();
+    setPlayingId(null);
+    setCurrentTime(0);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -474,17 +482,13 @@ export default function AssabileAdhanModal({
                       onClick={() => handleTogglePlay(adhan)}
                       className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all flex-shrink-0 relative overflow-hidden ${
                         isPlaying
-                          ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30"
+                          ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/30 ring-2 ring-red-400/50"
                           : "bg-white/10 hover:bg-emerald-500 hover:text-black text-white"
                       }`}
-                      title={isPlaying ? "Arrêter la lecture" : "Écouter l'Adhan"}
+                      title={isPlaying ? "Cliquer pour arrêter immédiatement l'Adhan" : "Écouter l'Adhan"}
                     >
                       {isPlaying ? (
-                        <div className="flex items-center gap-0.5">
-                          <span className="w-1 h-3.5 bg-black rounded-sm animate-pulse" />
-                          <span className="w-1 h-5 bg-black rounded-sm animate-bounce" />
-                          <span className="w-1 h-3 bg-black rounded-sm animate-pulse" />
-                        </div>
+                        <Square size={16} className="fill-white" />
                       ) : (
                         <Play size={16} className="ml-0.5" />
                       )}
@@ -507,9 +511,22 @@ export default function AssabileAdhanModal({
                           </span>
                         )}
                         {isPlaying && (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-400 text-black text-[10px] font-bold animate-pulse">
-                            En écoute
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-400 text-black text-[10px] font-bold animate-pulse">
+                              En écoute
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStopAudio();
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                              title="Arrêter la lecture"
+                            >
+                              <Square size={9} className="fill-current" />
+                              <span>Arrêter</span>
+                            </button>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-0.5 flex-wrap">
@@ -569,15 +586,29 @@ export default function AssabileAdhanModal({
         {activeAdhan && (
           <div className="px-5 py-3 border-t border-emerald-500/30 bg-zinc-900/95 flex flex-col gap-2 shadow-xl">
             <div className="flex items-center justify-between gap-3">
-              {/* Currently playing title */}
-              <div className="flex items-center gap-2.5 min-w-0">
+              {/* Currently playing title & playback buttons */}
+              <div className="flex items-center gap-2 min-w-0">
                 <button
                   onClick={() => handleTogglePlay(activeAdhan)}
                   className="w-8 h-8 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center flex-shrink-0 transition-colors shadow-md shadow-emerald-500/20"
+                  title={playingId === activeAdhan.id ? "Mettre en pause" : "Reprendre la lecture"}
                 >
-                  {playingId === activeAdhan.id ? <Square size={13} /> : <Play size={13} className="ml-0.5" />}
+                  {playingId === activeAdhan.id ? (
+                    <Pause size={13} className="fill-black" />
+                  ) : (
+                    <Play size={13} className="ml-0.5 fill-black" />
+                  )}
                 </button>
-                <div className="min-w-0">
+
+                <button
+                  onClick={handleStopAudio}
+                  className="w-8 h-8 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 border border-red-500/40 flex items-center justify-center flex-shrink-0 transition-colors shadow-sm"
+                  title="Arrêter définitivement l'Adhan"
+                >
+                  <Square size={12} className="fill-current" />
+                </button>
+
+                <div className="min-w-0 ml-1">
                   <p className="text-white text-xs font-bold truncate flex items-center gap-1.5">
                     <span>{activeAdhan.muezzin}</span>
                     <span className="text-zinc-400 font-normal text-[11px]">({activeAdhan.location})</span>

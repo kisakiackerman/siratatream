@@ -13,10 +13,12 @@ import {
   List,
   Flame,
   Radio,
+  Mic,
 } from "lucide-react";
 import type { ContentItem } from "@/data/catalog";
 import { catalog } from "@/data/catalog";
 import { RECITERS_DATA, getReciterForItem } from "@/lib/reciterData";
+import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 
 type TarawihSearchProps = {
   onPlayVideo?: (video: ContentItem) => void;
@@ -88,6 +90,17 @@ export default function TarawihSearch({ onPlayVideo }: TarawihSearchProps) {
   const [selectedFilter, setSelectedFilter] = useState<string>("all");
   const [selectedReciterFilter, setSelectedReciterFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+
+  const {
+    supported: voiceSupported,
+    listening: isListeningVoice,
+    error: voiceError,
+    transcript: voiceTranscript,
+    toggle: toggleVoice,
+    clearError: clearVoiceError,
+  } = useVoiceSearch((transcript) => {
+    setSearchQuery(transcript);
+  });
 
   const minSec = useMemo(() => minMinutes * 60, [minMinutes]);
   const maxSec = useMemo(() => maxMinutes * 60, [maxMinutes]);
@@ -327,7 +340,7 @@ export default function TarawihSearch({ onPlayVideo }: TarawihSearchProps) {
         <div className="space-y-4">
           {/* Quick Filters */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-zinc-950/40 backdrop-blur-xl border border-white/10 p-3 rounded-2xl">
-            {/* Search filter */}
+            {/* Search filter with voice search */}
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
               <input
@@ -335,8 +348,21 @@ export default function TarawihSearch({ onPlayVideo }: TarawihSearchProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filtrer par sourate, année, imam..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-white/20"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-10 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-white/20"
               />
+              <button
+                type="button"
+                onClick={toggleVoice}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-all ${
+                  isListeningVoice
+                    ? "text-white bg-rose-600 animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.6)]"
+                    : "text-zinc-400 hover:text-white hover:bg-white/10"
+                }`}
+                title={isListeningVoice ? "Arrêter l'écoute" : "Recherche vocale (parlez dans votre micro)"}
+                aria-label="Recherche vocale"
+              >
+                <Mic size={14} />
+              </button>
             </div>
 
             {/* Reciter filter buttons */}
@@ -366,6 +392,42 @@ export default function TarawihSearch({ onPlayVideo }: TarawihSearchProps) {
               ))}
             </div>
           </div>
+
+          {/* Voice Search Listening Feedback */}
+          {isListeningVoice && (
+            <div className="px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping flex-shrink-0" />
+                <span className="font-medium truncate">
+                  {voiceTranscript ? `"${voiceTranscript}"` : "Écoute en cours... Parlez (ex: 'Sudais 1993', 'Ali Jaber')"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleVoice}
+                className="text-[10px] font-bold bg-rose-600 hover:bg-rose-500 px-2 py-0.5 rounded text-white"
+              >
+                Terminer
+              </button>
+            </div>
+          )}
+
+          {/* Voice Search Error */}
+          {voiceError && (
+            <div className="px-3.5 py-2 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={14} className="text-amber-400 flex-shrink-0" />
+                <span>{voiceError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearVoiceError}
+                className="text-amber-300 hover:text-white text-xs px-1"
+              >
+                Fermer
+              </button>
+            </div>
+          )}
 
           {/* GRID OF MINIATURES */}
           {viewMode === "grid" ? (

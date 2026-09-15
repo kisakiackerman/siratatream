@@ -13,6 +13,7 @@ import {
   Info,
   Tv,
   Layers,
+  AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { type ContentItem, type Category, type Channel } from "@/data/catalog";
@@ -20,6 +21,7 @@ import { useCreatorCatalog } from "@/hooks/useCreatorCatalog";
 import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 import YouTubeHoverPreview from "@/components/YouTubeHoverPreview";
 import { getReciterForItem } from "@/lib/reciterData";
+import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
 import VideoTitleTooltip from "@/components/VideoTitleTooltip";
 
 type CatalogPageProps = {
@@ -111,6 +113,10 @@ export default function CatalogPage({
       return b.year - a.year;
     });
 
+    if (selectedChannels.length === 0 && sortMode !== "title") {
+      return diversifyCatalogByChannel(sorted, { prioritizeQuality: sortMode === "score" });
+    }
+
     return sorted;
   }, [catalog, query, selectedChannels, selectedCategories, minYear, maxYear, sortMode]);
 
@@ -133,7 +139,14 @@ export default function CatalogPage({
     setQuery(transcript);
   }, []);
 
-  const { supported: voiceSupported, listening, start: startVoice } = useVoiceSearch(handleVoiceResult);
+  const {
+    supported: voiceSupported,
+    listening,
+    error: voiceError,
+    transcript: voiceTranscript,
+    toggle: toggleVoice,
+    clearError: clearVoiceError,
+  } = useVoiceSearch(handleVoiceResult);
 
   return (
     <motion.div
@@ -190,20 +203,20 @@ export default function CatalogPage({
                 onChange={(e) => setQuery(e.target.value)}
                 className="bg-transparent text-white text-sm px-2 py-2.5 flex-1 outline-none placeholder-zinc-400"
               />
-              {voiceSupported && (
-                <button
-                  type="button"
-                  onClick={startVoice}
-                  className={`p-2 rounded-xl transition-colors ${
-                    listening
-                      ? "text-red-300 bg-red-500/25 animate-pulse"
-                      : "text-zinc-300 hover:text-white hover:bg-white/10"
-                  }`}
-                  title={listening ? "Écoute en cours..." : "Recherche vocale"}
-                >
-                  <Mic size={16} />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={toggleVoice}
+                className={`p-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                  listening
+                    ? "text-white bg-rose-600 animate-pulse shadow-[0_0_12px_rgba(225,29,72,0.6)]"
+                    : "text-zinc-300 hover:text-white hover:bg-white/10"
+                }`}
+                title={listening ? "Arrêter l'écoute" : "Recherche vocale (dictez votre recherche)"}
+                aria-label="Recherche vocale"
+              >
+                <Mic size={16} />
+                {listening && <span className="text-xs font-bold hidden sm:inline">Écoute...</span>}
+              </button>
               {query && (
                 <button
                   type="button"
@@ -215,6 +228,41 @@ export default function CatalogPage({
                 </button>
               )}
             </div>
+
+            {/* Live listening feedback pill */}
+            {listening && (
+              <div className="mt-2.5 px-4 py-2 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping flex-shrink-0" />
+                  <span className="font-medium truncate">
+                    {voiceTranscript ? `"${voiceTranscript}"` : "Écoute en cours... Parlez maintenant dans votre micro"}
+                  </span>
+                </div>
+                <button
+                  onClick={toggleVoice}
+                  className="text-[10px] font-bold bg-rose-600 hover:bg-rose-500 px-2 py-0.5 rounded-lg text-white"
+                >
+                  Valider
+                </button>
+              </div>
+            )}
+
+            {/* Voice search error banner */}
+            {voiceError && (
+              <div className="mt-2.5 px-4 py-2.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={15} className="text-amber-400 flex-shrink-0" />
+                  <span className="text-[11px] leading-tight">{voiceError}</span>
+                </div>
+                <button
+                  onClick={clearVoiceError}
+                  className="p-1 hover:bg-white/10 rounded text-amber-300 hover:text-white"
+                  title="Fermer"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

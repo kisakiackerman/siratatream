@@ -1452,14 +1452,7 @@ export default function PlayerModal({
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.94 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{
-        duration: 0.32,
-        ease: [0.16, 1, 0.3, 1],
-      }}
+    <div
       className="fixed inset-0 z-[100] bg-black flex flex-col font-sans"
     >
       {/* Élément audio caché pour le doublage — ne rend rien visuellement */}
@@ -2667,6 +2660,6 @@ export default function PlayerModal({
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

@@ -52,6 +52,9 @@ import {
   MessageSquare,
   Inbox,
   MailOpen,
+  Zap,
+  Bot,
+  EyeOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/hooks/useAuth";
@@ -63,6 +66,22 @@ import {
 import { useVideoSuggestions, VideoSuggestion } from "@/hooks/useVideoSuggestions";
 import { useCreatorMessages, CreatorMessage } from "@/hooks/useCreatorMessages";
 import { type ContentItem, type Category, type Channel } from "@/data/catalog";
+import { dinulQayyimaRaw, dinulQayyimaMeta } from "@/data/dinulQayyimaVideos";
+import {
+  minuteIslamVideosOver10Min,
+  minuteIslamTotalCount,
+  minuteIslamOver10MinCount,
+  minuteIslamAlreadyInAppCount,
+  minuteIslamNewOver10MinCount,
+} from "@/data/minuteIslamExport";
+import {
+  surLeCheminVideosOver10Min,
+  surLeCheminTotalCount,
+  surLeCheminOver10MinCount,
+  surLeCheminAlreadyInAppCount,
+  surLeCheminNewOver10MinCount,
+} from "@/data/surLeCheminExport";
+import { exportYouTubeStatsToCSV, exportYouTubeStatsToJSON } from "@/lib/youtubeApi";
 import SponsorSegmentManager from "@/components/SponsorSegmentManager";
 
 interface CreatorStudioModalProps {
@@ -177,6 +196,9 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
   const [confirmResetAllDeleted, setConfirmResetAllDeleted] = useState(false);
 
   // Video Delete Confirmation & Toast State
+  const [copiedDqLinks, setCopiedDqLinks] = useState(false);
+  const [copiedMiLinks, setCopiedMiLinks] = useState(false);
+  const [copiedSlcLinks, setCopiedSlcLinks] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<ContentItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; id: string; title: string } | null>(null);
@@ -237,6 +259,58 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
     }
   );
   const [annSavedAlert, setAnnSavedAlert] = useState(false);
+
+  // Shorts module enabled toggle
+  const [shortsEnabled, setShortsEnabled] = useState<boolean>(() => {
+    return localStorage.getItem("sirat_shorts_enabled") === "true";
+  });
+
+  // Automated Daily Sync Agent State (Mode Silencieux — Vidéos > 5 min)
+  const [agentStatus, setAgentStatus] = useState<any>(null);
+  const [isAgentSyncing, setIsAgentSyncing] = useState(false);
+  const [agentSyncMessage, setAgentSyncMessage] = useState<string | null>(null);
+
+  const fetchAgentStatus = async () => {
+    try {
+      const res = await fetch("/api/agent/status");
+      if (res.ok) {
+        const data = await res.json();
+        setAgentStatus(data);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch agent status:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "cloud-sync") {
+      fetchAgentStatus();
+    }
+  }, [activeTab]);
+
+  const handleTriggerAgentSync = async () => {
+    setIsAgentSyncing(true);
+    setAgentSyncMessage(null);
+    try {
+      const res = await fetch("/api/agent/sync-now", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setAgentSyncMessage(data.message || "Vérification silencieuse terminée avec succès");
+        await fetchAgentStatus();
+      }
+    } catch (e: any) {
+      setAgentSyncMessage("Erreur: " + e.message);
+    } finally {
+      setIsAgentSyncing(false);
+    }
+  };
+
+  const handleToggleShorts = () => {
+    const next = !shortsEnabled;
+    setShortsEnabled(next);
+    localStorage.setItem("sirat_shorts_enabled", next ? "true" : "false");
+    window.dispatchEvent(new Event("shorts_enabled_changed"));
+  };
 
   // Extract video ID or direct link helper
   const extractVideoInfo = (urlOrId: string): { videoId: string; videoUrl?: string; type: "youtube" | "direct" | "vimeo" | "dailymotion" } => {
@@ -1962,16 +2036,471 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
             </div>
           )}
 
-          {/* TAB 8: BACKUP */}
+          {/* TAB 8: BACKUP & PLATFORM MODULES */}
           {activeTab === "cloud-sync" && (
             <div className="space-y-6 max-w-3xl mx-auto">
+              {/* Module Shorts & Formats Courts Configuration */}
               <div className="bg-zinc-900/80 p-6 rounded-3xl border border-zinc-800 space-y-4">
-                <h3 className="font-bold text-white text-base">Sauvegarde & Export Global</h3>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Zap size={18} className={shortsEnabled ? "text-emerald-400" : "text-zinc-500"} />
+                      <h3 className="font-bold text-white text-base">Module Shorts &amp; Formats Courts (9:16)</h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        Gestion Créateur
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 max-w-lg">
+                      {shortsEnabled
+                        ? "Le module Shorts est actuellement ACTIVÉ : la rangée d'accueil, le lecteur vertical 9:16 et les raccourcis de navigation sont visibles."
+                        : "Le module Shorts est actuellement DÉSACTIVÉ et masqué sur toute l'interface pour offrir une expérience axée sur les contenus longs."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleToggleShorts}
+                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors flex-shrink-0 ${
+                      shortsEnabled ? "bg-emerald-500" : "bg-zinc-700"
+                    }`}
+                    aria-label="Activer ou désactiver la section Shorts"
+                  >
+                    <div
+                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        shortsEnabled ? "translate-x-6" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Agent Quotidien Autonome (Export Silencieux — Vidéos >= 10 min) */}
+              <div className="bg-gradient-to-br from-amber-950/30 via-zinc-900 to-zinc-900/90 p-6 rounded-3xl border border-amber-500/30 space-y-5 shadow-xl shadow-amber-950/20">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center">
+                        <Bot size={18} />
+                      </div>
+                      <h3 className="font-bold text-white text-base">Agent Quotidien Autonome</h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Actif (Toutes les 24h)
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center gap-1">
+                        <EyeOff size={11} className="text-zinc-400" />
+                        Mode Silencieux
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-300 max-w-2xl leading-relaxed">
+                      Cet agent visite <strong>chaque jour</strong> vos 7 chaînes YouTube de référence, extrait automatiquement les nouvelles vidéos d'au moins <strong>10 minutes (&gt;= 10 min)</strong> et les exporte sans vous déranger ni afficher de notifications intrusives.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:items-end gap-1 shrink-0">
+                    <span className="px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-300 text-xs font-bold border border-amber-500/30">
+                      {agentStatus?.totalExportedVideos ?? 0} vidéo(s) exportée(s)
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      Filtre : &gt;= 10 min uniquement
+                    </span>
+                  </div>
+                </div>
+
+                {/* Direct Specifications Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="bg-zinc-950/60 p-3 rounded-2xl border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 block">Fréquence</span>
+                    <strong className="text-xs text-white">Chaque jour (24h)</strong>
+                  </div>
+                  <div className="bg-zinc-950/60 p-3 rounded-2xl border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 block">Filtre Durée</span>
+                    <strong className="text-xs text-emerald-400">&gt;= 10 minutes</strong>
+                  </div>
+                  <div className="bg-zinc-950/60 p-3 rounded-2xl border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 block">Notifications</span>
+                    <strong className="text-xs text-zinc-300">0% (Silencieux)</strong>
+                  </div>
+                  <div className="bg-zinc-950/60 p-3 rounded-2xl border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 block">Chaînes Surveillées</span>
+                    <strong className="text-xs text-amber-300">7 Chaînes Officielles</strong>
+                  </div>
+                </div>
+
+                {/* Monitored Channels Pills */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-semibold text-zinc-400 block">
+                    Chaînes sous surveillance quotidienne :
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { name: "Din-ul-Qayyima", handle: "@DinulQayyima1" },
+                      { name: "Towards Eternity", handle: "@TowardsEternityFrancais" },
+                      { name: "NARRO DIN", handle: "@dinnarro" },
+                      { name: "NARRO", handle: "@narrostory" },
+                      { name: "Yacine", handle: "@yacinetareb" },
+                      { name: "Croyant Rationnel", handle: "@croyantrationnel" },
+                      { name: "Minute Islam", handle: "@MinuteIslam" },
+                    ].map((ch) => (
+                      <span
+                        key={ch.handle}
+                        className="px-2 py-1 rounded-lg bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-300 flex items-center gap-1"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        <strong className="font-medium text-white">{ch.name}</strong>
+                        <span className="text-zinc-500">{ch.handle}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-zinc-800/80">
+                  <a
+                    href="/api/agent/download-export?format=json"
+                    download
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-lg shadow-amber-950/40"
+                  >
+                    <DownloadCloud size={15} />
+                    <span>Télécharger Export Agent (JSON)</span>
+                  </a>
+
+                  <a
+                    href="/api/agent/download-export?format=csv"
+                    download
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all"
+                  >
+                    <FileDown size={15} />
+                    <span>Télécharger Tableau CSV</span>
+                  </a>
+
+                  <button
+                    onClick={handleTriggerAgentSync}
+                    disabled={isAgentSyncing}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 text-xs font-semibold border border-amber-500/30 transition-all active:scale-95 disabled:opacity-50 ml-auto"
+                  >
+                    {isAgentSyncing ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Vérification silencieuse en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={14} />
+                        <span>Lancer une vérification silencieuse maintenant</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {agentSyncMessage && (
+                  <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle2 size={14} />
+                    <span>{agentSyncMessage}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Export Dédié Din-ul-Qayyima */}
+              <div className="bg-emerald-950/20 p-6 rounded-3xl border border-emerald-800/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <span className="text-emerald-400">📖</span> Export Chaîne : Din-ul-Qayyima (@DinulQayyima1)
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Intégralité des <strong>{dinulQayyimaRaw.length} vidéos &amp; cours</strong> (Mohamed Nadhir) avec IDs, titres officiels, durées, séries (al-Akhdarī, Nūr al-ʿUyūn, etc.).
+                    </p>
+                  </div>
+                  <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-emerald-900/40 text-emerald-300 text-xs font-semibold border border-emerald-700/50">
+                    {dinulQayyimaRaw.length} vidéos prêtes
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    onClick={() => {
+                      const data = dinulQayyimaRaw.map(([id, title, desc]) => {
+                        const meta = dinulQayyimaMeta[id] || { cats: [], year: 2024 };
+                        return {
+                          id,
+                          url: `https://www.youtube.com/watch?v=${id}`,
+                          title,
+                          duration: meta.duration || "—",
+                          seriesTitle: meta.seriesTitle || null,
+                          episodeNumber: meta.episodeNumber || null,
+                          categories: meta.cats || [],
+                          year: meta.year || 2024,
+                          description: desc,
+                        };
+                      });
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `dinul_qayyima_videos_export_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-950/50"
+                  >
+                    <DownloadCloud size={16} />
+                    <span>Télécharger Export JSON ({dinulQayyimaRaw.length} vidéos)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const headers = ["Titre", "ID YouTube", "Lien YouTube", "Duree", "Serie", "Episode", "Categories", "Annee"];
+                      const rows = dinulQayyimaRaw.map(([id, title]) => {
+                        const meta = dinulQayyimaMeta[id] || { cats: [], year: 2024 };
+                        return [
+                          `"${title.replace(/"/g, '""')}"`,
+                          `"${id}"`,
+                          `"https://www.youtube.com/watch?v=${id}"`,
+                          `"${meta.duration || ""}"`,
+                          `"${(meta.seriesTitle || "").replace(/"/g, '""')}"`,
+                          `"${meta.episodeNumber || ""}"`,
+                          `"${(meta.cats || []).join(", ")}"`,
+                          `"${meta.year || ""}"`
+                        ].join(";");
+                      });
+                      const csvContent = "\uFEFF" + [headers.join(";"), ...rows].join("\n");
+                      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `dinul_qayyima_export_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all"
+                  >
+                    <FileDown size={16} />
+                    <span>Télécharger Tableau CSV (Excel)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const urls = dinulQayyimaRaw.map(([id, title]) => `https://www.youtube.com/watch?v=${id} — ${title}`).join("\n");
+                      navigator.clipboard.writeText(urls);
+                      setCopiedDqLinks(true);
+                      setTimeout(() => setCopiedDqLinks(false), 2500);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                      copiedDqLinks
+                        ? "bg-emerald-900/60 text-emerald-300 border-emerald-500"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
+                    }`}
+                  >
+                    {copiedDqLinks ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                    <span>{copiedDqLinks ? "356 Liens Copiés !" : "Copier les 356 Liens YouTube"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Export Dédié Minute Islam (@MinuteIslam) */}
+              <div className="bg-amber-950/20 p-6 rounded-3xl border border-amber-800/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <span className="text-amber-400">⏱️</span> Export Chaîne : Minute Islam (@MinuteIslam)
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Export officiel des <strong>{minuteIslamOver10MinCount} vidéos de plus de 10 minutes</strong> ({minuteIslamAlreadyInAppCount} déjà dans l'app, {minuteIslamNewOver10MinCount} nouvelles découvertes) sur {minuteIslamTotalCount} vidéos totales.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-amber-900/40 text-amber-300 text-xs font-semibold border border-amber-700/50">
+                      {minuteIslamOver10MinCount} vidéos &gt; 10 min
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(minuteIslamVideosOver10Min, null, 2)], {
+                        type: "application/json",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `minute_islam_videos_over_10min_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-lg shadow-amber-950/50"
+                  >
+                    <DownloadCloud size={16} />
+                    <span>Télécharger Export JSON ({minuteIslamOver10MinCount} vidéos &gt; 10 min)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const headers = [
+                        "ID YouTube",
+                        "Titre",
+                        "Duree",
+                        "Duree_Secondes",
+                        "Vues",
+                        "Date_Publication",
+                        "Lien_YouTube",
+                        "Deja_Dans_App",
+                      ];
+                      const rows = minuteIslamVideosOver10Min.map((v) => [
+                        `"${v.id}"`,
+                        `"${v.title.replace(/"/g, '""')}"`,
+                        `"${v.duration}"`,
+                        `${v.durationSec}`,
+                        `"${v.views.replace(/"/g, '""')}"`,
+                        `"${v.published.replace(/"/g, '""')}"`,
+                        `"${v.url}"`,
+                        `"${v.alreadyInApp ? "OUI" : "NON"}"`,
+                      ].join(";"));
+                      const csvContent = "\uFEFF" + [headers.join(";"), ...rows].join("\n");
+                      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `minute_islam_videos_over_10min_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all"
+                  >
+                    <FileDown size={16} />
+                    <span>Télécharger Tableau CSV (Excel)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const urls = minuteIslamVideosOver10Min
+                        .map((v) => `${v.url} — ${v.title} (${v.duration})`)
+                        .join("\n");
+                      navigator.clipboard.writeText(urls);
+                      setCopiedMiLinks(true);
+                      setTimeout(() => setCopiedMiLinks(false), 2500);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                      copiedMiLinks
+                        ? "bg-amber-900/60 text-amber-300 border-amber-500"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
+                    }`}
+                  >
+                    {copiedMiLinks ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                    <span>
+                      {copiedMiLinks
+                        ? `${minuteIslamOver10MinCount} Liens Copiés !`
+                        : `Copier les ${minuteIslamOver10MinCount} Liens YouTube`}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Export Dédié Sur le chemin de la prophétie (@Surlecheminde) */}
+              <div className="bg-sky-950/20 p-6 rounded-3xl border border-sky-800/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <span className="text-sky-400">🧭</span> Export Chaîne : Sur le chemin de la prophétie (@Surlecheminde)
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Export officiel des <strong>{surLeCheminOver10MinCount} vidéos de plus de 10 minutes</strong> ({surLeCheminAlreadyInAppCount} déjà dans l'app, {surLeCheminNewOver10MinCount} prêtes pour intégration) sur {surLeCheminTotalCount} vidéos totales.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-sky-900/40 text-sky-300 text-xs font-semibold border border-sky-700/50">
+                      {surLeCheminOver10MinCount} vidéos &gt; 10 min
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(surLeCheminVideosOver10Min, null, 2)], {
+                        type: "application/json",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `sur_le_chemin_videos_over_10min_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold transition-all shadow-lg shadow-sky-950/50"
+                  >
+                    <DownloadCloud size={16} />
+                    <span>Télécharger Export JSON ({surLeCheminOver10MinCount} vidéos &gt; 10 min)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const headers = [
+                        "ID YouTube",
+                        "Titre",
+                        "Duree",
+                        "Duree_Secondes",
+                        "Vues",
+                        "Date_Publication",
+                        "Lien_YouTube",
+                        "Deja_Dans_App",
+                      ];
+                      const rows = surLeCheminVideosOver10Min.map((v) => [
+                        `"${v.id}"`,
+                        `"${v.title.replace(/"/g, '""')}"`,
+                        `"${v.duration}"`,
+                        `${v.durationSec}`,
+                        `"${v.views.replace(/"/g, '""')}"`,
+                        `"${v.published.replace(/"/g, '""')}"`,
+                        `"${v.url}"`,
+                        `"${v.alreadyInApp ? "OUI" : "NON"}"`,
+                      ].join(";"));
+                      const csvContent = "\uFEFF" + [headers.join(";"), ...rows].join("\n");
+                      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `sur_le_chemin_videos_over_10min_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all"
+                  >
+                    <FileDown size={16} />
+                    <span>Télécharger Tableau CSV (Excel)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const urls = surLeCheminVideosOver10Min
+                        .map((v) => `${v.url} — ${v.title} (${v.duration})`)
+                        .join("\n");
+                      navigator.clipboard.writeText(urls);
+                      setCopiedSlcLinks(true);
+                      setTimeout(() => setCopiedSlcLinks(false), 2500);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                      copiedSlcLinks
+                        ? "bg-sky-900/60 text-sky-300 border-sky-500"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
+                    }`}
+                  >
+                    {copiedSlcLinks ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                    <span>
+                      {copiedSlcLinks
+                        ? `${surLeCheminOver10MinCount} Liens Copiés !`
+                        : `Copier les ${surLeCheminOver10MinCount} Liens YouTube`}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-zinc-900/80 p-6 rounded-3xl border border-zinc-800 space-y-4">
+                <h3 className="font-bold text-white text-base">Sauvegarde &amp; Export Global</h3>
                 <p className="text-xs text-zinc-400">
                   Exportez l'ensemble du catalogue, des chaînes et des configurations sous format JSON.
                 </p>
 
-                <div className="flex items-center gap-3 pt-2">
+                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
                   <button
                     onClick={() => {
                       const backup = exportBackup();
@@ -1983,10 +2512,26 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold border border-zinc-700 transition-all"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold border border-zinc-700 transition-all"
                   >
                     <DownloadCloud size={16} />
-                    <span>Télécharger la Sauvegarde Complète (JSON)</span>
+                    <span>Télécharger la Sauvegarde (JSON)</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => exportYouTubeStatsToCSV(allCatalogIncludingDeleted)}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 text-xs font-bold border border-blue-900/50 transition-all"
+                  >
+                    <FileDown size={16} />
+                    <span>Exporter les Stats YouTube (CSV)</span>
+                  </button>
+
+                  <button
+                    onClick={() => exportYouTubeStatsToJSON(allCatalogIncludingDeleted)}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 text-xs font-bold border border-blue-900/50 transition-all"
+                  >
+                    <Database size={16} />
+                    <span>Exporter les Stats YouTube (JSON)</span>
                   </button>
                 </div>
               </div>

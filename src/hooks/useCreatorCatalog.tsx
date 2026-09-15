@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, createContext, useContext, type ReactNode } from "react";
 import {
   catalog as baseCatalog,
   type ContentItem,
   type Category,
   type Channel,
   categories as baseCategories,
+  parseDurationToSeconds,
 } from "@/data/catalog";
+import { deduplicateCatalog } from "@/lib/catalogDeduplication";
+import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
 import { db, doc, setDoc, getDoc, collection, onSnapshot, getDocs, deleteDoc } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -264,13 +267,22 @@ export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
   // Compute all active categories and channels
   const allActiveCategories = Array.from(new Set([...baseCategories, ...customCategories]));
   const allActiveChannels = Array.from(new Set([
+    "Din-ul-Qayyima",
     "NARRO DIN",
     "NARRO",
     "Yacine",
     "Towards Eternity",
     "Croyant Rationnel",
     "Récitations Haramain",
+    "Sur le chemin de la prophétie",
     "Minute Islam",
+    "Averroès Histoire",
+    "Minhaj An-Nubuwwah",
+    "Darifton Prod",
+    "L'Islam Simplement",
+    "Blue Casquette",
+    "La Quête",
+    "Les Savants de la Sunnah",
     ...customChannels.map((c) => c.name),
   ]));
 
@@ -297,9 +309,24 @@ export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
     return all;
   })();
 
-  const mergedCatalog = allCatalogIncludingDeleted.filter(
-    (item) => !deletedVideoIds.includes(item.id)
-  );
+  const filteredCatalog = allCatalogIncludingDeleted.filter((item) => {
+    if (deletedVideoIds.includes(item.id)) return false;
+    const sec = parseDurationToSeconds(item.duration);
+    if (sec > 0 && sec < 600) return false;
+    const titleLower = item.title.toLowerCase();
+    if (titleLower.includes("bande-annonce") || titleLower.includes("bande annonce") || titleLower.includes("teaser")) {
+      return false;
+    }
+    return true;
+  });
+
+  const mergedCatalog = useMemo(() => {
+    const deduped = deduplicateCatalog(filteredCatalog, "Catalogue Global / Créateur");
+    return diversifyCatalogByChannel(deduped, {
+      prioritizeQuality: true,
+      spotlightId,
+    });
+  }, [filteredCatalog, spotlightId]);
 
   // Add or update a content item
   const addOrUpdateContent = useCallback(

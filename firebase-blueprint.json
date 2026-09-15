@@ -156,12 +156,70 @@
         }
       },
       "required": ["id", "senderName", "content", "createdAt"]
+    },
+    "UserSpiritualNote": {
+      "title": "UserSpiritualNote",
+      "description": "Personal spiritual reflection or marked verse linked to a video",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique note ID"
+        },
+        "contentId": {
+          "type": "string",
+          "description": "Associated video content ID"
+        },
+        "contentTitle": {
+          "type": "string",
+          "description": "Title of the associated video"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title or subject of the reflection"
+        },
+        "content": {
+          "type": "string",
+          "description": "Note or reflection text"
+        },
+        "verseReference": {
+          "type": "string",
+          "description": "Optional marked Quranic verse reference (e.g. Sourate 18:10)"
+        },
+        "verseText": {
+          "type": "string",
+          "description": "Optional Arabic or translated verse text"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Optional video timestamp (e.g. 03:45)"
+        },
+        "date": {
+          "type": "string",
+          "description": "Human readable date string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["id", "title", "content"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "Document holding user specific preferences, saved list, notes, and history"
+    },
+    "/users/{userId}/notes/{noteId}": {
+      "schema": "UserSpiritualNote",
+      "description": "Personal notes, spiritual reflections and marked verses authored by the user"
     },
     "/video_suggestions/{suggestionId}": {
       "schema": "VideoSuggestion",
