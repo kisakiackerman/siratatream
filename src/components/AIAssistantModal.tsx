@@ -42,7 +42,6 @@ interface AIAssistantModalProps {
   onSelectContent: (id: string) => void;
   onOpenIslamicHubTab?: (tab: "calendar" | "prayer" | "qibla" | "duas" | "tasbih" | "zakat") => void;
   onOpenMyList?: () => void;
-  onOpenOffline?: () => void;
   onOpenCatalog?: () => void;
 }
 
@@ -61,7 +60,6 @@ export default function AIAssistantModal({
   onSelectContent,
   onOpenIslamicHubTab,
   onOpenMyList,
-  onOpenOffline,
   onOpenCatalog,
 }: AIAssistantModalProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
@@ -209,7 +207,6 @@ export default function AIAssistantModal({
       else if (action.tool === "duas" && onOpenIslamicHubTab) onOpenIslamicHubTab("duas");
       else if (action.tool === "tasbih" && onOpenIslamicHubTab) onOpenIslamicHubTab("tasbih");
       else if (action.tool === "mylist" && onOpenMyList) onOpenMyList();
-      else if (action.tool === "offline" && onOpenOffline) onOpenOffline();
       else if (action.tool === "catalog" && onOpenCatalog) onOpenCatalog();
       else if (onOpenIslamicHubTab) onOpenIslamicHubTab("calendar");
     } else if (action.videoItem) {

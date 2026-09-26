@@ -18,10 +18,12 @@ import {
   Zap,
   LayoutGrid,
   AlertCircle,
+  History,
+  Trash2,
 } from "lucide-react";
 import { type ContentItem } from "@/data/catalog";
 import { useCreatorCatalog } from "@/hooks/useCreatorCatalog";
-import { smartSearch, searchSuggestions } from "@/lib/smartSearch";
+import { smartSearch } from "@/lib/smartSearch";
 import ProfileMenu from "@/components/ProfileMenu";
 import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
@@ -45,7 +47,6 @@ type NavbarProps = {
   isCatalogOpen?: boolean;
   onOpenRandom?: () => void;
   onOpenIslamicHub: () => void;
-  onOpenOffline: () => void;
   onOpenAIAssistant?: () => void;
   onOpenSuggestions?: () => void;
   onOpenGoogleMaps?: () => void;
@@ -55,7 +56,8 @@ type NavbarProps = {
 
 const CATALOG_MENU = [
   { id: "all", label: "Tous les genres (Vue Globale)", icon: "🌟" },
-  { id: "Coran", label: "Coran & Tarawih (1980-2000)", icon: "📖", tag: "Haramain" },
+  { id: "savants-sunnah", label: "Les Savants de la Sunnah", icon: "💎", tag: "Nouveau" },
+  { id: "Coran", label: "Le Noble Coran (Récitations & Prières)", icon: "📖", tag: "Haramain" },
   { id: "Prophètes", label: "Récits des Prophètes & Sîra", icon: "📜" },
   { id: "Compagnons", label: "Vie des Compagnons (Sahaba)", icon: "🛡️" },
   { id: "Miracles du Coran", label: "Miracles du Coran & Science", icon: "🔬" },
@@ -126,7 +128,6 @@ export default function Navbar({
   isCatalogOpen = false,
   onOpenRandom,
   onOpenIslamicHub,
-  onOpenOffline,
   onOpenAIAssistant,
   onOpenSuggestions,
   onOpenGoogleMaps,
@@ -139,7 +140,7 @@ export default function Navbar({
   const [searchQuery, setSearchQuery] = useState("");
   const [notifOpen, setNotifOpen] = useState(false);
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
-  const [notifFilter, setNotifFilter] = useState<"all" | "te" | "prophets" | "miracles" | "sahaba">("all");
+  const [notifFilter, setNotifFilter] = useState<"all" | "favorites" | "te" | "prophets" | "miracles" | "sahaba">("all");
 
   const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
     try {
@@ -149,6 +150,52 @@ export default function Navbar({
       return [];
     }
   });
+
+  // Historique des dernières requêtes de recherche sauvegardé dans le localStorage
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("narro_recent_searches");
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed)
+        ? parsed.filter((q): q is string => typeof q === "string" && q.trim().length > 0)
+        : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveSearchQuery = useCallback((queryToSave: string) => {
+    const trimmed = queryToSave.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
+      const next = [trimmed, ...filtered].slice(0, 8);
+      try {
+        localStorage.setItem("narro_recent_searches", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const removeRecentSearch = useCallback((itemToRemove: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setRecentSearches((prev) => {
+      const next = prev.filter((item) => item !== itemToRemove);
+      try {
+        localStorage.setItem("narro_recent_searches", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const clearAllRecentSearches = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setRecentSearches([]);
+    try {
+      localStorage.removeItem("narro_recent_searches");
+    } catch {}
+  }, []);
 
   const { catalog: liveCatalog, customItems } = useCreatorCatalog();
   const { activeProfile } = useViewerProfile();
@@ -179,9 +226,10 @@ export default function Navbar({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Recherche instantanée dans tout le catalogue
   const searchResults = useMemo(
-    () => (searchQuery.trim().length > 1 ? smartSearch(searchQuery, 10) : []),
-    [searchQuery]
+    () => (searchQuery.trim().length > 0 ? smartSearch(searchQuery, 12, liveCatalog) : []),
+    [searchQuery, liveCatalog]
   );
 
   // Dernières vidéos ajoutées à l'application (vidéos personnalisées customItems + nouveautés isNew)
@@ -239,6 +287,12 @@ export default function Navbar({
   }, [activeProfile, latestAddedVideos]);
 
   const filteredNotifEpisodes = useMemo(() => {
+    if (notifFilter === "favorites") {
+      const favs = activeProfile?.favorite_categories || [];
+      return unreadLatestVideos.filter((item) =>
+        item.categories.some((cat) => favs.includes(cat as any))
+      );
+    }
     if (notifFilter === "te") {
       return unreadLatestVideos.filter((item) => item.channel === "Towards Eternity");
     }
@@ -252,7 +306,7 @@ export default function Navbar({
       return unreadLatestVideos.filter((item) => item.categories.includes("Compagnons"));
     }
     return unreadLatestVideos;
-  }, [unreadLatestVideos, notifFilter]);
+  }, [unreadLatestVideos, notifFilter, activeProfile?.favorite_categories]);
 
   const markAllAsRead = async () => {
     const allIds = latestAddedVideos.map((item) => item.id);
@@ -302,12 +356,35 @@ export default function Navbar({
     } catch {}
   };
 
-  const handleSelect = (id: string) => {
+  const handleSelect = (id: string, queryToSave?: string) => {
+    const q = queryToSave !== undefined ? queryToSave : searchQuery;
+    if (q && q.trim().length > 0) {
+      saveSearchQuery(q);
+    }
     onSelectContent(id);
     setSearchOpen(false);
     setSearchQuery("");
     setNotifOpen(false);
     setCatDropdownOpen(false);
+  };
+
+  const handleApplyRecentSearch = (query: string) => {
+    setSearchQuery(query);
+    saveSearchQuery(query);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchQuery.trim()) {
+        saveSearchQuery(searchQuery);
+        if (searchResults.length > 0) {
+          handleSelect(searchResults[0].id, searchQuery);
+        }
+      }
+    } else if (e.key === "Escape") {
+      setSearchOpen(false);
+    }
   };
 
   const handleNotificationSelect = async (item: ContentItem) => {
@@ -332,10 +409,16 @@ export default function Navbar({
     handleSelect(item.id);
   };
 
-  const handleVoiceResult = useCallback((transcript: string) => {
-    setSearchQuery(transcript);
-    setSearchOpen(true);
-  }, []);
+  const handleVoiceResult = useCallback(
+    (transcript: string) => {
+      setSearchQuery(transcript);
+      setSearchOpen(true);
+      if (transcript.trim().length > 0) {
+        saveSearchQuery(transcript);
+      }
+    },
+    [saveSearchQuery]
+  );
 
   const {
     supported: voiceSupported,
@@ -385,16 +468,16 @@ export default function Navbar({
           <NavTooltip label="SiratStream (sirat-stream)" sublabel="sirat-stream.ai.studio" align="left" />
         </div>
 
-        {/* Bouton Short Mobile Rapide - Liquid Glass */}
+        {/* Bouton Quick Plays Mobile Rapide - Liquid Glass */}
         {onOpenShorts && (
           <button
             type="button"
             onClick={onOpenShorts}
             className="md:hidden flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.12] hover:bg-white/[0.22] border border-white/30 text-emerald-300 text-xs font-bold backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95"
-            aria-label="Ouvrir le flux Short"
+            aria-label="Ouvrir le flux Quick Plays (TikTok)"
           >
             <Zap size={12} className="text-emerald-400 fill-emerald-400" />
-            <span>Short</span>
+            <span>Quick Plays</span>
           </button>
         )}
 
@@ -405,6 +488,8 @@ export default function Navbar({
             <div className="relative group">
               <button
                 onClick={onOpenCatalog}
+                onMouseEnter={() => import("@/components/CatalogPage")}
+                onFocus={() => import("@/components/CatalogPage")}
                 className={`flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors border-b-2 ${
                   isCatalogOpen
                     ? "text-emerald-400 border-emerald-400 font-bold"
@@ -500,7 +585,7 @@ export default function Navbar({
               )}
             </div>
 
-            {/* 3. Short (Format vertical & Catalogue) - Liquid Glass */}
+            {/* 3. Lancement rapide (Quick Plays / TikTok) - Liquid Glass */}
             {onOpenShorts && (
               <div className="relative group flex items-center">
                 <button
@@ -509,10 +594,10 @@ export default function Navbar({
                   className={`flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 font-bold whitespace-nowrap text-xs sm:text-sm text-emerald-300 hover:text-white bg-white/[0.10] hover:bg-white/[0.20] border border-white/30 hover:border-emerald-300/60 backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95 ${
                     onOpenShortsCatalog ? "rounded-l-full pr-2.5" : "rounded-full"
                   }`}
-                  aria-label="Short - Flux vidéo vertical"
+                  aria-label="Lancement rapide (Quick Plays) - Flux vertical TikTok"
                 >
                   <Zap size={14} className="text-emerald-400 fill-emerald-400" />
-                  <span>Short</span>
+                  <span>Quick Plays</span>
                 </button>
                 {onOpenShortsCatalog && (
                   <button
@@ -526,7 +611,7 @@ export default function Navbar({
                     <span className="hidden xl:inline text-[11px]">Catalogue</span>
                   </button>
                 )}
-                <NavTooltip label="Short" sublabel="Flux vertical & Catalogue dédié" />
+                <NavTooltip label="Quick Plays" sublabel="Lancement rapide (TikTok & Pour rire)" />
               </div>
             )}
 
@@ -582,16 +667,28 @@ export default function Navbar({
           {/* Recherche & Recherche Vocale */}
           <div className="relative" data-search-area>
             {searchOpen ? (
-              <div className="flex items-center bg-zinc-900/95 border border-zinc-700 rounded-full overflow-hidden shadow-2xl">
-                <Search size={16} className="ml-3 flex-shrink-0 text-zinc-400" />
+              <div className="flex items-center bg-zinc-900/95 border border-zinc-700/80 focus-within:border-emerald-500/50 rounded-full overflow-hidden shadow-2xl transition-all">
+                <Search size={16} className="ml-3 flex-shrink-0 text-emerald-400" />
                 <input
                   autoFocus
                   type="text"
-                  placeholder="Rechercher une vidéo, un récit..."
+                  placeholder="Recherche rapide (titre, récit, cheikh...)"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent text-white text-sm px-3 py-2 w-36 sm:w-64 outline-none placeholder-zinc-500"
+                  onKeyDown={handleSearchKeyDown}
+                  className="bg-transparent text-white text-sm px-3 py-2 w-44 sm:w-72 outline-none placeholder-zinc-500"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="p-1 text-zinc-400 hover:text-white transition-colors"
+                    title="Effacer la saisie"
+                    aria-label="Effacer la saisie"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {
@@ -654,60 +751,13 @@ export default function Navbar({
                   >
                     <Search size={18} />
                   </button>
-                  <NavTooltip label="Recherche" sublabel="Titre, récit ou catégorie" align="right" />
-                </div>
-
-                {/* Direct Voice search button */}
-                <div className="relative group">
-                  <button
-                    onClick={async () => {
-                      setSearchOpen(true);
-                      if (micPermissionState === "prompt") {
-                        const ok = await requestMicPermission();
-                        if (ok) {
-                          startVoice();
-                        } else {
-                          setShowMicModal(true);
-                        }
-                      } else if (micPermissionState === "denied") {
-                        setShowMicModal(true);
-                      } else {
-                        startVoice();
-                      }
-                    }}
-                    className={`p-2 rounded-full transition-all ${
-                      listening
-                        ? "text-rose-300 bg-rose-600/30 animate-pulse border border-rose-500/50"
-                        : micPermissionState === "granted"
-                        ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
-                        : "text-zinc-300 hover:text-white hover:bg-white/10"
-                    }`}
-                    aria-label="Recherche vocale"
-                    title={
-                      micPermissionState === "granted"
-                        ? "Recherche vocale (Micro autorisé)"
-                        : "Demander la permission du micro au navigateur"
-                    }
-                  >
-                    <Mic size={18} />
-                  </button>
-                  <NavTooltip
-                    label="Recherche vocale"
-                    sublabel={
-                      micPermissionState === "granted"
-                        ? "Microphone autorisé (parlez directement)"
-                        : micPermissionState === "denied"
-                        ? "Micro bloqué (cliquez pour débloquer)"
-                        : "Demander l'accès au microphone"
-                    }
-                    align="right"
-                  />
+                  <NavTooltip label="Recherche rapide" sublabel="Résultats instantanés" align="right" />
                 </div>
               </div>
             )}
 
             {searchOpen && (
-              <div className="absolute top-full mt-2 right-0 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[70vh] overflow-y-auto z-50">
+              <div className="absolute top-full mt-2 right-0 w-80 sm:w-[420px] max-w-[calc(100vw-1.5rem)] bg-zinc-950/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[72vh] overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-150">
                 {/* Active listening banner */}
                 {listening && (
                   <div className="px-3.5 py-2 bg-rose-950/80 border-b border-rose-500/30 text-xs text-rose-200 flex items-center justify-between gap-2 animate-in fade-in">
@@ -752,60 +802,149 @@ export default function Navbar({
                     </div>
                   </div>
                 )}
-                {searchQuery.trim().length <= 1 ? (
-                  <div className="p-4">
-                    <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold mb-3">
-                      Suggestions de recherche
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {searchSuggestions.map((sug) => (
+
+                {/* Si aucun texte n'est saisi dans le champ de recherche : afficher les dernières requêtes de l'utilisateur stockées dans le localStorage */}
+                {searchQuery.trim().length === 0 ? (
+                  recentSearches.length > 0 ? (
+                    <div className="p-3">
+                      <div className="flex items-center justify-between px-2 py-1.5 mb-1.5">
+                        <div className="flex items-center gap-1.5 text-zinc-400 font-semibold text-[11px] uppercase tracking-wider">
+                          <History size={13} className="text-emerald-400" />
+                          <span>Dernières requêtes</span>
+                          <span className="text-zinc-500 font-mono text-[10px]">({recentSearches.length})</span>
+                        </div>
                         <button
-                          key={sug}
-                          onClick={() => setSearchQuery(sug)}
-                          className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs rounded-full border border-zinc-800 transition-colors"
+                          type="button"
+                          onClick={clearAllRecentSearches}
+                          className="text-[11px] text-zinc-400 hover:text-rose-400 transition-colors flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-white/5"
+                          title="Effacer tout l'historique des recherches"
                         >
-                          {sug}
+                          <Trash2 size={11} />
+                          <span>Tout effacer</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-1">
+                        {recentSearches.map((req, idx) => (
+                          <div
+                            key={`${req}-${idx}`}
+                            onClick={() => handleApplyRecentSearch(req)}
+                            className="group flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-zinc-300 hover:text-white bg-zinc-900/40 hover:bg-zinc-800/80 border border-zinc-800/60 hover:border-emerald-500/30 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <Clock size={13} className="text-zinc-500 group-hover:text-emerald-400 transition-colors shrink-0" />
+                              <span className="truncate font-medium">{req}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] text-zinc-500 group-hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:inline font-mono">
+                                Relancer ↵
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => removeRecentSearch(req, e)}
+                                className="p-1 text-zinc-500 hover:text-rose-400 hover:bg-white/5 rounded-md transition-colors"
+                                title="Supprimer cette requête de l'historique"
+                                aria-label={`Supprimer ${req}`}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-2.5 border border-emerald-500/20 shadow-sm">
+                        <Search size={18} />
+                      </div>
+                      <p className="text-xs font-bold text-white">Recherche rapide</p>
+                      <p className="text-[11px] text-zinc-400 mt-1 max-w-[240px] mx-auto leading-relaxed">
+                        Tapez un mot-clé pour voir les résultats s'afficher instantanément.
+                      </p>
+                    </div>
+                  )
+                ) : searchResults.length > 0 ? (
+                  /* Résultats instantanés affichés au fil de la saisie */
+                  <div>
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-900/60 border-b border-zinc-800/80">
+                      <div className="flex items-center gap-1.5 text-zinc-400 text-[11px] font-semibold uppercase tracking-wider">
+                        <Zap size={13} className="text-amber-400" />
+                        <span>
+                          {searchResults.length} résultat{searchResults.length > 1 ? "s" : ""} instantané{searchResults.length > 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-mono hidden sm:inline">
+                        Entrée ↵ pour lire
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-zinc-800/50">
+                      {searchResults.map((item: ContentItem) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelect(item.id, searchQuery)}
+                          className="group flex items-center gap-3 w-full px-3.5 py-2.5 hover:bg-zinc-900/90 transition-all text-left"
+                        >
+                          <div className="relative w-16 sm:w-20 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-900 border border-zinc-800 group-hover:border-emerald-500/50 transition-colors">
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                if (!img.src.includes("hqdefault")) {
+                                  img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                                }
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                              <div className="w-6 h-6 rounded-full bg-emerald-400 text-zinc-950 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:scale-110 shadow-lg">
+                                <Play size={11} className="fill-current ml-0.5" />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="text-white text-xs sm:text-sm font-semibold leading-snug truncate group-hover:text-emerald-300 transition-colors">
+                              {item.title}
+                            </p>
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1 flex-wrap">
+                              <span className="text-emerald-400/90 font-medium truncate max-w-[130px]">
+                                {item.channel}
+                              </span>
+                              {item.categories && item.categories[0] && (
+                                <>
+                                  <span className="text-zinc-600">·</span>
+                                  <span className="text-zinc-400 truncate max-w-[120px]">
+                                    {item.categories[0]}
+                                  </span>
+                                </>
+                              )}
+                              {item.year && (
+                                <>
+                                  <span className="text-zinc-600">·</span>
+                                  <span className="text-zinc-500 font-mono text-[10px]">{item.year}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          <Play size={14} className="text-zinc-600 group-hover:text-emerald-400 flex-shrink-0 transition-colors" />
                         </button>
                       ))}
                     </div>
                   </div>
-                ) : searchResults.length > 0 ? (
-                  <div>
-                    <p className="px-4 pt-3 pb-2 text-zinc-500 text-xs uppercase tracking-wider font-semibold">
-                      {searchResults.length} résultat{searchResults.length > 1 ? "s" : ""}
-                    </p>
-                    {searchResults.map((item: ContentItem) => (
-                      <button
-                        key={item.id}
-                        onClick={() => handleSelect(item.id)}
-                        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-zinc-900 transition-colors text-left border-t border-zinc-800/50"
-                      >
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          className="w-16 h-10 object-cover rounded-md flex-shrink-0"
-                          onError={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            if (!img.src.includes("hqdefault")) {
-                              img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
-                            }
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-white text-sm font-medium leading-tight truncate">
-                            {item.title}
-                          </p>
-                          <p className="text-zinc-500 text-xs mt-0.5">
-                            {item.categories.slice(0, 2).join(" · ")} · {item.channel}
-                          </p>
-                        </div>
-                        <Play size={14} className="text-zinc-500 flex-shrink-0" />
-                      </button>
-                    ))}
-                  </div>
                 ) : (
-                  <div className="p-6 text-center text-zinc-500 text-xs">
-                    Aucun résultat trouvé pour "{searchQuery}".
+                  <div className="p-6 text-center">
+                    <Search size={22} className="mx-auto text-zinc-600 mb-2" />
+                    <p className="text-xs font-semibold text-zinc-300">
+                      Aucun résultat pour « {searchQuery} »
+                    </p>
+                    <p className="text-[11px] text-zinc-500 mt-1">
+                      Essayez un autre mot-clé ou vérifiez l'orthographe.
+                    </p>
                   </div>
                 )}
               </div>
@@ -889,6 +1028,18 @@ export default function Navbar({
                     >
                       Toutes ({unreadLatestVideos.length})
                     </button>
+                    {activeProfile?.favorite_categories && activeProfile.favorite_categories.length > 0 && (
+                      <button
+                        onClick={() => setNotifFilter("favorites")}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${
+                          notifFilter === "favorites"
+                            ? "bg-emerald-400 text-zinc-950 font-bold shadow-sm"
+                            : "bg-emerald-950/40 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-900/40"
+                        }`}
+                      >
+                        <span>★ Favoris ({unreadLatestVideos.filter((i) => i.categories.some((c) => (activeProfile.favorite_categories || []).includes(c as any))).length})</span>
+                      </button>
+                    )}
                     {unreadLatestVideos.some((i) => i.channel === "Towards Eternity") && (
                       <button
                         onClick={() => setNotifFilter("te")}
@@ -1075,7 +1226,6 @@ export default function Navbar({
             onOpenAccountSettings={onOpenAccountSettings}
             onSwitchProfile={onSwitchProfile}
             onOpenIslamicHub={onOpenIslamicHub}
-            onOpenOffline={onOpenOffline}
             onOpenSuggestions={onOpenSuggestions}
             onOpenShorts={onOpenShorts}
           />

@@ -22,90 +22,63 @@ function getSystemTheme(): ResolvedTheme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "system";
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-      if (saved === "dark" || saved === "light" || saved === "system") {
-        return saved;
-      }
-    } catch {
-      // ignore
-    }
-    return "system";
-  });
+  // Always enforced in Dark Mode per user instruction
+  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const systemTheme: ResolvedTheme = "dark";
+  const resolvedTheme: ResolvedTheme = "dark";
 
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme);
-
-  // Monitor OS system color scheme changes in real-time
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setSystemTheme(e.matches ? "dark" : "light");
-    };
-
-    setSystemTheme(mediaQuery.matches ? "dark" : "light");
-
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    } else if (mediaQuery.addListener) {
-      // Fallback for older browsers / webviews
-      mediaQuery.addListener(handleChange);
-      return () => mediaQuery.removeListener(handleChange);
-    }
-  }, []);
-
-  const resolvedTheme: ResolvedTheme = useMemo(() => {
-    if (theme === "system") {
-      return systemTheme;
-    }
-    return theme;
-  }, [theme, systemTheme]);
-
-  // Apply class and data-theme to HTML root for styling
+  // Enforce dark mode on HTML root and body
   useEffect(() => {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
     const body = document.body;
 
-    root.classList.remove("dark", "light");
-    root.classList.add(resolvedTheme);
-    root.setAttribute("data-theme", resolvedTheme);
-    root.style.colorScheme = resolvedTheme;
+    root.classList.remove("light");
+    root.classList.add("dark");
+    root.setAttribute("data-theme", "dark");
+    root.style.colorScheme = "dark";
 
-    body.classList.remove("dark", "light");
-    body.classList.add(resolvedTheme);
-    body.setAttribute("data-theme", resolvedTheme);
-  }, [resolvedTheme]);
+    body.classList.remove("light");
+    body.classList.add("dark");
+    body.setAttribute("data-theme", "dark");
 
-  const setTheme = (newTheme: ThemeMode) => {
-    setThemeState(newTheme);
     try {
-      localStorage.setItem(STORAGE_KEY, newTheme);
+      localStorage.setItem(STORAGE_KEY, "dark");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setTheme = (_newTheme: ThemeMode) => {
+    // Permanent dark mode
+    setThemeState("dark");
+    try {
+      localStorage.setItem(STORAGE_KEY, "dark");
     } catch {
       // ignore
     }
   };
 
   const toggleTheme = () => {
-    // If currently dark, toggle to light; if light, toggle to dark; if system, toggle to inverse of current resolved
-    const next: ThemeMode = resolvedTheme === "dark" ? "light" : "dark";
-    setTheme(next);
+    // Kept in permanent dark mode
+    setThemeState("dark");
+    try {
+      localStorage.setItem(STORAGE_KEY, "dark");
+    } catch {
+      // ignore
+    }
   };
 
   const value = useMemo(
     () => ({
-      theme,
-      resolvedTheme,
-      systemTheme,
-      isSystem: theme === "system",
+      theme: "dark" as ThemeMode,
+      resolvedTheme: "dark" as ResolvedTheme,
+      systemTheme: "dark" as ResolvedTheme,
+      isSystem: false,
       setTheme,
       toggleTheme,
     }),
-    [theme, resolvedTheme, systemTheme]
+    []
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

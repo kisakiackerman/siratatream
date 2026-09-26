@@ -30,8 +30,8 @@ export default function VideoTitleTooltip({
       className={`relative group/vtooltip inline-block w-full ${className}`}
       title={description || item.title}
     >
-      {/* Video Title */}
-      <Component className={`${titleClassName} ${clampClass}`}>
+      {/* Video Title with smooth opacity transition */}
+      <Component className={`${titleClassName} ${clampClass} vignette-title`}>
         {item.title}
       </Component>
 

@@ -39,9 +39,11 @@ import {
   stopAdhanAudio,
   exportAdhanMp3,
 } from "@/lib/adhanAudio";
+import CategoryNotificationsManager from "./CategoryNotificationsManager";
 
 interface NotificationsSettingsSectionProps {
   onShowToast: (message: string) => void;
+  onPlayVideo?: (id: string) => void;
 }
 
 const PRAYER_ITEMS = [
@@ -146,10 +148,71 @@ const DEFAULT_CHANNELS_METADATA: Record<
     avatar: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=120",
     tag: "Science & Foi",
   },
+  "Les Savants de la Sunnah": {
+    description: "Extraits, fatwas et précieux rappels des grands savants de l'Islam (@SavantsSunnah)",
+    avatar: "https://images.unsplash.com/photo-1564769625905-50e93615e769?w=120",
+    tag: "Savants & Sunnah",
+  },
+  "Minute Islam": {
+    description: "Rappels courts, sagesses et enseignements pour fortifier sa foi",
+    avatar: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=120",
+    tag: "Rappels",
+  },
+  "Sur le chemin de la prophétie": {
+    description: "Témoignages, récits et sagesses sur la voie prophétique",
+    avatar: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=120",
+    tag: "Témoignages",
+  },
+  "Averroès Histoire": {
+    description: "Histoire et civilisation islamique, documentaires et archives",
+    avatar: "https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=120",
+    tag: "Histoire",
+  },
+  "Minhaj An-Nubuwwah": {
+    description: "Enseignements et rappels prophétiques sur la méthodologie authentique",
+    avatar: "https://images.unsplash.com/photo-1564769625905-50e93615e769?w=120",
+    tag: "Enseignements",
+  },
+  "Darifton Prod": {
+    description: "Documentaires, récits captivants et histoire de l'Islam",
+    avatar: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=120",
+    tag: "Documentaires",
+  },
+  "L'Islam Simplement": {
+    description: "Apprentissage accessible, rappels clairs et spiritualité quotidienne",
+    avatar: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=120",
+    tag: "Apprentissage",
+  },
+  "Blue Casquette": {
+    description: "Enquêtes, réflexions profondes et société",
+    avatar: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=120",
+    tag: "Société",
+  },
+  "La Quête": {
+    description: "Découverte, dialogue et quête de vérité",
+    avatar: "https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=120",
+    tag: "Dialogue",
+  },
+  "Purification & Education": {
+    description: "Tafsir, foi et purification de l'âme par Abou Ibrahim Mounir",
+    avatar: "https://images.unsplash.com/photo-1564769625905-50e93615e769?w=120",
+    tag: "Tafsir & Foi",
+  },
+  "Mosquée Mirail Toulouse": {
+    description: "Conférences, cours et enseignements au quotidien",
+    avatar: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=120",
+    tag: "Conférences",
+  },
+  "Dourous.net": {
+    description: "Conférences, rappels et éthique par Nader Abou Anas",
+    avatar: "https://images.unsplash.com/photo-1585036156171-384164a8c675?w=120",
+    tag: "Éthique & Rappels",
+  },
 };
 
 export default function NotificationsSettingsSection({
   onShowToast,
+  onPlayVideo,
 }: NotificationsSettingsSectionProps) {
   const {
     preferences,
@@ -407,6 +470,14 @@ export default function NotificationsSettingsSection({
           </button>
         </div>
       </GlassPanel>
+
+      {/* ============================================================ */}
+      {/* SECTION NOUVEAUTÉS PAR CATÉGORIES FAVORITES (NOTIFICATIONS NAVIGATEUR) */}
+      {/* ============================================================ */}
+      <CategoryNotificationsManager
+        onShowToast={onShowToast}
+        onPlayVideo={onPlayVideo}
+      />
 
       {/* ============================================================ */}
       {/* SECTION 1: RAPPELS DE PRIÈRE (SALÂT) */}

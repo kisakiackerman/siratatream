@@ -22,8 +22,16 @@ export default function IntroSplash({ onComplete }: IntroSplashProps) {
       handleSkip();
     }, 1200);
 
-    return () => clearTimeout(autoTimer);
-  }, [handleSkip]);
+    // Fallback timer: if exit animation was triggered but onAnimationComplete never fires
+    const safetyTimer = setTimeout(() => {
+      onComplete();
+    }, 2200);
+
+    return () => {
+      clearTimeout(autoTimer);
+      clearTimeout(safetyTimer);
+    };
+  }, [handleSkip, onComplete]);
 
   const handleExitComplete = () => {
     onComplete();

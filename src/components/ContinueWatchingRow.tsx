@@ -167,17 +167,17 @@ export default function ContinueWatchingRow({ onPlay }: ContinueWatchingRowProps
                 <VideoTitleTooltip
                   item={item}
                   as="h3"
-                  titleClassName="text-white text-xs sm:text-sm font-semibold truncate group-hover/card:text-emerald-200 transition-colors"
+                  titleClassName="text-white text-xs sm:text-sm font-semibold truncate group-hover/card:text-emerald-200 transition-colors vignette-title"
                   lineClamp={1}
                 />
-                <div className="flex items-center justify-between text-zinc-400 text-[11px] mt-1 gap-1">
-                  <span className="truncate max-w-[50%] text-emerald-400/80">{item.channel}</span>
+                <div className="flex items-center justify-between text-zinc-400 text-[11px] mt-1 gap-1 vignette-meta">
+                  <span className="truncate max-w-[50%] text-emerald-400/80 vignette-meta">{item.channel}</span>
                   {remainingLabel ? (
-                    <span className="text-emerald-300/90 font-medium text-[10px] truncate" title={`Temps restant : ${remainingLabel}`}>
+                    <span className="text-emerald-300/90 font-medium text-[10px] truncate vignette-meta" title={`Temps restant : ${remainingLabel}`}>
                       {remainingLabel}
                     </span>
                   ) : (
-                    <span className="text-emerald-400 font-medium text-[11px]">
+                    <span className="text-emerald-400 font-medium text-[11px] vignette-meta">
                       Reprendre
                     </span>
                   )}

@@ -9,7 +9,8 @@ const CHANNELS = [
   { id: "croyant-rationnel", name: "Croyant Rationnel", handle: "@croyantrationnel" },
   { id: "minute-islam", name: "Minute Islam", handle: "@MinuteIslam" },
   { id: "sur-le-chemin", name: "Sur le chemin de la prophétie", handle: "@Surlecheminde" },
-  { id: "averoeshistoire", name: "Averroès Histoire", handle: "@averoeshistoire" }
+  { id: "averoeshistoire", name: "Averroès Histoire", handle: "@averoeshistoire" },
+  { id: "savants-sunnah", name: "Les Savants de la Sunnah", handle: "@SavantsSunnah" }
 ];
 
 export function parseDurationSeconds(dur) {

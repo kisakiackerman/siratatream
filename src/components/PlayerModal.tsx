@@ -14,7 +14,6 @@ import {
   Share2,
   Loader2,
   Subtitles,
-  DownloadCloud,
   CheckCircle,
   ExternalLink,
   Music,
@@ -35,10 +34,13 @@ import {
   AlertTriangle,
   RefreshCw,
   Check,
-  Zap,
-  ZapOff,
   Globe,
   Moon,
+  Lock,
+  Unlock,
+  AlertCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { ContentItem, catalog } from "@/data/catalog";
@@ -56,10 +58,15 @@ import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useMyList } from "@/lib/useMyList";
 import { useContentStats } from "@/hooks/useContentStats";
 import RatingStars from "@/components/RatingStars";
-import SpotifyLyricsCard from "@/components/SpotifyLyricsCard";
-import { isDownloadedOffline, saveOfflineDownload, removeOfflineDownload } from "@/lib/offlineStorage";
+import { getLocalVideoUrl } from "@/lib/videoStorage";
 import { getReciterForItem } from "@/lib/reciterData";
 import { getSavedWatchProgress, saveWatchProgress } from "@/lib/watchHistory";
+import SleepTimerMenu, { SLEEP_TIMER_PRESETS } from "@/components/SleepTimerMenu";
+import {
+  detectNetworkSpeed,
+  selectAdaptiveQuality,
+  subscribeToNetworkQualityChanges,
+} from "@/lib/adaptiveConnectionQuality";
 
 type PlayerModalProps = {
   item: ContentItem;
@@ -117,15 +124,6 @@ function getStoredPlaybackSpeed(): number {
   }
 }
 
-function getStoredBoostLevel(): number {
-  try {
-    const v = Number(localStorage.getItem("nexstream_audio_boost"));
-    return v >= 100 ? v : 100;
-  } catch {
-    return 100;
-  }
-}
-
 function isOnCellularConnection(): boolean {
   try {
     const conn =
@@ -166,7 +164,6 @@ function getStoredPreferredDubLanguage(): string | null {
   }
 }
 
-const BOOST_LEVELS = [100, 125, 150, 175, 200, 250, 300];
 const AUDIO_SYNC_DRIFT_THRESHOLD = 0.25; // secondes de dérive tolérée avant resynchronisation
 
 export default function PlayerModal({
@@ -189,25 +186,14 @@ export default function PlayerModal({
   const [resumeToast, setResumeToast] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(() => getStoredPlaybackSpeed());
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [qualityPreference, setQualityPreference] = useState<string>(() => getStoredQualityPreference());
-  const [currentQualityLabel, setCurrentQualityLabel] = useState<string>("1080p FHD");
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
-  const [downloaded, setDownloaded] = useState(() => isDownloadedOffline(item.id));
   const [directStreamUrl, setDirectStreamUrl] = useState<string | null>(null);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
   const [isAudioMode, setIsAudioMode] = useState(Boolean(initialAudioMode));
-  const [showAudioLyrics, setShowAudioLyrics] = useState(false);
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
   const [playbackError, setPlaybackError] = useState<PlaybackErrorInfo | null>(null);
   const [initRetryCount, setInitRetryCount] = useState(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
-
-  // Amplificateur de son (Web Audio API — flux directs uniquement)
-  const [boostLevel, setBoostLevel] = useState<number>(() => getStoredBoostLevel());
-  const [boostSupported, setBoostSupported] = useState(false);
-  const [showBoostMenu, setShowBoostMenu] = useState(false);
-  const [showNowPlayingBoostMenu, setShowNowPlayingBoostMenu] = useState(false);
 
   // Doublage audio multi-langue (flux directs uniquement, pistes définies dans catalog.ts)
   const [activeAudioLang, setActiveAudioLang] = useState<string>(ORIGINAL_AUDIO_CODE);
@@ -220,13 +206,179 @@ export default function PlayerModal({
   const [repeatOn, setRepeatOn] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showNowPlayingSpeedMenu, setShowNowPlayingSpeedMenu] = useState(false);
-  const [showNowPlayingQualityMenu, setShowNowPlayingQualityMenu] = useState(false);
 
   // Sleep Timer
   const [sleepTimer, setSleepTimer] = useState<number | null>(null);
   const [sleepTimeRemaining, setSleepTimeRemaining] = useState<number | null>(null);
   const [showSleepMenu, setShowSleepMenu] = useState(false);
   const [showNowPlayingSleepMenu, setShowNowPlayingSleepMenu] = useState(false);
+  const sleepTimerValRef = useRef<number | null>(sleepTimer);
+  useEffect(() => {
+    sleepTimerValRef.current = sleepTimer;
+  }, [sleepTimer]);
+
+  // Screen Lock
+  const [screenLocked, setScreenLocked] = useState(false);
+
+  // Réglage de l'opacité des textes (Titre, chaîne et infos) — réduit à 65% par défaut pour discrétion
+  const [textOpacity, setTextOpacity] = useState<number>(() => {
+    if (typeof window === "undefined") return 0.65;
+    const saved = localStorage.getItem("sirat_player_text_opacity");
+    return saved !== null ? parseFloat(saved) : 0.65;
+  });
+
+  const handleSetTextOpacity = useCallback((opacity: number) => {
+    setTextOpacity(opacity);
+    try {
+      localStorage.setItem("sirat_player_text_opacity", opacity.toString());
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Solution Gratuite Anti-Titre YouTube : Rognage optique pour masquer la barre de titre native YouTube
+  const [cinemaCleanMode, setCinemaCleanMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("sirat_cinema_clean_mode");
+    return saved !== null ? saved === "true" : true;
+  });
+
+  const toggleCinemaCleanMode = useCallback(() => {
+    setCinemaCleanMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sirat_cinema_clean_mode", next.toString());
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  // Mobile Clean Layout Options Sheet
+  const [showMobileOptions, setShowMobileOptions] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLandscapeFullscreen, setIsLandscapeFullscreen] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [isWindowPortrait, setIsWindowPortrait] = useState(true);
+  const [viewportDims, setViewportDims] = useState({ w: 0, h: 0 });
+
+  // Plein écran effectif (natif ou mode paysage forcé pour smartphones)
+  const effectiveFullscreen = isFullscreen || isLandscapeFullscreen;
+
+  // Détection dynamique de l'appareil mobile, des dimensions et de l'orientation portrait/paysage
+  useEffect(() => {
+    const updateDims = () => {
+      if (typeof window !== "undefined") {
+        setViewportDims({ w: window.innerWidth, h: window.innerHeight });
+        const isMobile =
+          /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+          ("maxTouchPoints" in navigator && navigator.maxTouchPoints > 0 && window.innerWidth < 1024) ||
+          window.innerWidth < 768;
+        setIsMobileDevice(isMobile);
+        setIsWindowPortrait(window.innerHeight > window.innerWidth);
+      }
+    };
+    updateDims();
+    window.addEventListener("resize", updateDims);
+    window.addEventListener("orientationchange", updateDims);
+    return () => {
+      window.removeEventListener("resize", updateDims);
+      window.removeEventListener("orientationchange", updateDims);
+    };
+  }, []);
+
+  // Forçage de la rotation 90 degrés si l'utilisateur est sur smartphone en mode portrait et active le plein écran
+  const forceRotate90 = effectiveFullscreen && isMobileDevice && isWindowPortrait;
+
+  const rotatedStyle: React.CSSProperties | undefined = forceRotate90
+    ? {
+        position: "fixed",
+        top: "50%",
+        left: "50%",
+        width: viewportDims.h > 0 ? `${viewportDims.h}px` : "100vh",
+        height: viewportDims.w > 0 ? `${viewportDims.w}px` : "100vw",
+        transform: "translate(-50%, -50%) rotate(90deg)",
+        transformOrigin: "center center",
+        zIndex: 99999,
+        maxWidth: "none",
+        maxHeight: "none",
+      }
+    : undefined;
+
+  // Verrouillage de l'orientation de l'écran en paysage pour les smartphones
+  const lockLandscapeOrientation = useCallback(async () => {
+    try {
+      const isMobile =
+        /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        ("maxTouchPoints" in navigator && navigator.maxTouchPoints > 0 && window.innerWidth < 1024) ||
+        window.innerWidth < 768;
+
+      if (!isMobile) return;
+
+      const orientation = screen.orientation || (screen as any).mozOrientation || (screen as any).msOrientation;
+      if (orientation && typeof orientation.lock === "function") {
+        await orientation.lock("landscape").catch(() => {
+          return orientation.lock("landscape-primary").catch(() => {});
+        });
+      } else if (typeof (screen as any).lockOrientation === "function") {
+        (screen as any).lockOrientation("landscape");
+      } else if (typeof (screen as any).mozLockOrientation === "function") {
+        (screen as any).mozLockOrientation("landscape");
+      } else if (typeof (screen as any).msLockOrientation === "function") {
+        (screen as any).msLockOrientation("landscape");
+      }
+    } catch {
+      // Non bloquant si les permissions ou l'environnement restreignent le verrouillage
+    }
+  }, []);
+
+  const unlockScreenOrientation = useCallback(() => {
+    try {
+      const orientation = screen.orientation || (screen as any).mozOrientation || (screen as any).msOrientation;
+      if (orientation && typeof orientation.unlock === "function") {
+        orientation.unlock();
+      } else if (typeof (screen as any).unlockOrientation === "function") {
+        (screen as any).unlockOrientation();
+      } else if (typeof (screen as any).mozUnlockOrientation === "function") {
+        (screen as any).mozUnlockOrientation();
+      } else if (typeof (screen as any).msUnlockOrientation === "function") {
+        (screen as any).msUnlockOrientation();
+      }
+    } catch {
+      // Ignored
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      const isFs = Boolean(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isFs);
+      if (isFs) {
+        setIsLandscapeFullscreen(true);
+        lockLandscapeOrientation();
+      } else {
+        setIsLandscapeFullscreen(false);
+        unlockScreenOrientation();
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    document.addEventListener("webkitfullscreenchange", handleFsChange);
+    document.addEventListener("mozfullscreenchange", handleFsChange);
+    document.addEventListener("MSFullscreenChange", handleFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFsChange);
+      document.removeEventListener("webkitfullscreenchange", handleFsChange);
+      document.removeEventListener("mozfullscreenchange", handleFsChange);
+      document.removeEventListener("MSFullscreenChange", handleFsChange);
+      unlockScreenOrientation();
+    };
+  }, [lockLandscapeOrientation, unlockScreenOrientation]);
 
   const { activeProfile } = useViewerProfile();
   const { inList, toggle } = useMyList();
@@ -247,6 +399,7 @@ export default function PlayerModal({
   const containerRef = useRef<HTMLDivElement>(null);
   const playerDivRef = useRef<HTMLDivElement>(null);
   const controlsTimer = useRef<any>(null);
+  const playingRef = useRef<boolean>(playing);
   const progressTimer = useRef<any>(null);
   const historyTimer = useRef<any>(null);
   const sleepTimerRef = useRef<any>(null);
@@ -258,14 +411,6 @@ export default function PlayerModal({
   // Élément audio caché pour le doublage — joué en parallèle de la vidéo
   // (dont la piste native est alors coupée) et synchronisé sur son temps.
   const dubAudioRef = useRef<HTMLAudioElement>(null);
-
-  // Amplificateur de son — graphe Web Audio persistant tant que le même
-  // élément <video> DOM reste monté (un MediaElementSourceNode ne peut
-  // être créé qu'une seule fois par élément).
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioSourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const audioGraphElementRef = useRef<HTMLVideoElement | null>(null);
 
   const isTarawih = item.channel === "Récitations Haramain" || item.categories.includes("Coran");
   const reciter = isTarawih ? getReciterForItem(item.title, item.description, item.channel) : null;
@@ -360,11 +505,20 @@ export default function PlayerModal({
     activeAudioLangRef.current = activeAudioLang;
   }, [activeAudioLang]);
 
-  // Safe close handler that immediately persists exact second
+  // Direct close handler: saves progress and exits player immediately
   const handleClose = useCallback(() => {
     saveCurrentProgress();
+    setIsLandscapeFullscreen(false);
+    unlockScreenOrientation();
+    try {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
     onClose();
-  }, [saveCurrentProgress, onClose]);
+  }, [saveCurrentProgress, onClose, unlockScreenOrientation]);
 
   // Safe item switch that immediately persists exact second
   const handleChangeItem = useCallback(
@@ -425,6 +579,17 @@ export default function PlayerModal({
       setDirectStreamUrl(item.videoUrl);
       return;
     }
+
+    // Check stored IndexedDB video blob for self-hosted files
+    getLocalVideoUrl(item.id)
+      .then((storedUrl) => {
+        if (active && storedUrl) {
+          setDirectStreamUrl(storedUrl);
+          return;
+        }
+      })
+      .catch(() => {});
+
     setDirectStreamUrl(null);
 
     fetchVideoPlaybackSource(item.youtubeId)
@@ -438,84 +603,7 @@ export default function PlayerModal({
     return () => {
       active = false;
     };
-  }, [item.youtubeId, item.videoUrl, item.videoSourceType]);
-
-  // ─────────────────────────────────────────────────────────────
-  // Amplificateur de son : construit le graphe Web Audio (source →
-  // gain → sortie) dès qu'un flux direct est lu. Un MediaElementSourceNode
-  // ne pouvant être créé qu'une seule fois par élément <video>, on ne
-  // reconstruit le graphe que si l'élément DOM a réellement changé.
-  // Indisponible pour la lecture via l'API/iframe YouTube (flux opaque,
-  // cross-origin — le navigateur ne permet pas d'accéder à son audio).
-  // Note : quand un doublage est actif, la vidéo est mise en muet et
-  // c'est l'élément <audio> de doublage qui porte le son — le boost ne
-  // s'applique alors qu'à la piste originale, pas au doublage.
-  // ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!directStreamUrl) {
-      setBoostSupported(false);
-      return;
-    }
-    const videoEl = videoRef.current;
-    if (!videoEl) {
-      setBoostSupported(false);
-      return;
-    }
-    if (audioGraphElementRef.current === videoEl && gainNodeRef.current) {
-      // Graphe déjà construit pour cet élément précis
-      setBoostSupported(true);
-      return;
-    }
-    try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) {
-        setBoostSupported(false);
-        return;
-      }
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
-      const source = ctx.createMediaElementSource(videoEl);
-      const gain = ctx.createGain();
-      gain.gain.value = boostLevel / 100;
-      source.connect(gain);
-      gain.connect(ctx.destination);
-      audioSourceNodeRef.current = source;
-      gainNodeRef.current = gain;
-      audioGraphElementRef.current = videoEl;
-      setBoostSupported(true);
-    } catch (err) {
-      console.warn("Amplificateur de son indisponible pour ce flux :", err);
-      setBoostSupported(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [directStreamUrl, item.id]);
-
-  // Applique le niveau de boost à chaque changement, et le persiste
-  useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = boostLevel / 100;
-    }
-    try {
-      localStorage.setItem("nexstream_audio_boost", String(boostLevel));
-    } catch {
-      // ignore
-    }
-  }, [boostLevel]);
-
-  const handleSelectBoost = (level: number) => {
-    setBoostLevel(level);
-    showCaptionNotification(
-      level === 100 ? "Amplificateur désactivé" : `Volume amplifié à ${level}%`,
-      level > 100
-    );
-    setShowBoostMenu(false);
-    setShowNowPlayingBoostMenu(false);
-  };
+  }, [item.id, item.youtubeId, item.videoUrl, item.videoSourceType]);
 
   // ─────────────────────────────────────────────────────────────
   // Doublage audio : bascule entre la piste originale (celle intégrée
@@ -571,8 +659,8 @@ export default function PlayerModal({
     [availableAudioTracks, muted, volume, playing]
   );
 
-  // Quality forcing engine (Full HD 1080p / 1440p / 4K)
-  const applyForcedHDQuality = useCallback((player: any, preference: string = "auto_max") => {
+  // Forçage absolu de la qualité vidéo en Full HD minimum (1080p ou supérieur selon la source)
+  const applyForcedHDQuality = useCallback((player: any) => {
     if (!player) return;
     try {
       const levels: string[] = player.getAvailableQualityLevels?.() || [];
@@ -580,36 +668,51 @@ export default function PlayerModal({
         setAvailableQualities(levels);
       }
 
+      // Priorité stricte au Full HD minimum : 4K / 2K si supporté par la vidéo, sinon 1080p
       let chosen = "hd1080";
-      if (preference === "auto_max") {
-        // Enforce the highest resolution available (4K > 1440p > 1080p)
-        if (levels.includes("highres") || levels.includes("hd2160")) {
-          chosen = levels.includes("hd2160") ? "hd2160" : "highres";
+      if (levels.length > 0) {
+        if (levels.includes("highres")) {
+          chosen = "highres";
+        } else if (levels.includes("hd2160")) {
+          chosen = "hd2160";
         } else if (levels.includes("hd1440")) {
           chosen = "hd1440";
         } else if (levels.includes("hd1080")) {
           chosen = "hd1080";
-        } else if (levels.length > 0) {
+        } else {
           chosen = levels[0];
         }
-      } else if (preference && (levels.length === 0 || levels.includes(preference))) {
-        chosen = preference;
-      } else if (levels.length > 0) {
-        chosen = levels[0];
       }
 
       player.setPlaybackQuality?.(chosen);
       player.setSuggestedQuality?.(chosen);
 
-      if (chosen === "hd2160" || chosen === "highres") setCurrentQualityLabel("4K UHD");
-      else if (chosen === "hd1440") setCurrentQualityLabel("1440p 2K");
-      else if (chosen === "hd1080") setCurrentQualityLabel("1080p FHD");
-      else if (chosen === "hd720") setCurrentQualityLabel("720p HD");
-      else setCurrentQualityLabel("1080p FHD");
+      // Envoi direct des commandes au conteneur Iframe YouTube pour maximiser la prise en compte
+      const iframe = player.getIframe?.() || containerRef.current?.querySelector("iframe");
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "setPlaybackQuality", args: [chosen] }),
+          "*"
+        );
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: [chosen, "highres"] }),
+          "*"
+        );
+      }
     } catch (err) {
       console.warn("Quality forcing error:", err);
     }
   }, []);
+
+  // Surveillance en temps réel pour maintenir systématiquement le Full HD sans interruption
+  useEffect(() => {
+    const unsubscribe = subscribeToNetworkQualityChanges(() => {
+      if (playerRef.current) {
+        applyForcedHDQuality(playerRef.current);
+      }
+    });
+    return unsubscribe;
+  }, [applyForcedHDQuality]);
 
   // Applique l'état des sous-titres (activé/désactivé + taille) sur la
   // cible de lecture active (vidéo directe HTML5, lecteur YouTube API,
@@ -760,8 +863,6 @@ export default function PlayerModal({
     let cancelled = false;
     setPlaybackRate(getStoredPlaybackSpeed());
     setShowSpeedMenu(false);
-    setShowQualityMenu(false);
-    setDownloaded(isDownloadedOffline(item.id));
 
     // If direct video stream is playing or fallback is active, skip YT API player
     if (directStreamUrl) {
@@ -806,6 +907,8 @@ export default function PlayerModal({
             cc_lang_pref: "fr",
             vq: "hd1080",
             hd: 1,
+            loop: 1,
+            playlist: item.youtubeId,
           };
 
           playerRef.current = new (window as any).YT.Player(playerDivRef.current, {
@@ -820,8 +923,8 @@ export default function PlayerModal({
                   if (resumeTime > 0) {
                     e.target.seekTo(resumeTime, true);
                   }
-                  // Force Full HD+ immediately
-                  applyForcedHDQuality(e.target, qualityPreference);
+                  // Force Full HD 1080p+ immédiatement
+                  applyForcedHDQuality(e.target);
                   // Vitesse de lecture par défaut (réglage utilisateur)
                   e.target.setPlaybackRate?.(playbackRateRef.current);
                   // Sous-titres activés par défaut (réglage utilisateur)
@@ -866,9 +969,9 @@ export default function PlayerModal({
                 setBuffering(state === "buffering");
                 setPlaying(state === "playing");
 
-                // Lock Full HD+ on play / buffer
+                // Lock Full HD 1080p+ on play / buffer
                 if (state === "playing" || state === "buffering") {
-                  applyForcedHDQuality(playerRef.current || e.target, qualityPreference);
+                  applyForcedHDQuality(playerRef.current || e.target);
                 }
 
                 if (state === "paused") {
@@ -877,6 +980,20 @@ export default function PlayerModal({
 
                 if (state === "ended") {
                   saveCurrentProgressRef.current();
+                  if (sleepTimerValRef.current === -1) {
+                    try {
+                      playerRef.current?.seekTo?.(0, true);
+                      playerRef.current?.pauseVideo?.();
+                    } catch {
+                      // ignore
+                    }
+                    postIframeCommand("pauseVideo");
+                    setPlaying(false);
+                    setSleepTimer(null);
+                    setSleepTimeRemaining(null);
+                    showCaptionNotification("Minuteur de sommeil : fin de la vidéo atteinte, lecture arrêtée.", false);
+                    return;
+                  }
                   if (repeatOnRef.current) {
                     try {
                       playerRef.current?.seekTo?.(0, true);
@@ -1014,16 +1131,21 @@ export default function PlayerModal({
     };
   }, [activeProfile, saveCurrentProgress]);
 
-  // Save on page exit / window unload
+  // Save on page exit / window unload & warn if playing to prevent accidental exit
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       saveCurrentProgress();
+      if (playing) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [saveCurrentProgress]);
+  }, [saveCurrentProgress, playing]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -1052,18 +1174,46 @@ export default function PlayerModal({
     };
   }, [onClose]);
 
-  const resetControlsTimer = useCallback(() => {
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
+
+  const resetControlsTimer = useCallback((customDuration?: number | React.SyntheticEvent) => {
+    clearTimeout(controlsTimer.current);
+    setShowControls(true);
+    const duration = typeof customDuration === "number" ? customDuration : 6000;
+    controlsTimer.current = setTimeout(() => {
+      if (playingRef.current) setShowControls(false);
+    }, duration);
+  }, []);
+
+  // Gestion tactile intelligente :
+  // Les commandes et bandes restent visibles tant que le doigt est sur l'écran,
+  // puis restent affichées pendant au moins 6 secondes après que l'utilisateur
+  // cesse de toucher l'écran en pleine lecture avant de s'estomper.
+  const handleTouchStart = useCallback(() => {
+    clearTimeout(controlsTimer.current);
+    setShowControls(true);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
     clearTimeout(controlsTimer.current);
     setShowControls(true);
     controlsTimer.current = setTimeout(() => {
-      if (playing) setShowControls(false);
-    }, 3500);
-  }, [playing]);
+      if (playingRef.current) setShowControls(false);
+    }, 6000); // Au moins 6 secondes après avoir cessé de toucher l'écran en pleine lecture
+  }, []);
 
   useEffect(() => {
-    resetControlsTimer();
+    // Au démarrage ou dès que la lecture commence, afficher la bande et les contrôleurs pendant au moins 6 secondes
+    if (playing) {
+      resetControlsTimer(6000);
+    } else {
+      clearTimeout(controlsTimer.current);
+      setShowControls(true);
+    }
     return () => clearTimeout(controlsTimer.current);
-  }, [resetControlsTimer]);
+  }, [playing, item.id, resetControlsTimer]);
 
   const postIframeCommand = useCallback((func: string, args: any[] = []) => {
     try {
@@ -1077,21 +1227,49 @@ export default function PlayerModal({
   }, []);
 
   const formatSleepTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
+    if (seconds <= 0) return "0:00";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
+    if (h > 0) {
+      return `${h}h${m < 10 ? "0" : ""}${m}m`;
+    }
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
   const handleSelectSleepTimer = (minutes: number | null) => {
+    if (minutes === -1) {
+      setSleepTimer(-1);
+      const curTime = currentTimeSec || lastTimeRef.current || (videoRef.current ? videoRef.current.currentTime : 0);
+      const totalDur = duration || lastDurationRef.current || (videoRef.current ? videoRef.current.duration : 0);
+      const rem = Math.max(1, Math.round((totalDur || 0) - (curTime || 0)));
+      setSleepTimeRemaining(rem > 1 ? rem : 60);
+      setShowSleepMenu(false);
+      setShowNowPlayingSleepMenu(false);
+      showCaptionNotification("Minuteur de sommeil : arrêt à la fin de la vidéo", true);
+      return;
+    }
+
     setSleepTimer(minutes);
     setSleepTimeRemaining(minutes ? minutes * 60 : null);
     setShowSleepMenu(false);
     setShowNowPlayingSleepMenu(false);
     if (minutes) {
-      showCaptionNotification(`Mode Sommeil: arrêt dans ${minutes} min`, true);
+      showCaptionNotification(`Minuteur de sommeil : arrêt dans ${minutes} min`, true);
     } else {
-      showCaptionNotification(`Mode Sommeil désactivé`, false);
+      showCaptionNotification(`Minuteur de sommeil désactivé`, false);
     }
+  };
+
+  const handleExtendSleepTimer = (extraMinutes: number) => {
+    const extraSeconds = extraMinutes * 60;
+    setSleepTimeRemaining((prev) => (prev !== null ? prev + extraSeconds : extraSeconds));
+    if (sleepTimer !== null && sleepTimer !== -1) {
+      setSleepTimer((prev) => (prev !== null ? prev + extraMinutes : extraMinutes));
+    } else if (sleepTimer === null) {
+      setSleepTimer(extraMinutes);
+    }
+    showCaptionNotification(`+${extraMinutes} min ajoutées au minuteur`, true);
   };
 
   useEffect(() => {
@@ -1102,6 +1280,16 @@ export default function PlayerModal({
     }
 
     sleepTimerRef.current = setInterval(() => {
+      if (sleepTimerValRef.current === -1) {
+        const cur = videoRef.current?.currentTime || lastTimeRef.current || 0;
+        const dur = videoRef.current?.duration || lastDurationRef.current || 0;
+        if (dur > 0) {
+          const rem = Math.max(0, Math.round(dur - cur));
+          setSleepTimeRemaining(rem);
+        }
+        return;
+      }
+
       setSleepTimeRemaining((prev) => {
         if (prev === null) return null;
         if (prev <= 1) {
@@ -1118,8 +1306,10 @@ export default function PlayerModal({
               // ignore
             }
           }
+          postIframeCommand("pauseVideo");
           setPlaying(false);
           setSleepTimer(null);
+          showCaptionNotification("Minuteur de sommeil : lecture arrêtée automatiquement", false);
           
           return 0;
         }
@@ -1130,7 +1320,7 @@ export default function PlayerModal({
     return () => {
       if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     };
-  }, [sleepTimer]);
+  }, [sleepTimer, postIframeCommand]);
 
   function togglePlay() {
     if (videoRef.current) {
@@ -1356,30 +1546,72 @@ export default function PlayerModal({
     }
   }
 
-  function changeQuality(qualKey: string) {
-    setQualityPreference(qualKey);
-    setShowQualityMenu(false);
-    setShowNowPlayingQualityMenu(false);
-    if (playerRef.current) {
-      applyForcedHDQuality(playerRef.current, qualKey);
+  async function toggleFullscreen() {
+    const isCurrentlyFs = isFullscreen || isLandscapeFullscreen;
+
+    if (!isCurrentlyFs) {
+      // 1. Activer immédiatement l'état plein écran paysage pour garantir l'exécution visuelle
+      setIsLandscapeFullscreen(true);
+
+      // 2. Tenter le verrouillage d'orientation paysage sans bloquer l'exécution
+      lockLandscapeOrientation().catch(() => {});
+
+      // 3. Tenter le plein écran natif de manière sécurisée (non-bloquante)
+      try {
+        const el = containerRef.current || document.documentElement;
+        const requestFs =
+          el.requestFullscreen ||
+          (el as any).webkitRequestFullscreen ||
+          (el as any).mozRequestFullScreen ||
+          (el as any).msRequestFullscreen;
+
+        if (requestFs) {
+          await requestFs.call(el).catch(() => {});
+        } else if (videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
+          try {
+            (videoRef.current as any).webkitEnterFullscreen();
+          } catch {
+            // ignore
+          }
+        }
+        if (playerRef.current) {
+          setTimeout(() => {
+            applyForcedHDQuality(playerRef.current);
+          }, 350);
+        }
+      } catch {
+        // Ignoré si restreint par les permissions ou la sandbox iframe
+      }
+    } else {
+      // Quitter le plein écran paysage
+      setIsLandscapeFullscreen(false);
+      unlockScreenOrientation();
+
+      try {
+        if (
+          document.fullscreenElement ||
+          (document as any).webkitFullscreenElement ||
+          (document as any).mozFullScreenElement ||
+          (document as any).msFullscreenElement
+        ) {
+          const exitFs =
+            document.exitFullscreen ||
+            (document as any).webkitExitFullscreen ||
+            (document as any).mozCancelFullScreen ||
+            (document as any).msExitFullscreen;
+          if (exitFs) {
+            await exitFs.call(document).catch(() => {});
+          }
+        }
+      } catch {
+        // Ignoré
+      }
     }
   }
 
   function goFullscreen() {
-    if (containerRef.current?.requestFullscreen) {
-      containerRef.current.requestFullscreen();
-    }
+    toggleFullscreen();
   }
-
-  const handleToggleDownload = () => {
-    if (downloaded) {
-      removeOfflineDownload(item.id);
-      setDownloaded(false);
-    } else {
-      saveOfflineDownload(item);
-      setDownloaded(true);
-    }
-  };
 
   const handleExportVideoFile = () => {
     if (item.videoUrl && (item.videoUrl.endsWith(".mp4") || item.videoUrl.endsWith(".webm"))) {
@@ -1461,87 +1693,108 @@ export default function PlayerModal({
       <div
         ref={containerRef}
         className={`relative overflow-hidden bg-black select-none ${
-          isAudioMode ? "flex-1" : "w-full aspect-video md:aspect-auto md:flex-1 flex-shrink-0"
-        }`}
+          isAudioMode || effectiveFullscreen
+            ? "flex-1 w-full h-full"
+            : "w-full aspect-video md:aspect-auto md:flex-1 flex-shrink-0"
+        } ${forceRotate90 ? "fixed inset-0" : ""}`}
+        style={rotatedStyle}
         onMouseMove={resetControlsTimer}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
-        {/* Direct MP4/WebM stream or YouTube player or Fallback iframe */}
-        {directStreamUrl ? (
-          <video
-            ref={videoRef}
-            src={directStreamUrl}
-            autoPlay
-            playsInline
-            className={`absolute inset-0 w-full h-full object-contain ${
-              isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
-            }`}
-            onLoadedMetadata={() => {
-              if (videoRef.current) {
-                videoRef.current.playbackRate = playbackRateRef.current;
-              }
-              if (captionsOnRef.current) {
-                applyCaptionsToTarget(true);
-              }
-            }}
-            onWaiting={() => setBuffering(true)}
-            onPlaying={() => {
-              setBuffering(false);
-              setPlaying(true);
-            }}
-            onPause={() => setPlaying(false)}
-            onEnded={() => {
-              saveCurrentProgress();
-              if (dubAudioRef.current) dubAudioRef.current.pause();
-              if (repeatOn && videoRef.current) {
-                videoRef.current.currentTime = 0;
-                videoRef.current.play();
-                if (activeAudioLangRef.current !== ORIGINAL_AUDIO_CODE && dubAudioRef.current) {
-                  dubAudioRef.current.currentTime = 0;
-                  dubAudioRef.current.play().catch(() => {});
+        {/* Conteneur vidéo avec rognage optique Cinema Clean (pousse la barre de titre YouTube hors champ) */}
+        <div
+          className={`absolute inset-0 w-full h-full overflow-hidden transition-transform duration-300 ${
+            cinemaCleanMode && !directStreamUrl && !isAudioMode ? "scale-[1.07] origin-center" : "scale-100"
+          }`}
+        >
+          {/* Direct MP4/WebM stream or YouTube player or Fallback iframe */}
+          {directStreamUrl ? (
+            <video
+              ref={videoRef}
+              src={directStreamUrl}
+              autoPlay
+              playsInline
+              className={`absolute inset-0 w-full h-full object-contain ${
+                isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
+              }`}
+              onLoadedMetadata={() => {
+                if (videoRef.current) {
+                  videoRef.current.playbackRate = playbackRateRef.current;
                 }
-              } else {
-                handleNextTrack();
-              }
-            }}
-          />
-        ) : useIframeFallback ? (
-          <div
-            className={`absolute inset-0 w-full h-full bg-black ${
-              isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
-            }`}
-          >
-            <iframe
-              ref={iframeRef}
-              key={item.youtubeId}
-              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=1&disablekb=0&fs=1&origin=${encodeURIComponent(
-                typeof window !== "undefined" ? window.location.origin : ""
-              )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
-              title={item.title}
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allowFullScreen
-              onLoad={() => {
                 if (captionsOnRef.current) {
-                  setTimeout(() => applyCaptionsToTarget(true), 800);
+                  applyCaptionsToTarget(true);
                 }
-                if (playbackRateRef.current !== 1) {
-                  setTimeout(
-                    () => postIframeCommand("setPlaybackRate", [playbackRateRef.current]),
-                    800
-                  );
+              }}
+              onWaiting={() => setBuffering(true)}
+              onPlaying={() => {
+                setBuffering(false);
+                setPlaying(true);
+              }}
+              onPause={() => setPlaying(false)}
+              onEnded={() => {
+                saveCurrentProgress();
+                if (dubAudioRef.current) dubAudioRef.current.pause();
+                if (sleepTimerValRef.current === -1) {
+                  setPlaying(false);
+                  setSleepTimer(null);
+                  setSleepTimeRemaining(null);
+                  showCaptionNotification("Minuteur de sommeil : fin de la vidéo atteinte, lecture arrêtée.", false);
+                  return;
+                }
+                if (repeatOn && videoRef.current) {
+                  videoRef.current.currentTime = 0;
+                  videoRef.current.play();
+                  if (activeAudioLangRef.current !== ORIGINAL_AUDIO_CODE && dubAudioRef.current) {
+                    dubAudioRef.current.currentTime = 0;
+                    dubAudioRef.current.play().catch(() => {});
+                  }
+                } else {
+                  handleNextTrack();
                 }
               }}
             />
-          </div>
-        ) : (
-          <div
-            ref={playerDivRef}
-            className={`absolute inset-0 w-full h-full ${
-              isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
-            }`}
-          />
-        )}
+          ) : useIframeFallback ? (
+            <div
+              className={`absolute inset-0 w-full h-full bg-black ${
+                isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
+              }`}
+            >
+              <iframe
+                ref={iframeRef}
+                key={item.youtubeId}
+                src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=1&disablekb=0&fs=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+                  typeof window !== "undefined" ? window.location.origin : ""
+                )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
+                title={item.title}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                onLoad={() => {
+                  if (captionsOnRef.current) {
+                    setTimeout(() => applyCaptionsToTarget(true), 800);
+                  }
+                  if (playbackRateRef.current !== 1) {
+                    setTimeout(
+                      () => postIframeCommand("setPlaybackRate", [playbackRateRef.current]),
+                      800
+                    );
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div
+              ref={playerDivRef}
+              className={`absolute inset-0 w-full h-full ${
+                isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
+              }`}
+            />
+          )}
+        </div>
 
         {/* ───────────────────────────────────────────────────────── */}
         {/* GRACEFUL ERROR OVERLAY — Vidéo indisponible ou restreinte */}
@@ -1695,61 +1948,38 @@ export default function PlayerModal({
                 </div>
               </div>
 
-              {/* Zone Centrale : Soit Pochette Studio, Soit Panneau Paroles Spotify */}
+              {/* Zone Centrale : Pochette Studio Audio HD */}
               <div className="flex-1 flex flex-col items-center justify-center min-h-0 mb-4 relative">
-                {showAudioLyrics ? (
-                  /* Interface Paroles Style Spotify (compacte, taille juste adaptée pour lire) */
-                  <div className="w-full flex-1 flex items-center justify-center min-h-0">
-                    <SpotifyLyricsCard
-                      item={item}
-                      currentTimeSec={currentTimeSec}
-                      durationSec={duration}
-                      onSeek={(sec) => seekToPct((sec / (duration || 1)) * 100)}
-                      onClose={() => setShowAudioLyrics(false)}
+                <div className="flex flex-col items-center justify-center w-full h-full min-h-0">
+                  <div className="relative w-full max-w-[280px] sm:max-w-[320px] aspect-square rounded-2xl overflow-hidden border border-white/15 shadow-2xl bg-black/60 backdrop-blur-md group">
+                    <img
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />
-                  </div>
-                ) : (
-                  /* Pochette Studio Audio HD standard */
-                  <div className="flex flex-col items-center justify-center w-full h-full min-h-0">
-                    <div className="relative w-full max-w-[280px] sm:max-w-[320px] aspect-square rounded-2xl overflow-hidden border border-white/15 shadow-2xl bg-black/60 backdrop-blur-md group">
-                      <img
-                        src={item.thumbnail}
-                        alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                      />
 
-                      {/* Equalizer animation when playing */}
-                      {playing && !buffering && (
-                        <div className="absolute top-3 left-3 flex items-end gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 pointer-events-none">
-                          <span className="w-1 h-3 bg-emerald-400 rounded-full animate-[bounce_0.8s_ease-in-out_infinite]" />
-                          <span className="w-1 h-4 bg-emerald-400 rounded-full animate-[bounce_0.6s_ease-in-out_infinite_0.2s]" />
-                          <span className="w-1 h-2 bg-emerald-400 rounded-full animate-[bounce_0.9s_ease-in-out_infinite_0.4s]" />
-                        </div>
-                      )}
+                    {/* Equalizer animation when playing */}
+                    {playing && !buffering && (
+                      <div className="absolute top-3 left-3 flex items-end gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 pointer-events-none">
+                        <span className="w-1 h-3 bg-emerald-400 rounded-full animate-[bounce_0.8s_ease-in-out_infinite]" />
+                        <span className="w-1 h-4 bg-emerald-400 rounded-full animate-[bounce_0.6s_ease-in-out_infinite_0.2s]" />
+                        <span className="w-1 h-2 bg-emerald-400 rounded-full animate-[bounce_0.9s_ease-in-out_infinite_0.4s]" />
+                      </div>
+                    )}
 
-                      <button
-                        onClick={() => toggle(item)}
-                        className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md border transition-colors ${
-                          inList(item.id)
-                            ? "bg-rose-500/90 border-rose-300/60 text-white"
-                            : "bg-black/50 border-white/20 text-white/90 hover:bg-black/80"
-                        }`}
-                        title={inList(item.id) ? "Retirer de ma liste" : "Ajouter à ma liste"}
-                      >
-                        <Heart size={17} fill={inList(item.id) ? "white" : "none"} />
-                      </button>
-                    </div>
-
-                    {/* Quick Paroles button pill under artwork */}
                     <button
-                      onClick={() => setShowAudioLyrics(true)}
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-emerald-500/20 text-zinc-300 hover:text-emerald-300 text-xs font-semibold border border-white/10 hover:border-emerald-500/40 transition-all"
+                      onClick={() => toggle(item)}
+                      className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md border transition-colors ${
+                        inList(item.id)
+                          ? "bg-rose-500/90 border-rose-300/60 text-white"
+                          : "bg-black/50 border-white/20 text-white/90 hover:bg-black/80"
+                      }`}
+                      title={inList(item.id) ? "Retirer de ma liste" : "Ajouter à ma liste"}
                     >
-                      <Subtitles size={13} />
-                      <span>Afficher les paroles / transcription</span>
+                      <Heart size={17} fill={inList(item.id) ? "white" : "none"} />
                     </button>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Titre & Artiste / Récitateur */}
@@ -1834,7 +2064,7 @@ export default function PlayerModal({
                 </button>
               </div>
 
-              {/* Rangée de raccourcis : file, boost, doublage, qualité, vitesse, sous-titres Spotify */}
+              {/* Rangée de raccourcis : file, doublage, qualité, vitesse, sous-titres Spotify */}
               <div className="flex items-center justify-center gap-2 mb-3 flex-shrink-0">
                 <div className="flex items-center gap-1.5 liquid-glass backdrop-blur-2xl border border-white/15 rounded-full p-1 shadow-sm">
                   <button
@@ -1893,56 +2123,6 @@ export default function PlayerModal({
                     </div>
                   )}
 
-                  {/* Amplificateur de son */}
-                  <div className="relative">
-                    <button
-                      onClick={() =>
-                        boostSupported
-                          ? setShowNowPlayingBoostMenu((v) => !v)
-                          : showCaptionNotification(
-                              "Amplificateur indisponible pour ce contenu (lu depuis YouTube)",
-                              false
-                            )
-                      }
-                      className={`w-10 h-8.5 rounded-full flex items-center justify-center transition-colors relative ${
-                        !boostSupported
-                          ? "text-zinc-600 cursor-not-allowed"
-                          : boostLevel > 100
-                          ? "text-emerald-300"
-                          : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                      }`}
-                      title={
-                        boostSupported
-                          ? "Amplificateur de son"
-                          : "Amplificateur indisponible pour cette source (YouTube)"
-                      }
-                    >
-                      {boostSupported ? <Zap size={16} /> : <ZapOff size={16} />}
-                      {boostLevel > 100 && boostSupported && (
-                        <span className="absolute -bottom-0.5 -right-0.5 text-[8px] font-bold bg-emerald-400 text-zinc-950 rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                          {boostLevel / 100}
-                        </span>
-                      )}
-                    </button>
-                    {showNowPlayingBoostMenu && boostSupported && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-28 liquid-glass-card backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl py-1.5 z-30">
-                        {BOOST_LEVELS.map((level) => (
-                          <button
-                            key={level}
-                            onClick={() => handleSelectBoost(level)}
-                            className={`w-full text-left px-4 py-1.5 text-xs transition-colors rounded-lg mx-auto ${
-                              boostLevel === level
-                                ? "text-emerald-300 font-semibold bg-emerald-500/20"
-                                : "text-zinc-300 hover:text-white hover:bg-white/10"
-                            }`}
-                          >
-                            {level}%
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   <div className="relative">
                     <button
                       onClick={() => {
@@ -1975,50 +2155,36 @@ export default function PlayerModal({
                     )}
                   </div>
 
-                  {/* Bouton Mode Sommeil */}
+                  {/* Bouton Mode Sommeil (Audio) */}
                   <div className="relative">
                     <button
                       onClick={() => setShowNowPlayingSleepMenu((v) => !v)}
-                      className={`w-10 h-8.5 rounded-full flex items-center justify-center transition-colors relative ${
+                      className={`h-9 px-3 rounded-full flex items-center justify-center transition-all relative gap-1.5 active:scale-95 ${
                         sleepTimer !== null
-                          ? "text-emerald-300"
-                          : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                          ? "text-emerald-300 bg-emerald-500/20 border border-emerald-400/50 shadow-md shadow-emerald-950/40 font-bold"
+                          : "text-zinc-300 hover:bg-white/10 hover:text-white liquid-glass border border-white/15"
                       }`}
-                      title="Mode Sommeil (Minuteur)"
+                      title="Minuteur de sommeil (Arrêt automatique)"
                     >
-                      <Moon size={16} />
-                      {sleepTimer !== null && sleepTimeRemaining !== null && (
-                        <span className="absolute -bottom-1 -right-2 text-[9px] font-bold text-emerald-400 bg-black/60 px-1 rounded-sm backdrop-blur-md">
+                      <Moon size={15} className={sleepTimer !== null ? "text-emerald-400 animate-pulse" : ""} />
+                      {sleepTimer !== null && sleepTimeRemaining !== null ? (
+                        <span className="text-[11px] font-bold text-emerald-300 font-mono">
                           {formatSleepTime(sleepTimeRemaining)}
                         </span>
+                      ) : (
+                        <span className="text-xs font-medium">Sommeil</span>
                       )}
                     </button>
                     {showNowPlayingSleepMenu && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 liquid-glass-card backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl py-1.5 z-30">
-                        <button
-                          onClick={() => handleSelectSleepTimer(null)}
-                          className={`w-full text-left px-4 py-1.5 text-xs transition-colors rounded-lg mx-auto ${
-                            sleepTimer === null
-                              ? "text-emerald-300 font-semibold bg-emerald-500/20"
-                              : "text-zinc-300 hover:text-white hover:bg-white/10"
-                          }`}
-                        >
-                          Désactivé
-                        </button>
-                        {[15, 30, 60].map((mins) => (
-                          <button
-                            key={mins}
-                            onClick={() => handleSelectSleepTimer(mins)}
-                            className={`w-full text-left px-4 py-1.5 text-xs transition-colors rounded-lg mx-auto ${
-                              sleepTimer === mins
-                                ? "text-emerald-300 font-semibold bg-emerald-500/20"
-                                : "text-zinc-300 hover:text-white hover:bg-white/10"
-                            }`}
-                          >
-                            {mins} minutes
-                          </button>
-                        ))}
-                      </div>
+                      <SleepTimerMenu
+                        sleepTimer={sleepTimer}
+                        sleepTimeRemaining={sleepTimeRemaining}
+                        onSelect={handleSelectSleepTimer}
+                        onExtend={handleExtendSleepTimer}
+                        onClose={() => setShowNowPlayingSleepMenu(false)}
+                        formatSleepTime={formatSleepTime}
+                        align="center"
+                      />
                     )}
                   </div>
                 </div>
@@ -2092,64 +2258,109 @@ export default function PlayerModal({
         {!useIframeFallback && !isAudioMode && (
           <div
             className="absolute inset-0"
-            onClick={togglePlay}
-            style={{ cursor: showControls ? "pointer" : "default" }}
+            onClick={screenLocked ? undefined : togglePlay}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            style={{ cursor: showControls && !screenLocked ? "pointer" : "default" }}
           />
         )}
 
-        {/* Top Header Bar (masquée en mode audio : remplacée par le header "Now Playing") */}
-        {!isAudioMode && (
+        {/* Screen Locked Overlay */}
+        {screenLocked && (
           <div
-            className={`absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/95 via-black/70 to-transparent transition-opacity duration-300 ${
+            className={`absolute inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ${
               showControls ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
+            onClick={(e) => {
+              // Prevent clicks from propagating to the video
+              e.stopPropagation();
+            }}
           >
-            <div className="flex items-center justify-between gap-4 px-6 py-4">
-              <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setScreenLocked(false);
+                showCaptionNotification("Écran déverrouillé", false);
+              }}
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-white font-bold hover:bg-black/90 transition-all shadow-2xl scale-100 active:scale-95 pointer-events-auto"
+            >
+              <Unlock size={20} />
+              <span>Déverrouiller</span>
+            </button>
+          </div>
+        )}
+
+        {/* Top Header Bar avec bande cinéma esthétique et occultante */}
+        {!isAudioMode && !screenLocked && (
+          <div
+            className={`absolute top-0 left-0 right-0 z-20 transition-all duration-300 ease-out ${
+              showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
+            }`}
+          >
+            {/* Bande noire cinéma esthétique : dégradé velours progressif avec flou satiné et estompage doux */}
+            <div className="absolute inset-x-0 top-0 h-28 sm:h-32 cinema-band-top pointer-events-none shadow-[0_12px_32px_rgba(0,0,0,0.35)]" />
+
+            {/* Liseré lumineux supérieur ultra-fin */}
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent pointer-events-none" />
+
+            {/* Lueur d'ambiance discrète */}
+            <div className="absolute top-0 left-1/4 w-1/2 h-20 bg-emerald-500/[0.04] blur-2xl pointer-events-none" />
+
+            <div className="relative z-10 flex items-center justify-between gap-2.5 px-3 sm:px-6 py-2.5 sm:py-4">
+              <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
                 <button
                   onClick={handleMinimize}
-                  className="flex items-center gap-2 text-zinc-200 hover:text-white transition-all flex-shrink-0 liquid-glass hover:bg-white/15 px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm"
+                  className="flex items-center gap-1.5 text-zinc-200 hover:text-white transition-all flex-shrink-0 liquid-glass hover:bg-white/15 p-2 sm:px-3.5 sm:py-1.5 rounded-full border border-white/15 shadow-sm active:scale-95"
                   title="Réduire en miniature / Image dans l'image"
                 >
                   <Minimize2 size={16} />
-                  <span className="text-xs font-semibold hidden sm:block">Miniature</span>
+                  <span className="text-xs font-semibold hidden sm:inline">Miniature</span>
                 </button>
                 <button
                   onClick={handleClose}
-                  className="flex items-center gap-1.5 text-zinc-300 hover:text-rose-400 transition-all flex-shrink-0 liquid-glass hover:bg-white/15 px-3 py-1.5 rounded-full border border-white/15 shadow-sm"
+                  className="flex items-center gap-1.5 text-zinc-300 hover:text-rose-400 transition-all flex-shrink-0 liquid-glass hover:bg-white/15 p-2 sm:px-3 sm:py-1.5 rounded-full border border-white/15 shadow-sm active:scale-95"
                   title="Fermer la vidéo"
                 >
-                  <X size={16} />
+                  <X size={17} />
                   <span className="text-xs font-semibold hidden sm:block">Fermer</span>
                 </button>
-                <div className="min-w-0 ml-1">
-                  <p className="text-zinc-400 text-[11px] uppercase tracking-wider font-medium">
-                    En lecture · {item.channel}
+                <div
+                  className="min-w-0 ml-1 transition-opacity duration-300 hover:!opacity-100 cursor-pointer group/headerTitle"
+                  style={{ opacity: textOpacity }}
+                  title="Opacité du titre : cliquer pour alterner (65%, 35%, 10%, 100%)"
+                  onClick={() => {
+                    const next = textOpacity === 0.65 ? 0.35 : textOpacity === 0.35 ? 0.1 : textOpacity === 0.1 ? 1.0 : 0.65;
+                    handleSetTextOpacity(next);
+                  }}
+                >
+                  <p className="text-zinc-400 text-[10px] sm:text-[11px] uppercase tracking-wider font-medium truncate max-w-[38vw] sm:max-w-none vignette-meta">
+                    {item.channel}
                   </p>
-                  <h3 className="text-white font-bold text-base sm:text-lg leading-tight truncate max-w-[40vw]">
+                  <h3 className="text-white font-bold text-xs sm:text-base md:text-lg leading-tight truncate max-w-[42vw] sm:max-w-[40vw] vignette-title">
                     {item.title}
                   </h3>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                {/* Audio/Video Mode Switcher (Seamless toggle using exact extracted audio) */}
+              {/* Header Controls */}
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+                {/* Audio/Video Mode Switcher */}
                 <button
                   onClick={() => setIsAudioMode(!isAudioMode)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border active:scale-95 ${
                     isAudioMode
                       ? "liquid-glass-emerald border border-emerald-300/40 text-emerald-200 shadow-md shadow-emerald-950/40"
                       : "liquid-glass text-zinc-200 hover:text-white border-white/15 hover:bg-white/15 shadow-sm"
                   }`}
-                  title={isAudioMode ? "Basculer en Mode Vidéo" : "Basculer en Mode Audio HD (Son extrait de la vidéo)"}
+                  title={isAudioMode ? "Basculer en Mode Vidéo" : "Basculer en Mode Audio HD"}
                 >
-                  {isAudioMode ? <Tv size={14} /> : <Music size={14} />}
-                  <span className="hidden sm:inline">
-                    {isAudioMode ? "Mode Vidéo" : "Audio HD"}
+                  {isAudioMode ? <Tv size={14} className="text-emerald-400" /> : <Music size={14} className="text-emerald-400" />}
+                  <span className="text-[11px] sm:text-xs">
+                    {isAudioMode ? "Vidéo" : "Audio HD"}
                   </span>
                 </button>
 
-                {/* Reciter pill in top bar if Tarawih */}
+                {/* Reciter pill in top bar if Tarawih (Tablette & PC) */}
                 {reciter && (
                   <div className="hidden md:flex items-center gap-2 liquid-glass-card px-3 py-1.5 rounded-full border border-emerald-400/30 shadow-lg">
                     <img
@@ -2164,7 +2375,7 @@ export default function PlayerModal({
                   </div>
                 )}
 
-                {/* Open on YouTube external */}
+                {/* Open on YouTube external (PC) */}
                 <a
                   href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
                   target="_blank"
@@ -2175,6 +2386,16 @@ export default function PlayerModal({
                   <ExternalLink size={13} />
                   <span>YouTube</span>
                 </a>
+
+                {/* Mobile Settings Button */}
+                <button
+                  onClick={() => setShowMobileOptions(true)}
+                  className="flex sm:hidden w-8 h-8 rounded-full items-center justify-center liquid-glass hover:bg-white/15 border border-white/15 text-zinc-200 hover:text-white transition-all shadow-sm active:scale-95"
+                  title="Options de lecture"
+                  aria-label="Options de lecture"
+                >
+                  <Settings size={15} />
+                </button>
               </div>
             </div>
           </div>
@@ -2208,17 +2429,27 @@ export default function PlayerModal({
           </div>
         )}
 
-        {/* Bottom Floating Control Bar (masquée en mode audio) */}
-        {!isAudioMode && (
+        {/* Bottom Floating Control Bar avec bande cinéma esthétique et occultante */}
+        {!isAudioMode && !screenLocked && (
           <div
-            className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/95 via-black/70 to-transparent transition-opacity duration-300 ${
-              showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+            className={`absolute bottom-0 left-0 right-0 z-20 transition-all duration-300 ease-out ${
+              showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
             }`}
           >
-            {/* Seek Bar */}
-            <div className="px-6 pb-2">
+            {/* Bande noire cinéma esthétique : dégradé velours semi-transparent et flou satiné */}
+            <div className="absolute inset-x-0 bottom-0 h-40 sm:h-48 cinema-band-bottom pointer-events-none shadow-[0_-12px_32px_rgba(0,0,0,0.35)]" />
+
+            {/* Liseré lumineux supérieur ultra-fin */}
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent pointer-events-none" />
+
+            {/* Lueur d'ambiance centrale discrète */}
+            <div className="absolute bottom-0 left-1/3 w-1/3 h-28 bg-emerald-500/[0.03] blur-3xl pointer-events-none" />
+
+            <div className="relative z-10">
+              {/* Seek Bar */}
+            <div className="px-4 sm:px-6 pb-2">
               <div
-                className="group/progress relative h-1.5 hover:h-2.5 bg-white/20 rounded-full cursor-pointer transition-all duration-150"
+                className="group/progress relative h-1.5 hover:h-2.5 bg-white/20 hover:bg-white/25 rounded-full cursor-pointer transition-all duration-150 backdrop-blur-sm"
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const pct = ((e.clientX - rect.left) / rect.width) * 100;
@@ -2226,24 +2457,96 @@ export default function PlayerModal({
                 }}
               >
                 <div
-                  className="h-full bg-emerald-500 rounded-full relative"
+                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full relative shadow-[0_0_12px_rgba(16,185,129,0.5)]"
                   style={{ width: `${progress}%` }}
                 >
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-md opacity-0 group-hover/progress:opacity-100 transition-opacity" />
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_8px_rgba(0,0,0,0.6)] opacity-0 group-hover/progress:opacity-100 transition-opacity border border-emerald-300" />
                 </div>
               </div>
-              <div className="flex justify-between mt-1.5">
-                <span className="text-zinc-300 text-xs font-mono">
+              <div className="flex justify-between mt-1.5 px-0.5">
+                <span className="text-emerald-400/90 text-xs font-mono font-medium drop-shadow">
                   {fmt((progress / 100) * duration)}
                 </span>
-                <span className="text-zinc-300 text-xs font-mono">
+                <span className="text-zinc-400 text-xs font-mono drop-shadow">
                   {fmt(duration)}
                 </span>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-2 px-4 sm:px-6 pb-4 sm:pb-5">
+            {/* Disposition Mobile Smartphone : Commandes épurées, simples et centrées */}
+            <div className="flex sm:hidden flex-col gap-2 px-3 pb-3 pt-1 w-full">
+              {/* Ligne des commandes essentielles */}
+              <div className="flex items-center justify-between px-2 max-w-sm mx-auto w-full">
+                {/* 1. Reculer 10s */}
+                <button
+                  onClick={() => skip(-10)}
+                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex flex-col items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
+                  title="Reculer de 10 secondes"
+                  aria-label="Reculer de 10 secondes"
+                >
+                  <RotateCcw size={17} />
+                  <span className="text-[8px] font-extrabold leading-none mt-0.5">-10</span>
+                </button>
+
+                {/* 2. Lecture / Pause (Bouton central proéminent) */}
+                <button
+                  onClick={togglePlay}
+                  className="w-13 h-13 rounded-full bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold border border-white/30 backdrop-blur-md flex items-center justify-center transition-all shadow-[0_0_24px_rgba(52,211,153,0.4)] active:scale-95"
+                  title={playing ? "Mettre en pause" : "Lire la vidéo"}
+                  aria-label={playing ? "Pause" : "Lecture"}
+                >
+                  {playing ? (
+                    <Pause size={24} fill="currentColor" className="text-zinc-950" />
+                  ) : (
+                    <Play size={24} fill="currentColor" className="text-zinc-950 ml-0.5" />
+                  )}
+                </button>
+
+                {/* 3. Avancer 10s */}
+                <button
+                  onClick={() => skip(10)}
+                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex flex-col items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
+                  title="Avancer de 10 secondes"
+                  aria-label="Avancer de 10 secondes"
+                >
+                  <RotateCcw size={17} className="-scale-x-100" />
+                  <span className="text-[8px] font-extrabold leading-none mt-0.5">+10</span>
+                </button>
+
+                {/* 4. Mute / Volume */}
+                <button
+                  onClick={toggleMute}
+                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
+                  title={muted || volume === 0 ? "Activer le son" : "Couper le son"}
+                  aria-label="Contrôle du volume"
+                >
+                  {muted || volume === 0 ? <VolumeX size={18} className="text-rose-400" /> : <Volume2 size={18} />}
+                </button>
+
+                {/* 5. Paramètres du player (Ouvre toutes les options : vitesse, sous-titres, audio, etc.) */}
+                <button
+                  onClick={() => setShowMobileOptions(true)}
+                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 hover:text-white active:scale-90 transition-all shadow-sm"
+                  title="Paramètres de lecture"
+                  aria-label="Paramètres de lecture"
+                >
+                  <Settings size={18} />
+                </button>
+
+                {/* 6. Plein écran */}
+                <button
+                  onClick={toggleFullscreen}
+                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
+                  title={effectiveFullscreen ? "Quitter le plein écran" : "Plein écran"}
+                  aria-label={effectiveFullscreen ? "Quitter le plein écran" : "Plein écran"}
+                >
+                  {effectiveFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Disposition Grand Écran (Tablette / Ordinateur) : Barre complète */}
+            <div className="hidden sm:flex flex-wrap items-center justify-between gap-y-3 gap-x-2 px-4 sm:px-6 pb-4 sm:pb-5">
               
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-3 sm:gap-4">
@@ -2344,51 +2647,6 @@ export default function PlayerModal({
                 </div>
               )}
 
-              {/* Amplificateur de son */}
-              <div className="relative">
-                <button
-                  onClick={() =>
-                    boostSupported
-                      ? setShowBoostMenu((v) => !v)
-                      : showCaptionNotification(
-                          "Amplificateur indisponible pour ce contenu (lu depuis YouTube)",
-                          false
-                        )
-                  }
-                  className={`liquid-glass text-xs font-semibold px-3 py-1.5 rounded-full border transition-all shadow-sm flex items-center gap-1.5 ${
-                    !boostSupported
-                      ? "border-white/10 text-zinc-500 cursor-not-allowed"
-                      : boostLevel > 100
-                      ? "border-emerald-400/40 text-emerald-200 liquid-glass-emerald"
-                      : "border-white/15 text-zinc-200 hover:text-white"
-                  }`}
-                  title={
-                    boostSupported
-                      ? "Amplificateur de son"
-                      : "Indisponible pour cette source (lue depuis YouTube, pas un flux direct)"
-                  }
-                >
-                  {boostSupported ? <Zap size={14} /> : <ZapOff size={14} />}
-                  <span>{boostLevel}%</span>
-                </button>
-                {showBoostMenu && boostSupported && (
-                  <div className="absolute bottom-full right-0 mb-2 w-28 rounded-2xl border border-white/20 liquid-glass-card backdrop-blur-2xl py-1.5 shadow-2xl z-30">
-                    {BOOST_LEVELS.map((level) => (
-                      <button
-                        key={level}
-                        onClick={() => handleSelectBoost(level)}
-                        className={`block w-full px-3 py-1.5 text-left text-xs transition-colors rounded-lg mx-auto ${
-                          boostLevel === level
-                            ? "bg-emerald-500/20 text-emerald-300 font-bold"
-                            : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {level}%
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
               </div>
               </div>
 
@@ -2424,46 +2682,30 @@ export default function PlayerModal({
                 <div className="relative">
                   <button
                     onClick={() => setShowSleepMenu((open) => !open)}
-                    className={`liquid-glass hover:bg-white/15 border border-white/15 px-3 py-1.5 rounded-full flex items-center justify-center transition-all shadow-sm gap-1.5 ${
+                    className={`liquid-glass hover:bg-white/15 border px-3 py-1.5 rounded-full flex items-center justify-center transition-all shadow-sm gap-1.5 ${
                       sleepTimer !== null
-                        ? "text-emerald-300"
-                        : "text-zinc-200 hover:text-white"
+                        ? "text-emerald-300 border-emerald-400/50 bg-emerald-500/20 font-bold"
+                        : "border-white/15 text-zinc-200 hover:text-white"
                     }`}
-                    title="Mode Sommeil (Minuteur)"
+                    title="Minuteur de sommeil (Arrêt automatique)"
                   >
-                    <Moon size={14} />
-                    {sleepTimer !== null && sleepTimeRemaining !== null && (
-                      <span className="text-[10px] font-bold text-emerald-400">
-                        {formatSleepTime(sleepTimeRemaining)}
-                      </span>
-                    )}
+                    <Moon size={14} className={sleepTimer !== null ? "text-emerald-400 animate-pulse" : ""} />
+                    <span className="text-xs font-semibold">
+                      {sleepTimer !== null && sleepTimeRemaining !== null
+                        ? formatSleepTime(sleepTimeRemaining)
+                        : "Sommeil"}
+                    </span>
                   </button>
                   {showSleepMenu && (
-                    <div className="absolute bottom-full right-0 mb-2 w-32 liquid-glass-card backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl py-1.5 z-30">
-                      <button
-                        onClick={() => handleSelectSleepTimer(null)}
-                        className={`w-full text-left px-4 py-1.5 text-xs transition-colors rounded-lg mx-auto ${
-                          sleepTimer === null
-                            ? "text-emerald-300 font-semibold bg-emerald-500/20"
-                            : "text-zinc-300 hover:text-white hover:bg-white/10"
-                        }`}
-                      >
-                        Désactivé
-                      </button>
-                      {[15, 30, 60].map((mins) => (
-                        <button
-                          key={mins}
-                          onClick={() => handleSelectSleepTimer(mins)}
-                          className={`w-full text-left px-4 py-1.5 text-xs transition-colors rounded-lg mx-auto ${
-                            sleepTimer === mins
-                              ? "text-emerald-300 font-semibold bg-emerald-500/20"
-                              : "text-zinc-300 hover:text-white hover:bg-white/10"
-                          }`}
-                        >
-                          {mins} minutes
-                        </button>
-                      ))}
-                    </div>
+                    <SleepTimerMenu
+                      sleepTimer={sleepTimer}
+                      sleepTimeRemaining={sleepTimeRemaining}
+                      onSelect={handleSelectSleepTimer}
+                      onExtend={handleExtendSleepTimer}
+                      onClose={() => setShowSleepMenu(false)}
+                      formatSleepTime={formatSleepTime}
+                      align="right"
+                    />
                   )}
                 </div>
 
@@ -2502,16 +2744,6 @@ export default function PlayerModal({
                 </button>
 
                 <button
-                  onClick={handleToggleDownload}
-                  className={`w-9 h-9 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center transition-all shadow-sm ${
-                    downloaded ? "text-emerald-300" : "text-zinc-300 hover:text-white"
-                  }`}
-                  title={downloaded ? "Téléchargé hors-ligne" : "Télécharger pour regarder hors-ligne"}
-                >
-                  {downloaded ? <CheckCircle size={17} /> : <DownloadCloud size={17} />}
-                </button>
-
-                <button
                   onClick={handleExportVideoFile}
                   className="w-9 h-9 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-amber-300 transition-all shadow-sm"
                   title="Exporter la vidéo ou le manifeste multimédia"
@@ -2528,11 +2760,316 @@ export default function PlayerModal({
                 </button>
 
                 <button
+                  onClick={() => {
+                    setScreenLocked(true);
+                    showCaptionNotification("Écran verrouillé", true);
+                  }}
+                  className="w-9 h-9 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-rose-300 transition-all shadow-sm hidden sm:flex"
+                  title="Verrouiller l'écran"
+                >
+                  <Lock size={17} />
+                </button>
+
+                <button
                   onClick={goFullscreen}
                   className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-white transition-all shadow-sm hidden sm:flex"
-                  title="Plein écran"
+                  title={effectiveFullscreen ? "Quitter le plein écran" : "Plein écran"}
                 >
-                  <Maximize2 size={17} />
+                  {effectiveFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+                </button>
+              </div>
+            </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Options Bottom Sheet (Options secondaires accessibles proprement sur smartphone) */}
+        {showMobileOptions && (
+          <div
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:hidden animate-in fade-in duration-200"
+            onClick={() => setShowMobileOptions(false)}
+          >
+            <div
+              className="w-full bg-[#121216] border-t border-white/15 rounded-t-3xl p-5 shadow-2xl space-y-4 max-h-[82vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Settings size={18} className="text-emerald-400" />
+                  <h4 className="text-white font-bold text-sm">Options de lecture</h4>
+                </div>
+                <button
+                  onClick={() => setShowMobileOptions(false)}
+                  className="w-8 h-8 rounded-full liquid-glass flex items-center justify-center text-zinc-400 hover:text-white"
+                  title="Fermer les options"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Vitesse de lecture */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-zinc-400">Vitesse de lecture</p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[0.75, 1, 1.25, 1.5, 2].map((rateVal) => (
+                    <button
+                      key={rateVal}
+                      onClick={() => changePlaybackRate(rateVal)}
+                      className={`py-2 text-xs font-bold rounded-xl border transition-all ${
+                        playbackRate === rateVal
+                          ? "bg-emerald-500 text-zinc-950 border-emerald-400 shadow-md font-extrabold"
+                          : "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+                      }`}
+                    >
+                      {rateVal}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sous-titres (CC) */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <Subtitles size={18} className={captionsOn ? "text-emerald-400" : "text-zinc-400"} />
+                  <div>
+                    <p className="text-xs font-bold text-white">Sous-titres (CC)</p>
+                    <p className="text-[10px] text-zinc-400">{captionsOn ? "Activés" : "Désactivés"}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleCaptions}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                    captionsOn
+                      ? "bg-emerald-500 text-zinc-950 font-extrabold"
+                      : "bg-white/10 text-zinc-300 border border-white/10"
+                  }`}
+                >
+                  {captionsOn ? "Activé" : "Activer"}
+                </button>
+              </div>
+
+              {/* Opacité des textes (Titre & Métadonnées) */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-white/[0.03] border border-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye size={16} className="text-emerald-400" />
+                    <div>
+                      <p className="text-xs font-bold text-white">Opacité des textes (Titre & Infos)</p>
+                      <p className="text-[10px] text-zinc-400">Réglez la visibilité des titres pour un visionnage épuré</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    {Math.round(textOpacity * 100)}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5 pt-1">
+                  {[
+                    { label: "100%", val: 1.0, desc: "Normale" },
+                    { label: "65%", val: 0.65, desc: "Discrète (Par défaut)" },
+                    { label: "35%", val: 0.35, desc: "Tamisée" },
+                    { label: "10%", val: 0.1, desc: "Minimaliste" },
+                    { label: "0%", val: 0.0, desc: "Masquée" },
+                  ].map((lvl) => (
+                    <button
+                      key={lvl.label}
+                      onClick={() => handleSetTextOpacity(lvl.val)}
+                      className={`py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                        textOpacity === lvl.val
+                          ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-extrabold shadow-sm"
+                          : "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white"
+                      }`}
+                      title={lvl.desc}
+                    >
+                      {lvl.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Mode Épuré Anti-Titre YouTube (Rognage optique gratuit des bordures & logos YouTube) */}
+              {!directStreamUrl && (
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/10">
+                  <div className="flex items-center gap-2.5">
+                    <Tv size={18} className={cinemaCleanMode ? "text-emerald-400" : "text-zinc-400"} />
+                    <div className="pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-bold text-white">Mode Épuré Anti-Titre YouTube</p>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                          Gratuit
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-tight mt-0.5">
+                        {cinemaCleanMode
+                          ? "Rognage optique actif : le titre et la barre YouTube sont masqués"
+                          : "Affichage standard YouTube"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleCinemaCleanMode}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+                      cinemaCleanMode
+                        ? "bg-emerald-500 text-zinc-950 font-extrabold shadow-sm"
+                        : "bg-white/10 text-zinc-300 border border-white/10"
+                    }`}
+                  >
+                    {cinemaCleanMode ? "Actif" : "Inactif"}
+                  </button>
+                </div>
+              )}
+
+              {/* Mode Audio HD */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <Music size={18} className="text-emerald-400" />
+                  <div>
+                    <p className="text-xs font-bold text-white">Mode Audio HD</p>
+                    <p className="text-[10px] text-zinc-400">Écoute pure sans vidéo</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsAudioMode(true);
+                    setShowMobileOptions(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                >
+                  Passer en Audio
+                </button>
+              </div>
+
+              {/* Minuteur Sommeil enrichi */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-white/[0.03] border border-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Moon size={15} className="text-emerald-400" />
+                    <div>
+                      <p className="text-xs font-bold text-white">Minuteur de sommeil</p>
+                      <p className="text-[10px] text-zinc-400">Arrêt automatique de la lecture</p>
+                    </div>
+                  </div>
+                  {sleepTimer !== null && sleepTimeRemaining !== null && (
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      {formatSleepTime(sleepTimeRemaining)}
+                    </span>
+                  )}
+                </div>
+
+                {sleepTimer !== null && sleepTimeRemaining !== null && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={() => handleExtendSleepTimer(5)}
+                      className="flex-1 py-1 text-[10px] font-bold rounded-lg bg-white/10 text-emerald-300 hover:bg-white/15 transition-colors"
+                    >
+                      +5 min
+                    </button>
+                    <button
+                      onClick={() => handleExtendSleepTimer(15)}
+                      className="flex-1 py-1 text-[10px] font-bold rounded-lg bg-white/10 text-emerald-300 hover:bg-white/15 transition-colors"
+                    >
+                      +15 min
+                    </button>
+                    <button
+                      onClick={() => handleSelectSleepTimer(null)}
+                      className="flex-1 py-1 text-[10px] font-bold rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-colors"
+                    >
+                      Désactiver
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 pt-1">
+                  {SLEEP_TIMER_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => handleSelectSleepTimer(preset.minutes)}
+                      className={`py-1.5 px-2 text-xs font-bold rounded-xl border transition-all truncate ${
+                        sleepTimer === preset.minutes
+                          ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-extrabold"
+                          : "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+
+
+              {/* Doublage multilingue */}
+              {hasDubbing && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+                    <Globe size={14} className="text-emerald-400" />
+                    <span>Piste audio / Doublage</span>
+                  </p>
+                  <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+                    <button
+                      onClick={() => switchAudioLanguage(ORIGINAL_AUDIO_CODE)}
+                      className={`w-full px-3 py-2 text-left text-xs rounded-xl transition-all ${
+                        activeAudioLang === ORIGINAL_AUDIO_CODE
+                          ? "bg-emerald-500 text-zinc-950 font-bold"
+                          : "bg-white/5 text-zinc-300 hover:bg-white/10"
+                      }`}
+                    >
+                      Version originale
+                    </button>
+                    {availableAudioTracks.map((track) => (
+                      <button
+                        key={track.code}
+                        onClick={() => switchAudioLanguage(track.code)}
+                        className={`w-full px-3 py-2 text-left text-xs rounded-xl transition-all ${
+                          activeAudioLang === track.code
+                            ? "bg-emerald-500 text-zinc-950 font-bold"
+                            : "bg-white/5 text-zinc-300 hover:bg-white/10"
+                        }`}
+                      >
+                        {track.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions Rapides */}
+              <div className="grid grid-cols-4 gap-1.5 pt-1">
+                <button
+                  onClick={() => {
+                    setShowMobileOptions(false);
+                    handleMinimize();
+                  }}
+                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-white/5 border border-white/10 text-zinc-300 active:scale-95"
+                  title="Miniature"
+                >
+                  <PictureInPicture2 size={16} />
+                  <span className="text-[9px] font-semibold truncate">Miniature</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowMobileOptions(false);
+                    setScreenLocked(true);
+                    showCaptionNotification("Écran verrouillé", true);
+                  }}
+                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-white/5 border border-white/10 text-zinc-300 active:scale-95"
+                  title="Verrouiller"
+                >
+                  <Lock size={16} />
+                  <span className="text-[9px] font-semibold truncate">Verrouiller</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowMobileOptions(false);
+                    handleExportVideoFile();
+                  }}
+                  className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-white/5 border border-white/10 text-zinc-300 active:scale-95"
+                  title="Partager"
+                >
+                  <Share2 size={16} className="text-amber-300" />
+                  <span className="text-[9px] font-semibold truncate">Partager</span>
                 </button>
               </div>
             </div>
@@ -2540,8 +3077,8 @@ export default function PlayerModal({
         )}
       </div>
 
-      {/* Video Details & Meta Section (masquée en mode audio pour rester plein écran) */}
-      {!isAudioMode && (
+      {/* Video Details & Meta Section (masquée en mode audio ou plein écran pour libérer tout l'écran) */}
+      {!isAudioMode && !effectiveFullscreen && (
         <div className="flex-1 md:flex-none md:flex-shrink-0 bg-black/60 backdrop-blur-2xl border-t border-white/15 md:max-h-[40vh] overflow-y-auto">
           <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 py-5">
             <div className="flex flex-col lg:flex-row gap-6">
@@ -2558,7 +3095,10 @@ export default function PlayerModal({
                   </span>
                   <span className="liquid-glass border border-white/15 text-zinc-400 text-xs px-2.5 py-0.5 rounded-full shadow-sm">{item.year}</span>
                 </div>
-                <h3 className="text-white font-bold text-xl leading-tight mb-2">
+                <h3
+                  className="text-white font-bold text-xl leading-tight mb-2 transition-opacity duration-300 hover:!opacity-100"
+                  style={{ opacity: textOpacity }}
+                >
                   {item.title}
                 </h3>
 
@@ -2660,6 +3200,7 @@ export default function PlayerModal({
           </div>
         </div>
       )}
+
     </div>
   );
 }

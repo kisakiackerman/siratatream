@@ -14,6 +14,7 @@ import { type ContentItem } from "@/data/catalog";
 import { useContentStats } from "@/hooks/useContentStats";
 import { useMyList } from "@/lib/useMyList";
 import { formatYouTubeLikes, getCachedYouTubeMeta } from "@/lib/youtubeApi";
+import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
 
 type ShortVideoCardProps = {
   item: ContentItem;
@@ -250,7 +251,7 @@ export const ShortVideoCard = memo(function ShortVideoCard({
             <iframe
               ref={iframeRef}
               onLoad={handleIframeLoad}
-              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=${item.youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0`}
+              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=${item.youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}`}
               title={item.title}
               className="w-full h-full object-cover pointer-events-none scale-[1.03]"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -285,11 +286,11 @@ export const ShortVideoCard = memo(function ShortVideoCard({
           </div>
         )}
 
-        {/* Ambient Top Shadow */}
-        <div className="absolute top-0 inset-x-0 h-28 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none z-10" />
+        {/* Ambient Top Shadow avec bande cinéma velours */}
+        <div className="absolute top-0 inset-x-0 h-28 cinema-band-top pointer-events-none z-10" />
 
-        {/* Bottom Dark Gradient for crisp text readability */}
-        <div className="absolute bottom-0 inset-x-0 h-64 bg-gradient-to-t from-black/95 via-black/60 to-transparent pointer-events-none z-10" />
+        {/* Bottom Dark Gradient avec bande cinéma velours pour masquer les artefacts YouTube */}
+        <div className="absolute bottom-0 inset-x-0 h-64 cinema-band-bottom pointer-events-none z-10" />
 
         {/* Double-tap Floating Heart Burst Animation */}
         <AnimatePresence>

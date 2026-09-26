@@ -142,9 +142,7 @@ export const surLeCheminRaw: [string, string, string][] = [
   ["seJilrArgfQ", "Un célèbre combattant autrichien se convertit à l’islam et témoigne", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Un célèbre combattant autrichien se convertit à l’islam et témoigne ». Un voyage spirituel bouleversant et inspirant (14:41)."],
   ["LMDc_orlIUM", "Millionnaire suédois: j’ai eu des relations avec des centaines de femmes et je vivais comme paradis", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Millionnaire suédois: j’ai eu des relations avec des centaines de femmes et je vivais comme paradis ». Un voyage spirituel bouleversant et inspirant (16:14)."],
   ["5YbKP62aWz0", "J’ai gardé mon Islam secret pendant 7 ans | Mon histoire vraie de conversion à l’Islam", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « J’ai gardé mon Islam secret pendant 7 ans | Mon histoire vraie de conversion à l’Islam ». Un voyage spirituel bouleversant et inspirant (18:06)."],
-  ["sxFIu5uKe1M", "Comment j'ai embrassé l'islam grâce à… une série Netflix ? | Témoignage sincère", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Comment j'ai embrassé l'islam grâce à… une série Netflix ? | Témoignage sincère ». Un voyage spirituel bouleversant et inspirant (11:14)."],
   ["tFaXzAOwnl0", "Je sors d’une boîte de nuit, j’entre dans une église… et je deviens musulman", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Je sors d’une boîte de nuit, j’entre dans une église… et je deviens musulman ». Un voyage spirituel bouleversant et inspirant (31:36)."],
-  ["ZcAqW54yI3o", "Nous ne voulons pas de l’élite d’Epstein » – Le Coran se répand dans le monde | Dr Zakir naik", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Nous ne voulons pas de l’élite d’Epstein » – Le Coran se répand dans le monde | Dr Zakir naik ». Un voyage spirituel bouleversant et inspirant (43:44)."],
   ["JNyHoygDB8M", "Choc d’un Occidental non musulman : les prophéties du Coran se réalisent aujourd’hui.", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Choc d’un Occidental non musulman : les prophéties du Coran se réalisent aujourd’hui. ». Un voyage spirituel bouleversant et inspirant (15:07)."],
   ["MbzjoXBvaOw", "J'ai entendu une seule phrase pendant des heures… Puis j'ai embrassé l'islam", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « J'ai entendu une seule phrase pendant des heures… Puis j'ai embrassé l'islam ». Un voyage spirituel bouleversant et inspirant (10:12)."],
   ["FvcXSS4JQj4", "Conversion incroyable : Un Américain détestant l'islam devient musulman", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Conversion incroyable : Un Américain détestant l'islam devient musulman ». Un voyage spirituel bouleversant et inspirant (12:31)."],
@@ -185,7 +183,6 @@ export const surLeCheminRaw: [string, string, string][] = [
   ["YK6IcpapdJA", "Je suis entré dans sa ferme pour du pain… et j’en suis sorti nourri par la lumière du Coran.", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Je suis entré dans sa ferme pour du pain… et j’en suis sorti nourri par la lumière du Coran. ». Un voyage spirituel bouleversant et inspirant (13:16)."],
   ["fQ1HTR860Xc", "Les leçons qui ont transformé ma vie après mon voyage vers l’Islam", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Les leçons qui ont transformé ma vie après mon voyage vers l’Islam ». Un voyage spirituel bouleversant et inspirant (16:19)."],
   ["SMu0isaZlLg", "il parle au Prophète ﷺ et se réveille en larmes – Histoire touchante d’un cœur", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « il parle au Prophète ﷺ et se réveille en larmes – Histoire touchante d’un cœur ». Un voyage spirituel bouleversant et inspirant (13:01)."],
-  ["A9YQog14Ye0", "De la moquerie à la foi : comment une simple chanson m’a guidé vers l’Islam", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « De la moquerie à la foi : comment une simple chanson m’a guidé vers l’Islam ». Un voyage spirituel bouleversant et inspirant (12:11)."],
   ["1_RG2nMFFMs", "Comment j’ai découvert la vérité de l’Islam — Mon histoire de conversion", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Comment j’ai découvert la vérité de l’Islam — Mon histoire de conversion ». Un voyage spirituel bouleversant et inspirant (12:38)."],
   ["bdiXw-vS74s", "Comédien américain : « Nous allons faire de “terroriste” un mot tendance et génial !!!", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « Comédien américain : « Nous allons faire de “terroriste” un mot tendance et génial !!! ». Un voyage spirituel bouleversant et inspirant (10:36)."],
   ["Yzc9LpJ5G30", "J’ai trouvé l’Islam sans que personne ne me guide.", "Récit et témoignage captivant de la chaîne Sur le chemin de la prophétie : « J’ai trouvé l’Islam sans que personne ne me guide. ». Un voyage spirituel bouleversant et inspirant (10:18)."],
@@ -1400,26 +1397,10 @@ export const surLeCheminMeta: Record<string, SurLeCheminMetaItem> = {
     isNew: false,
     isTrending: false
   },
-  "sxFIu5uKe1M": {
-    cats: ["Héros & Personnages"],
-    year: 2025,
-    duration: "11:14",
-    featured: false,
-    isNew: false,
-    isTrending: false
-  },
   "tFaXzAOwnl0": {
     cats: ["Histoire & Mystère"],
     year: 2025,
     duration: "31:36",
-    featured: false,
-    isNew: false,
-    isTrending: false
-  },
-  "ZcAqW54yI3o": {
-    cats: ["Coran"],
-    year: 2025,
-    duration: "43:44",
     featured: false,
     isNew: false,
     isTrending: false
@@ -1740,14 +1721,6 @@ export const surLeCheminMeta: Record<string, SurLeCheminMetaItem> = {
     cats: ["Prophètes"],
     year: 2025,
     duration: "13:01",
-    featured: false,
-    isNew: false,
-    isTrending: false
-  },
-  "A9YQog14Ye0": {
-    cats: ["Histoire & Mystère"],
-    year: 2025,
-    duration: "12:11",
     featured: false,
     isNew: false,
     isTrending: false

@@ -26,10 +26,13 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
           </div>
           <div>
             <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
-              <span>Short</span>
+              <span>Lancement rapide (Quick Plays)</span>
+              <span className="hidden sm:inline text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-300">
+                Flux TikTok
+              </span>
             </h2>
             <p className="text-xs text-zinc-400">
-              Catalogue & flux vidéo vertical
+              Extraits courts, stand-ups & comédies « Pour rire » pour trouver une idée en un clin d'œil
             </p>
           </div>
         </div>
@@ -52,7 +55,7 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
             onClick={() => onOpenShorts()}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.12] hover:bg-white/[0.22] border border-white/30 text-emerald-300 hover:text-emerald-200 text-xs font-bold backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95"
           >
-            <span>Lancer le flux</span>
+            <span>Lancer les Quick Plays</span>
             <ChevronRight size={14} />
           </button>
         </div>
@@ -105,15 +108,15 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
 
               {/* Bottom Info */}
               <div className="absolute bottom-2.5 inset-x-2.5 space-y-1">
-                <span className="text-[10px] font-semibold text-emerald-400 line-clamp-1">
+                <span className="text-[10px] font-semibold text-emerald-400 line-clamp-1 vignette-meta">
                   {item.categories[0] || "Towards Eternity"}
                 </span>
-                <p className="text-white text-xs font-bold leading-snug line-clamp-2 drop-shadow-md">
+                <p className="text-white text-xs font-bold leading-snug line-clamp-2 drop-shadow-md vignette-title">
                   {item.title}
                 </p>
-                <div className="flex items-center gap-1 text-zinc-400 text-[10px]">
-                  <Eye size={11} className="text-zinc-500" />
-                  <span>{item.duration || "00:59"}</span>
+                <div className="flex items-center gap-1 text-zinc-400 text-[10px] vignette-meta">
+                  <Eye size={11} className="text-zinc-500 vignette-meta" />
+                  <span className="vignette-meta">{item.duration || "00:59"}</span>
                 </div>
               </div>
             </button>

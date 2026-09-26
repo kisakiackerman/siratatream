@@ -9,6 +9,9 @@ import { lislamSimplementRaw, lislamSimplementMeta } from "./lislamSimplementVid
 import { blueCasquetteRaw, blueCasquetteMeta } from "./blueCasquetteVideos";
 import { laQueteRaw, laQueteMeta } from "./laQueteVideos";
 import { savantsSunnahRaw, savantsSunnahMeta } from "./savantsSunnahVideos";
+import { purificationEducationRaw, purificationEducationMeta } from "./purificationEducationVideos";
+import { mosqueeMirailRaw, mosqueeMirailMeta } from "./mosqueeMirailVideos";
+import { dourousNetRaw, dourousNetMeta } from "./dourousNetVideos";
 import { channelVideoDurations } from "./channelVideoDurations";
 import { deduplicateCatalog } from "../lib/catalogDeduplication";
 import { diversifyCatalogByChannel } from "../lib/catalogDiversity";
@@ -39,7 +42,11 @@ export type Channel =
   | "L'Islam Simplement"
   | "Blue Casquette"
   | "La Quête"
-  | "Les Savants de la Sunnah";
+  | "Les Savants de la Sunnah"
+  | "Purification & Education"
+  | "Mosquée Mirail Toulouse"
+  | "Dourous.net"
+  | "Pour rire & Stand-up";
 
 export type SkipSegment = {
   start: number; // in seconds (e.g. 15)
@@ -241,8 +248,6 @@ const narroMeta: MetaRecord = {
     isNew: true,
     skipSegments: [{ start: 30, end: 88, label: "Passer la pub créateur", type: "sponsor" }],
   },
-  ShAjaaV2YjM: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2026, isNew: true },
-  "1zks1SMNvIY": { cats: ["Anges & Djinns", "Histoire & Mystère"], year: 2024 },
   "4KNarj80mnY": { cats: ["Eschatologie", "Anges & Djinns"], year: 2024 },
   "77a2ywhTNhY": { cats: ["Eschatologie", "Anges & Djinns"], year: 2025 },
   CG1BG1U5jXU: { cats: ["Eschatologie"], year: 2025, isTrending: true },
@@ -252,17 +257,14 @@ const narroMeta: MetaRecord = {
   i0okdKbT788: { cats: ["Prophètes", "Histoire & Mystère"], year: 2024 },
   UnmxHm8y5a4: { cats: ["Prophètes", "Histoire & Mystère"], year: 2024 },
   "Nv-bAdXllkk": { cats: ["Histoire & Mystère"], year: 2026, isTrending: true },
-  ZxhTqFuSAzg: { cats: ["Histoire & Mystère"], year: 2025 },
   "4WQnXfkWygs": { cats: ["Héros & Personnages", "Histoire & Mystère"], year: 2025 },
   VCkkV5RSQMQ: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  "EZh-MCNkicc": { cats: ["Histoire & Mystère"], year: 2025 },
   lZ7B_dZfvPA: { cats: ["Prophètes", "Héros & Personnages"], year: 2026, isNew: true },
   xDdF3LCbaGI: { cats: ["Eschatologie"], year: 2024 },
   t5iOxpukiPk: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
   r7xjc_c0kyI: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
   "4W8uaeXSQyc": { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
   z6gp6VkXvek: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
-  Di3yiK6E77Q: { cats: ["Histoire & Mystère"], year: 2026, isNew: true },
   "7MTukb8H1vc": { cats: ["Eschatologie", "Histoire & Mystère"], year: 2026, isNew: true, isTrending: true },
   Sp1zalDQXMo: { cats: ["Compagnons", "Héros & Personnages"], year: 2026, isNew: true, isTrending: true },
   "O8kPaIVY-mM": { cats: ["Coran", "Héros & Personnages"], year: 2026, isNew: true },
@@ -356,7 +358,6 @@ const yacineMeta: MetaRecord = {
   ESs8FC08MVI: { cats: ["Eschatologie", "Prophètes"], year: 2023 },
   "JFhFnBWxD-s": { cats: ["Eschatologie", "Prophètes"], year: 2023 },
   rMgQVmmpyeI: { cats: ["Eschatologie"], year: 2023 },
-  "880zNwqJho4": { cats: ["Eschatologie"], year: 2023 },
   JCtF62S2TDI: { cats: ["Miracles du Coran"], year: 2023 },
   "Pn778jWiP-U": { cats: ["Miracles du Coran"], year: 2023 },
   U4Cdzsu0uaA: { cats: ["Miracles du Coran", "Prophètes"], year: 2023 },
@@ -386,16 +387,8 @@ const croyantRationnelMeta: MetaRecord = {
     isTrending: true,
     skipSegments: [{ start: 0, end: 36, label: "Passer l'intro & annonce", type: "intro" }],
   },
-  Mt6LA6mtk9Q: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  "ewyOBQy66-4": {
-    cats: ["Histoire & Mystère"],
-    year: 2025,
-    isTrending: true,
-    skipSegments: [{ start: 12, end: 60, label: "Passer la pub créateur", type: "sponsor" }],
-  },
   h4e25tydSxI: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2025, isNew: true },
   "h671xDi-hAA": { cats: ["Eschatologie"], year: 2025, isNew: true },
-  hnp4sw7Zw0c: { cats: ["Histoire & Mystère"], year: 2025, isTrending: true },
   "s-R9ALodR6I": { cats: ["Anges & Djinns"], year: 2025, isNew: true },
   CNfOSXQsGsg: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
   JAVM9SJlrig: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
@@ -403,13 +396,8 @@ const croyantRationnelMeta: MetaRecord = {
   "PpuOdplk-B8": { cats: ["Héros & Personnages"], year: 2025, isNew: true },
   TClsJ1F398s: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
   "Vqhwihm-R8c": { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  Vz3KE3CdvxU: { cats: ["Compagnons", "Héros & Personnages"], year: 2025, isNew: true },
-  eeLYvyGSTgo: { cats: ["Héros & Personnages", "Histoire & Mystère"], year: 2025, isNew: true },
-  mGf0E0jfeNc: { cats: ["Histoire & Mystère"], year: 2025, isNew: true },
-  nZx97arDIHE: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
   qlhM54Cptxw: { cats: ["Eschatologie", "Anges & Djinns"], year: 2025, isNew: true, isTrending: true },
   "xmzTjT-hwJ8": { cats: ["Héros & Personnages"], year: 2025, isNew: true },
-  zLR8DEOThwc: { cats: ["Héros & Personnages"], year: 2025, isNew: true },
   WUx1ErC39EQ: { cats: ["Histoire & Mystère", "Héros & Personnages"], year: 2026, isNew: true, isTrending: true },
   VWvVZdhYFtk: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2026, isNew: true },
   SkKnO_g1BrA: { cats: ["Eschatologie", "Histoire & Mystère"], year: 2026, isNew: true, isTrending: true },
@@ -465,8 +453,6 @@ const narroRaw: [string, string, string][] = [
   ["WKGSN68aBkI", "Imam Malik: Il a défié le pouvoir au nom de la vérité", "L'Imam Malik, l'un des plus grands savants de l'Islam, qui affronta le calife pour défendre la vérité."],
   ["n-zTOILPVp4", "Djinns, Dajjal, Rothschild : ce que cache VRAIMENT l'Antarctique", "L'Antarctique, ses mystères, et les connexions étranges entre Djinns, Dajjal et les puissances mondiales."],
   ["CuxJEvI3eto", "Aïcha Kandicha : La djinn la plus dangereuse du Maghreb ? (enquête)", "Une enquête fascinante sur Aïcha Kandicha, la créature surnaturelle la plus redoutée du Maghreb."],
-  ["ShAjaaV2YjM", "BALENCIAGA et le culte satanique de BAAL ?", "Les liens troublants entre les marques de luxe, le culte de Baal et les pratiques occultes antiques."],
-  ["1zks1SMNvIY", "Ce livre de magie a ruiné un milliardaire de la Silicon Valley", "L'histoire d'un milliardaire de la Silicon Valley détruit par un livre de magie ancienne."],
   ["4KNarj80mnY", "Ils ont vu le Dajjal !", "Des hommes ont rencontré le Dajjal. Que leur a-t-il dit ? Que leur a-t-il montré ? Un récit saisissant."],
   ["77a2ywhTNhY", "Qui a enchainé le Dajjal sur une île ?", "Le Dajjal est enchaîné sur une île mystérieuse, attendant l'Heure. Qui l'y a attaché et pourquoi ?"],
   ["CG1BG1U5jXU", "7 Milliards contre Gog et Magog : Le récit de la fin", "Gog et Magog, les peuples qui dévasteront la Terre à la fin des temps. Le récit terrifiant de leur libération."],
@@ -476,17 +462,14 @@ const narroRaw: [string, string, string][] = [
   ["i0okdKbT788", "Les gens du Rass: Ce peuple méconnu qui a fondu comme du fer", "L'histoire méconnue du peuple du Rass, mentionné dans le Coran, et leur destruction fulgurante."],
   ["UnmxHm8y5a4", "Les 3 hommes les plus mystérieux du Coran", "Trois hommes mentionnés dans le Coran dont l'identité reste un mystère. Qui sont-ils réellement ?"],
   ["Nv-bAdXllkk", "Qui a vendu la Palestine à un pays qui n'existe pas ?", "Une plongée dans l'histoire de la Palestine et les manipulations géopolitiques qui ont conduit à sa situation actuelle."],
-  ["ZxhTqFuSAzg", "La Momie Maudite qui a Coulé le Titanic (Histoire VRAIE)", "L'histoire vraie de la momie maudite qui aurait causé le naufrage du Titanic. Récit ou réalité ?"],
   ["4WQnXfkWygs", "Pourquoi ce jeune homme SOURIAIT encore après sa mort ? (histoire vraie)", "Une histoire vraie et bouleversante : un jeune homme retrouvé souriant après son décès."],
   ["VCkkV5RSQMQ", "Ils ouvrent une tombe de 11 ans et découvrent l'impossible...", "Une découverte stupéfiante dans une tombe de 11 ans. Ce qu'ils y ont trouvé dépasse l'entendement."],
-  ["EZh-MCNkicc", "L'HORRIBLE histoire de JEFFREY EPSTEIN", "L'histoire sombre de Jeffrey Epstein et les réseaux de pouvoir qu'il révèle. Une enquête fascinante."],
   ["lZ7B_dZfvPA", "Brûlés pour leur Foi : La Véritable Tragédie des Gens du Fossé", "L'histoire des Gens du Fossé : des croyants brûlés vifs pour leur foi. L'un des récits les plus poignants du Coran."],
   ["xDdF3LCbaGI", "1H après TA MORT", "Que se passe-t-il une heure après votre mort ? Un récit saisissant sur le passage de l'âme."],
   ["t5iOxpukiPk", "Le livre de sorcellerie le plus dangereux au monde", "Une enquête stupéfiante sur le livre de sorcellerie le plus redouté de l'histoire, ses origines et ses avertissements."],
   ["r7xjc_c0kyI", "L'histoire dérangeante du satanisme moderne", "L'histoire troublante et occulte du satanisme moderne et les manipulations invisibles qui façonnent notre époque."],
   ["4W8uaeXSQyc", "La face cachée du Nouvel An (Saint Sylvestre)", "Les origines païennes et occultes méconnues des célébrations du Nouvel An et de la Saint-Sylvestre."],
   ["z6gp6VkXvek", "La face cachée du Père Noël", "Décryptage des racines réelles du mythe de Noël entre traditions antiques, paganisme et dérives commerciales."],
-  ["Di3yiK6E77Q", "Le côté sombre caché de LABUBU", "Une analyse percutante sur la figurine phénomène LABUBU et ses symbolismes cachés."],
   ["7MTukb8H1vc", "L’enfant mystérieux qui prétend être le Dajjal", "Le récit troublant de l'enfant qui prétendait être le faux messie et les investigations menées par les Compagnons."],
   ["Sp1zalDQXMo", "Cette guerrière musulmane a brisé seule l’armée Romaine", "L'incroyable épopée de Khawlah bint al-Azwar, la cavalière masquée qui mit en déroute les légions byzantines."],
   ["O8kPaIVY-mM", "Abdel Basset: Le maître des récitateurs", "L'hommage à la voix d'or d'Égypte, Cheikh Abdel Basset Abdel Samad, dont la récitation a ému des générations."],
@@ -550,7 +533,6 @@ const yacineRaw: [string, string, string][] = [
   ["ESs8FC08MVI", "Pourquoi la Prophétie du Messie HANTE Netanyahu ??", "Les liens troublants entre la prophétie du Messie, le Machiah, et les ambitions politiques contemporaines."],
   ["JFhFnBWxD-s", "2023 PRÉDIT par Le prophète ﷺ (c'est incroyable)", "Des événements contemporains prédits par le Prophète ﷺ il y a 1400 ans. Les signes de notre époque."],
   ["rMgQVmmpyeI", "ON ASSISTE à la réalisation de la PROPHETIE !", "Les prophéties se réalisent sous nos yeux. Un rappel puissant que nous vivons des temps exceptionnels."],
-  ["880zNwqJho4", "The Arrival Of Imam Al-Mahdi", "L'arrivée de l'Imam Al-Mahdi : qui est-il ? Quand viendra-t-il ? Que disent les textes sur ce guide de la fin des temps ?"],
   ["JCtF62S2TDI", "Le CORAN révèle un SECRET d'Égypte", "Un secret archéologique d'Égypte révélé par le Coran. Quand les miracles scientifiques rejoignent l'histoire."],
   ["Pn778jWiP-U", "UN MIRACLE scientifique Révélé par le CORAN - Le Mystère du fer", "Le mystère du fer dans le Coran : un miracle scientifique qui défie les explications humaines."],
   ["U4Cdzsu0uaA", "Le SECRET de cette CITÉ est révélé (VILLE DU PROPHÈTE Ibrahim)", "Les découvertes archéologiques qui confirment les récits coraniques sur la cité du prophète Ibrahim."],
@@ -737,11 +719,8 @@ const haramainRaw: [string, string, string][] = [
 
 const croyantRationnelRaw: [string, string, string][] = [
   ["E-3Opi2yDjs", "EBO Noah : Il Annonce la Fin du Monde sur TikTok et Arnaque des Milliers de Personnes", "Une enquête sur EBO Noah, ce influenceur qui annonça la fin du monde sur TikTok et trompa des milliers de croyants. Un rappel sur les faux prophètes."],
-  ["Mt6LA6mtk9Q", "Voici le Vrai Visage de Croyant Rationnel", "La présentation et le parcours du créateur de Croyant Rationnel, sa vision et sa démarche pour transmettre l'Islam avec rationalité."],
-  ["ewyOBQy66-4", "Epstein a Volé un Morceau de la Kaaba", "Les liens troublants entre Jeffrey Epstein et les mystères de la Kaaba. Une enquête fascinante au croisement de l'histoire et du complot."],
   ["h4e25tydSxI", "Elle a Épousé 40 Hommes, Aucun N'en est Sorti Vivant", "L'histoire mystérieuse d'une femme qui épousa 40 hommes sans qu'aucun n'en réchappe. Un récit fascinant sur la trahison et la justice divine."],
   ["h671xDi-hAA", "Le Faux Mahdi est Arrivé", "Un faux Mahdi fait son apparition. Comment reconnaître les imposteurs de la fin des temps selon les textes islamiques."],
-  ["hnp4sw7Zw0c", "24H avec une Tribu Africaine Coupée du Monde", "Une immersion fascinante au sein d'une tribu africaine isolée du reste du monde. Une réflexion sur la foi, la nature et la modernité."],
   ["s-R9ALodR6I", "Un Djin Nous Attaque — On a Tout Filmé", "Une expérience saisissante : une rencontre avec un djinn, filmée en direct. Quand le monde invisible se manifeste."],
   ["CNfOSXQsGsg", "URGENT : Achoura Commence Demain", "Un rappel important sur le jeûne d'Achoura, sa signification spirituelle et les mérites de ce jour sacré dans la tradition islamique."],
   ["JAVM9SJlrig", "Se Plaindre de la Chaleur Peut T'Emmener en Enfer", "Une réflexion sur la gratitude et la patience face aux épreuves du quotidien. Se plaindre peut-il nous nuire spirituellement ?"],
@@ -749,13 +728,8 @@ const croyantRationnelRaw: [string, string, string][] = [
   ["PpuOdplk-B8", "Explication du Jeûne de Achoura", "Une explication détaillée du jeûne d'Achoura : son histoire, sa signification, et la manière de l'observer selon la Sunna."],
   ["TClsJ1F398s", "Raser sa Barbe est Dangereux pour la Santé", "Une réflexion sur la barbe en Islam et les risques sanitaires du rasage. Entre Sunna, science et conseils pratiques."],
   ["Vqhwihm-R8c", "Il Fait des Rappels mais Il S'en Rappelle Plus", "Une critique de ceux qui transmettent des rappels islamiques sans les appliquer eux-mêmes. Un appel à la sincérité spirituelle."],
-  ["Vz3KE3CdvxU", "La Femme de Ousmane Dembélé", "L'histoire et la foi de la femme du footballeur Ousmane Dembélé. Quand l'Islam guide les choix de vie des stars du sport."],
-  ["eeLYvyGSTgo", "L'Acteur de Breaking Bad, Giancarlo Esposito, s'est Converti à l'Islam", "L'histoire de la conversion de Giancarlo Esposito, l'acteur de Breaking Bad. Quand les stars d'Hollywood trouvent l'Islam."],
-  ["mGf0E0jfeNc", "Les Signes de Main de Naruto sont-ils du Shirk ?", "Une analyse islamique des signes de main dans l'anime Naruto : relèvent-ils du shirk ? Une réflexion entre pop culture et religion."],
-  ["nZx97arDIHE", "3 Remèdes Islamiques pour Augmenter sa Testostérone", "Des remèdes issus de la tradition islamique pour booster naturellement la testostérone. Entre Sunna et santé masculine."],
   ["qlhM54Cptxw", "Les Animaux Parlent ! Nouveau Signe de la Fin du Monde", "Un nouveau signe de la fin du monde : les animaux qui parlent. Que disent les textes islamiques sur ce signe majeur ?"],
   ["xmzTjT-hwJ8", "Toutes Tes Duas Seront Acceptées ce Mardi 26 Mai 2026 (Jour d'Arafat)", "Le jour d'Arafat : le jour où toutes les invocations sont exaucées. Un rappel sur l'importance de ce jour béni."],
-  ["zLR8DEOThwc", "Elle a Forniqué avec son Cousin", "Une histoire sur les conséquences du péché et le chemin du repentir. Un rappel sur la gravité de la fornication en Islam."],
   ["WUx1ErC39EQ", "J’ai Enquêté sur Les Nourrices Musulmanes en France : (ça fait mal...)", "Une grande enquête percutante sur la situation et les défis des nourrices et assistantes maternelles musulmanes en France, entre vocation, foi et pressions sociétales."],
   ["VWvVZdhYFtk", "Pourquoi les Hommes Ressemblent de plus en plus à des Femmes", "Analyse sociologique et spirituelle à la lumière des prophéties islamiques sur la perte des repères masculins et les bouleversements de notre époque contemporaine."],
   ["SkKnO_g1BrA", "LES SIGNES DE LA FIN DES TEMPS AVEC PREUVES L'INTÉGRALE", "Le grand documentaire intégral sur les signes mineurs et majeurs de la fin des temps, étayé par les textes authentiques du Coran et de la Sunnah."],
@@ -948,6 +922,21 @@ const savantsSunnahItems: ContentItem[] = savantsSunnahRaw.map(([ytId, title, de
   return buildItem(`ss${i + 1}`, ytId, title, desc, "Les Savants de la Sunnah", meta);
 });
 
+const purificationEducationItems: ContentItem[] = purificationEducationRaw.map(([ytId, title, desc], i) => {
+  const meta = purificationEducationMeta[ytId] ?? {};
+  return buildItem(`pe${i + 1}`, ytId, title, desc, "Purification & Education", meta);
+});
+
+const mosqueeMirailItems: ContentItem[] = mosqueeMirailRaw.map(([ytId, title, desc], i) => {
+  const meta = mosqueeMirailMeta[ytId] ?? {};
+  return buildItem(`mmt${i + 1}`, ytId, title, desc, "Mosquée Mirail Toulouse", meta);
+});
+
+const dourousNetItems: ContentItem[] = dourousNetRaw.map(([ytId, title, desc], i) => {
+  const meta = dourousNetMeta[ytId] ?? {};
+  return buildItem(`dn${i + 1}`, ytId, title, desc, "Dourous.net", meta);
+});
+
 export const rawCatalog: ContentItem[] = [
   ...dinulQayyimaItems,
   ...surLeCheminItems,
@@ -958,6 +947,9 @@ export const rawCatalog: ContentItem[] = [
   ...blueCasquetteItems,
   ...laQueteItems,
   ...savantsSunnahItems,
+  ...purificationEducationItems,
+  ...mosqueeMirailItems,
+  ...dourousNetItems,
   ...narroDinItems,
   ...narroItems,
   ...yacineItems,
@@ -968,10 +960,18 @@ export const rawCatalog: ContentItem[] = [
 ];
 
 // Règle stricte de l'application : SUPPRIMER toutes les vidéos de moins de 10 minutes (< 600s)
-// Exception accordée pour "Les Savants de la Sunnah" (extraits et fatwas de savants)
+// Exception officielle et permanente accordée pour "Les Savants de la Sunnah" (extraits, fatwas et rappels des savants)
+export function isChannelExemptedFrom10MinRule(channel?: string, id?: string): boolean {
+  if (!channel && !id) return false;
+  if (channel === "Les Savants de la Sunnah") return true;
+  if (channel && channel.toLowerCase().includes("savants")) return true;
+  if (id && id.startsWith("ss")) return true;
+  return false;
+}
+
 const filteredCatalog: ContentItem[] = rawCatalog.filter((item) => {
-  // Dérogation pour Les Savants de la Sunnah (extraits courts de savants autorisés)
-  if (item.channel === "Les Savants de la Sunnah") {
+  // Dérogation officielle accordée pour Les Savants de la Sunnah (extraits courts de savants autorisés)
+  if (isChannelExemptedFrom10MinRule(item.channel, item.id)) {
     return true;
   }
   // Exclure les vidéos dont la durée est strictement inférieure à 10 minutes (< 600 secondes)
@@ -1035,7 +1035,7 @@ export const rows: ContentRowData[] = [
   },
   {
     id: "coran-tarawih",
-    label: "📖 Coran : Tarawih Historiques de La Mecque & Médine (1980 - 2000)",
+    label: "📖 Le Noble Coran : Récitations, Prières & Enseignements",
     items: catalog.filter((c) => c.categories.includes("Coran")),
   },
   ...allCategories
@@ -1124,6 +1124,21 @@ export const rows: ContentRowData[] = [
     id: "savants-sunnah",
     label: "💎 Les Savants de la Sunnah — Extraits, Fatwas & Rappels",
     items: catalog.filter((c) => c.channel === "Les Savants de la Sunnah"),
+  },
+  {
+    id: "purification-education",
+    label: "🌱 Purification & Education — Foi, Croyance & Explications (Abou Ibrahim Mounir)",
+    items: catalog.filter((c) => c.channel === "Purification & Education"),
+  },
+  {
+    id: "mosquee-mirail",
+    label: "🕌 Mosquée Mirail Toulouse — L'Islam au quotidien, Conférences & Enseignements",
+    items: catalog.filter((c) => c.channel === "Mosquée Mirail Toulouse"),
+  },
+  {
+    id: "dourous-net",
+    label: "🎙️ Dourous.net — Nader Abou Anas (Conférences, Éthique & Rappels)",
+    items: catalog.filter((c) => c.channel === "Dourous.net"),
   },
   {
     id: "new",

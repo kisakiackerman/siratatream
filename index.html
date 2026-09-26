@@ -1,33 +1,63 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" class="dark" style="color-scheme: dark;">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#09090b" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Sirat Stream" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Google Search Favicon & Browser Icons (Official Google Search favicon guidelines) -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="thumbnail" content="https://sirat-stream.ai.studio/og-image.jpg" />
+
+    <!-- Google Search Verification -->
+    <meta name="google-site-verification" content="blUU6DL38RmTo7CmP0v_fvlifrRv0sr21EnmWGzxBc8" />
     <meta name="google-site-verification" content="_uoqJNnifNul_qA66kaPi9NuJAdzw7ein_ovRQQbUs8" />
     <meta name="google-site-verification" content="gQCcXY6t3Z0IGE8jIJb70SSuBFy0_XVCo7wVTqa17i4" />
     <meta name="google-site-verification" content="googlef1e946b6d80588ed" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SiratStream</title>
+
+    <title>Sirat Stream (Sirat Streaming) – Streaming Musulman &amp; Islamique Gratuit</title>
     <link rel="canonical" href="https://sirat-stream.ai.studio/" />
 
-    <!-- Meta Description & SEO Keywords for Google Indexing -->
-    <meta name="description" content="SiratStream (https://sirat-stream.ai.studio, sirat-stream, siratstreamapp) - Plateforme de streaming vidéo et audio islamique avec lecteur interactif, doublage vocal IA multilingue en direct (comme YouTube), catalogue Coran &amp; Tarawih historiques (1980-2000), support hors-ligne et mode lecture apaisée." />
-    <meta name="keywords" content="https://sirat-stream.ai.studio, sirat-stream.ai.studio, sirat-stream, siratstream, sirat stream, sirat stream app, streaming islamique, coran, tarawih, doublage ia, audio multilingue, récitations coraniques, haramain, récits des prophètes, horaires de prière, mode lecture apaisée" />
-    <meta name="author" content="SiratStream (https://sirat-stream.ai.studio)" />
+    <!-- Meta Description & SEO Keywords for Google, Chrome, Bing, Safari -->
+    <meta name="description" content="Sirat Stream (Sirat Streaming) sur https://sirat-stream.ai.studio/ : la première plateforme 100% gratuite de streaming musulman et islamique. Récitations du Noble Coran, prières des Saintes Mosquées, enseignements, spiritualité et récits des Prophètes sans abonnement ni paiement." />
+    <meta name="keywords" content="sirat streaming, sirat, streaming musulman, sirat stream, streaming islamique, siratstream, sirat-stream, plateforme streaming musulman, site streaming musulman gratuit, video islamique, noble coran streaming, coran audio et video gratuit, streaming islamique gratuit, sirat streaming islam, chaine musulmane streaming" />
+    <meta name="author" content="Sirat Stream (https://sirat-stream.ai.studio)" />
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
 
-    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
-    <meta property="og:title" content="SiratStream" />
-    <meta property="og:site_name" content="SiratStream (sirat-stream.ai.studio)" />
+    <!-- Open Graph (WhatsApp, Telegram, Facebook, LinkedIn, iMessage, Twitter) -->
+    <meta property="og:title" content="Sirat Stream (Sirat Streaming) – Streaming Musulman &amp; Islamique Gratuit" />
+    <meta property="og:site_name" content="Sirat Stream" />
     <meta property="og:url" content="https://sirat-stream.ai.studio/" />
-    <meta property="og:description" content="SiratStream (https://sirat-stream.ai.studio) - Plateforme de streaming vidéo et audio islamique avec lecteur interactif, doublage vocal IA multilingue en direct (comme YouTube), catalogue Coran &amp; Tarawih historiques (1980-2000), support hors-ligne et mode lecture apaisée." />
+    <meta property="og:description" content="Plateforme 100% gratuite de streaming musulman : Le Noble Coran en HD, prières et rappels spirituels sans abonnement ni publicité." />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="fr_FR" />
+    <meta property="og:image" content="https://sirat-stream.ai.studio/og-image.jpg" />
+    <meta property="og:image:secure_url" content="https://sirat-stream.ai.studio/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Sirat Stream - Plateforme de Streaming Musulman et Islamique Gratuit" />
+    <link rel="image_src" href="https://sirat-stream.ai.studio/og-image.jpg" />
 
-    <!-- Twitter Cards -->
+    <!-- Twitter Cards (X, Telegram, Slack) -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="SiratStream (https://sirat-stream.ai.studio)" />
-    <meta name="twitter:description" content="Découvrez SiratStream sur https://sirat-stream.ai.studio : streaming islamique vidéo &amp; audio, Coran, Tarawih et spiritualité." />
+    <meta name="twitter:title" content="Sirat Stream (Sirat Streaming) – Streaming Musulman Gratuit" />
+    <meta name="twitter:description" content="Plateforme 100% gratuite de streaming musulman : Le Noble Coran en HD, prières et rappels spirituels sans abonnement ni publicité." />
+    <meta name="twitter:image" content="https://sirat-stream.ai.studio/og-image.jpg" />
+    <meta name="twitter:image:alt" content="Sirat Stream - Plateforme de Streaming Musulman et Islamique Gratuit" />
 
     <!-- Video Streaming DNS Preconnects for Instant Shorts Playback -->
     <link rel="preconnect" href="https://www.youtube-nocookie.com" crossorigin />
@@ -41,20 +71,56 @@
         "@context": "https://schema.org",
         "@graph": [
           {
+            "@type": "Organization",
+            "@id": "https://sirat-stream.ai.studio/#organization",
+            "name": "Sirat Stream",
+            "url": "https://sirat-stream.ai.studio/",
+            "logo": {
+              "@type": "ImageObject",
+              "@id": "https://sirat-stream.ai.studio/#logo",
+              "url": "https://sirat-stream.ai.studio/icon-512.png",
+              "contentUrl": "https://sirat-stream.ai.studio/icon-512.png",
+              "caption": "Logo Sirat Stream",
+              "width": 512,
+              "height": 512
+            },
+            "image": "https://sirat-stream.ai.studio/og-image.jpg"
+          },
+          {
+            "@type": "ImageObject",
+            "@id": "https://sirat-stream.ai.studio/#primaryimage",
+            "url": "https://sirat-stream.ai.studio/og-image.jpg",
+            "contentUrl": "https://sirat-stream.ai.studio/og-image.jpg",
+            "width": 1200,
+            "height": 630,
+            "caption": "Sirat Stream – Plateforme de Streaming Musulman et Islamique Gratuit"
+          },
+          {
             "@type": "WebSite",
             "@id": "https://sirat-stream.ai.studio/#website",
             "url": "https://sirat-stream.ai.studio/",
-            "name": "SiratStream",
+            "name": "Sirat Stream",
+            "publisher": {
+              "@id": "https://sirat-stream.ai.studio/#organization"
+            },
+            "primaryImageOfPage": {
+              "@id": "https://sirat-stream.ai.studio/#primaryimage"
+            },
+            "thumbnailUrl": "https://sirat-stream.ai.studio/og-image.jpg",
+            "image": "https://sirat-stream.ai.studio/og-image.jpg",
             "alternateName": [
+              "Sirat",
+              "Sirat Streaming",
+              "Streaming Musulman",
+              "Streaming Islamique",
+              "SiratStream",
+              "sirat stream",
+              "sirat streaming",
               "sirat-stream",
               "sirat-stream.ai.studio",
-              "https://sirat-stream.ai.studio",
-              "siratstreamapp",
-              "siratstreamapp.com",
-              "Sirat Stream",
-              "Sirat Stream App"
+              "https://sirat-stream.ai.studio"
             ],
-            "description": "Plateforme de streaming vidéo et audio islamique avec catalogue Coran, Tarawih historiques (1980-2000), horaires de prière et mode lecture apaisée.",
+            "description": "Première plateforme 100% gratuite de streaming musulman et islamique avec catalogue Le Noble Coran, prières, enseignements et récits des prophètes.",
             "inLanguage": "fr-FR",
             "potentialAction": {
               "@type": "SearchAction",
@@ -65,35 +131,76 @@
           {
             "@type": "WebApplication",
             "@id": "https://sirat-stream.ai.studio/#webapp",
-            "name": "SiratStream",
+            "name": "Sirat Stream",
+            "image": "https://sirat-stream.ai.studio/og-image.jpg",
             "alternateName": [
-              "sirat-stream",
-              "sirat-stream.ai.studio",
-              "https://sirat-stream.ai.studio",
-              "siratstreamapp",
-              "siratstreamapp.com"
+              "Sirat",
+              "Sirat Streaming",
+              "Streaming Musulman",
+              "Streaming Islamique",
+              "SiratStream",
+              "sirat stream",
+              "https://sirat-stream.ai.studio"
             ],
             "url": "https://sirat-stream.ai.studio/",
             "applicationCategory": "MultimediaApplication",
             "operatingSystem": "All",
+            "browserRequirements": "Requires JavaScript. Compatible with Chrome, Safari, Firefox, Edge, Opera, Samsung Internet.",
             "offers": {
               "@type": "Offer",
               "price": "0",
-              "priceCurrency": "EUR"
+              "priceCurrency": "EUR",
+              "availability": "https://schema.org/InStock"
             }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://sirat-stream.ai.studio/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Qu'est-ce que Sirat Stream (Sirat Streaming) ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Sirat Stream (aussi appelé Sirat Streaming ou sirat-stream) est la plateforme gratuite de streaming musulman et islamique accessible directement à l'adresse https://sirat-stream.ai.studio/. Elle propose des vidéos et audio du Noble Coran, des prières, des récits des Prophètes et des enseignements spirituels."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Comment accéder au streaming musulman sur Sirat Stream ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "L'accès se fait directement depuis n'importe quel navigateur (Google Chrome, Safari, Edge, Firefox) sur smartphone, tablette ou ordinateur en visitant https://sirat-stream.ai.studio/."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Sirat Streaming est-il payant ?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Non, Sirat Stream est totalement gratuit, sans aucun paiement, sans abonnement et sans carte bancaire."
+                }
+              }
+            ]
           }
         ]
       }
     </script>
   </head>
-  <body>
+  <body class="bg-zinc-950 text-white">
     <div id="root"></div>
     <!-- Fallback for search engine crawlers before hydration -->
     <noscript>
-      <div style="padding: 2rem; font-family: sans-serif; max-width: 800px; margin: auto;">
-        <h1>SiratStream (sirat-stream, https://sirat-stream.ai.studio)</h1>
-        <p>Bienvenue sur <strong>SiratStream</strong> (<strong>https://sirat-stream.ai.studio</strong>), la plateforme de streaming islamique dédiée aux récitations du noble Coran, aux Tarawih historiques des deux Saintes Mosquées (1980-2000), aux récits des Prophètes et à la spiritualité.</p>
-        <p>Accès au site officiel : <a href="https://sirat-stream.ai.studio/">https://sirat-stream.ai.studio/</a></p>
+      <div style="padding: 2rem; font-family: sans-serif; max-width: 800px; margin: auto; background-color: #09090b; color: #f4f4f5; line-height: 1.6;">
+        <h1>Sirat Stream – Plateforme de Streaming Musulman &amp; Islamique Gratuit</h1>
+        <p>Bienvenue sur <strong>Sirat Stream</strong> (également connu sous les noms <strong>Sirat Streaming</strong>, <strong>Sirat</strong> ou <em>streaming musulman</em>), accessible directement et sans frais à l'adresse officielle : <a href="https://sirat-stream.ai.studio/" style="color: #34d399;">https://sirat-stream.ai.studio/</a>.</p>
+        <p><strong>Plateforme 100% Gratuite :</strong> Aucun paiement requis, aucun abonnement, visionnez et écoutez en illimité les contenus de référence :</p>
+        <ul>
+          <li><strong>Streaming musulman en ligne</strong> : Récitations du Noble Coran (Tarawih, Haramain, Sheikhs réputés)</li>
+          <li><strong>Enseignements et rappels islamiques</strong> : Vidéos éducatives, récits des Prophètes et spiritualité</li>
+          <li><strong>Fonctionnalités avancées</strong> : Mode audio reposant, minuteur de sommeil, doublage vocal multilingue et horaires de prière en direct</li>
+        </ul>
+        <p>Accéder immédiatement sur Google Chrome, Safari, Firefox ou Edge : <a href="https://sirat-stream.ai.studio/" style="color: #34d399;">https://sirat-stream.ai.studio/</a></p>
       </div>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>

@@ -110,6 +110,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
     }
 
     const uId = (user as any).uid || (user as any).id || "guest-user";
+    const userDisplayName = user.displayName || user.email?.split("@")[0] || "Principal";
 
     // If guest mode, load directly from local storage
     if (isGuest || uId.startsWith("guest-")) {
@@ -122,13 +123,26 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Try fetching from Supabase
+    // Helper with strict timeout to prevent queries from hanging indefinitely
+    const withTimeout = async <T,>(thenable: PromiseLike<T>, ms = 2500): Promise<T> => {
+      return Promise.race([
+        Promise.resolve(thenable),
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error("Supabase request timeout")), ms)
+        ),
+      ]);
+    };
+
+    // Try fetching from Supabase with timeout guard
     try {
-      const { data, error: sbError } = await supabase
-        .from("viewer_profiles")
-        .select("*")
-        .eq("account_id", uId)
-        .order("created_at", { ascending: true });
+      const { data, error: sbError } = await withTimeout(
+        supabase
+          .from("viewer_profiles")
+          .select("*")
+          .eq("account_id", uId)
+          .order("created_at", { ascending: true }),
+        2500
+      );
 
       if (sbError || !data) {
         console.warn("Supabase profiles query failed or unavailable, fallback to local profiles:", sbError?.message);
@@ -140,35 +154,58 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
       } else if (data.length === 0) {
         // Create an initial default profile
         const newProf = getDefaultGuestProfile(uId);
-        newProf.name = user.email?.split("@")[0] || "Principal";
-        const { data: created } = await supabase
-          .from("viewer_profiles")
-          .insert({
-            account_id: uId,
-            name: newProf.name,
-            avatar_color: newProf.avatar_color,
-            is_kid: false,
-          })
-          .select()
-          .maybeSingle();
+        newProf.name = userDisplayName;
+        try {
+          const { data: created } = await withTimeout(
+            supabase
+              .from("viewer_profiles")
+              .insert({
+                account_id: uId,
+                name: newProf.name,
+                avatar_color: newProf.avatar_color,
+                is_kid: false,
+              })
+              .select()
+              .maybeSingle(),
+            2000
+          );
 
-        const profToUse = (created as ViewerProfile) || newProf;
-        setProfiles([profToUse]);
-        setActiveProfile(profToUse);
+          const profToUse = (created as ViewerProfile) || newProf;
+          setProfiles([profToUse]);
+          saveLocalProfiles(uId, [profToUse]);
+          localStorage.setItem(STORAGE_KEY, profToUse.id);
+          setActiveProfile(profToUse);
+        } catch {
+          setProfiles([newProf]);
+          saveLocalProfiles(uId, [newProf]);
+          localStorage.setItem(STORAGE_KEY, newProf.id);
+          setActiveProfile(newProf);
+        }
       } else {
         setProfiles(data);
+        saveLocalProfiles(uId, data);
         const storedId = localStorage.getItem(STORAGE_KEY);
         const matched = storedId ? data.find((p) => p.id === storedId) : null;
-        setActiveProfile(matched || data[0] || null);
+        const selected = matched || data[0] || null;
+        if (selected) {
+          localStorage.setItem(STORAGE_KEY, selected.id);
+        }
+        setActiveProfile(selected);
       }
     } catch {
       const local = getLocalProfiles(uId);
       setProfiles(local);
-      setActiveProfile(local[0] || null);
+      const storedId = localStorage.getItem(STORAGE_KEY);
+      const matched = storedId ? local.find((p) => p.id === storedId) : null;
+      const selected = matched || local[0] || null;
+      if (selected) {
+        localStorage.setItem(STORAGE_KEY, selected.id);
+      }
+      setActiveProfile(selected);
     } finally {
       setLoading(false);
     }
-  }, [user, isGuest, getLocalProfiles]);
+  }, [user ? (user as any).uid || (user as any).id : null, isGuest, getLocalProfiles]);
 
   useEffect(() => {
     fetchProfiles();

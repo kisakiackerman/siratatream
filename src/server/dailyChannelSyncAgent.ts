@@ -7,6 +7,7 @@ export interface MonitoredChannel {
   handle: string;
   url: string;
   category: string;
+  hasDurationExemption?: boolean;
 }
 
 export interface ExportedVideo {
@@ -150,6 +151,28 @@ export const MONITORED_CHANNELS: MonitoredChannel[] = [
     handle: "@SavantsSunnah",
     url: "https://www.youtube.com/@SavantsSunnah",
     category: "Extraits & Fatwas",
+    hasDurationExemption: true,
+  },
+  {
+    id: "purification-education",
+    name: "Purification & Education",
+    handle: "@PurificationEducation",
+    url: "https://www.youtube.com/@PurificationEducation",
+    category: "Foi & Croyance",
+  },
+  {
+    id: "mosquee-mirail-toulouse",
+    name: "Mosquée Mirail Toulouse",
+    handle: "@MosqueeMirailToulouse",
+    url: "https://www.youtube.com/@MosqueeMirailToulouse",
+    category: "Conférences & Enseignements",
+  },
+  {
+    id: "dourous-net",
+    name: "Dourous.net",
+    handle: "@NaderAbouAnas",
+    url: "https://www.youtube.com/@NaderAbouAnas",
+    category: "Conférences & Éthique",
   },
 ];
 
@@ -211,8 +234,8 @@ class DailyChannelSyncAgent {
         const raw = fs.readFileSync(EXPORT_FILE, "utf-8");
         const list: ExportedVideo[] = JSON.parse(raw);
         for (const v of list) {
-          // Filtrer selon la nouvelle règle stricte : >= 10 minutes (600s)
-          if (!v.durationSeconds || v.durationSeconds >= 600) {
+          // Filtrer selon la nouvelle règle stricte : >= 10 minutes (600s), sauf pour @SavantsSunnah
+          if (!v.durationSeconds || v.durationSeconds >= 600 || v.handle === "@SavantsSunnah") {
             this.exportedVideos.set(v.id, v);
           }
         }
@@ -385,9 +408,9 @@ class DailyChannelSyncAgent {
           const alreadyKnown = this.knownCatalogIds.has(v.id) || this.exportedVideos.has(v.id);
 
           // Règle stricte de l'utilisateur : les vidéos doivent faire AU MOINS 10 MINUTES (>= 600 secondes)
-          // Exception accordée pour "Les Savants de la Sunnah"
-          const isSavantsSunnah = ch.id === "savants-sunnah";
-          if (!isSavantsSunnah && v.durationSeconds > 0 && v.durationSeconds < 600) {
+          // Exception officielle accordée pour "Les Savants de la Sunnah"
+          const isExempted = ch.hasDurationExemption || ch.id === "savants-sunnah" || ch.handle === "@SavantsSunnah";
+          if (!isExempted && v.durationSeconds > 0 && v.durationSeconds < 600) {
             // Ignorée car moins de 10 min
             ignoredUnderTenCount++;
             continue;

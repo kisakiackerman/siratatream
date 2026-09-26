@@ -37,6 +37,13 @@ service cloud.firestore {
       allow write: if isCreator();
     }
 
+    // Active client sessions & IP links (Guests, Google, Apple across all instances)
+    match /active_sessions/{sessionId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isCreator();
+    }
+
     // Creator published videos and catalog items
     // Read is public; modifications are strictly restricted to Creators
     match /creator_content/{contentId} {

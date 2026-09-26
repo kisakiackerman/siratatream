@@ -1,9 +1,21 @@
-# Robots.txt for SiratStream (https://sirat-stream.ai.studio)
+# Robots.txt for Sirat Stream / Sirat Streaming (https://sirat-stream.ai.studio)
 User-agent: *
 Allow: /
 
-# Googlebot specific directives
 User-agent: Googlebot
 Allow: /
 
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
 Sitemap: https://sirat-stream.ai.studio/sitemap.xml
+

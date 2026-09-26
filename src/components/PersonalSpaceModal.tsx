@@ -20,6 +20,7 @@ import {
   Volume2,
   Wand2,
   Play,
+  Mail,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,7 +44,7 @@ export default function PersonalSpaceModal({
   onOpenIslamicHub,
   onOpenCreatorStudio,
 }: PersonalSpaceModalProps) {
-  const { user, firebaseUser, isGuest, isCreator, userSpace, signInWithGoogle, signInWithApple, signOut, updateUserSpace } = useAuth();
+  const { user, firebaseUser, isGuest, isCreator, userSpace, signInWithGoogle, signInWithApple, openEmailSyncModal, signOut, updateUserSpace } = useAuth();
   const { activeProfile } = useViewerProfile();
   const [activeTab, setActiveTab] = useState<"overview" | "favorites" | "history" | "bookmarks" | "notes" | "preferences">("overview");
 
@@ -151,6 +152,11 @@ export default function PersonalSpaceModal({
                     <Check size={10} className="text-emerald-400" />
                     Apple iCloud Connecté
                   </span>
+                ) : userSpace?.provider === "email" ? (
+                  <span className="px-2.5 py-0.5 rounded-full liquid-glass-emerald text-emerald-300 border border-emerald-400/40 text-[10px] font-bold flex items-center gap-1">
+                    <Check size={10} />
+                    Email Synchronisé
+                  </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full liquid-glass text-amber-300 border border-amber-400/30 text-[10px] font-bold">
                     Mode Invité
@@ -158,14 +164,22 @@ export default function PersonalSpaceModal({
                 )}
               </div>
               <p className="text-xs text-zinc-300">
-                {userSpace?.email || firebaseUser?.email || "Connectez votre compte Google ou Apple pour synchroniser tous vos appareils"}
+                {userSpace?.email || firebaseUser?.email || "Connectez votre compte email, Google ou Apple pour synchroniser tous vos appareils"}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {!firebaseUser && userSpace?.provider !== "apple" && (
+            {!firebaseUser && userSpace?.provider !== "apple" && userSpace?.provider !== "email" && (
               <div className="hidden sm:flex items-center gap-2">
+                <button
+                  onClick={openEmailSyncModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-400/20 hover:bg-emerald-400/30 text-emerald-200 text-xs font-bold transition-all border border-emerald-300/40 active:scale-95 shadow-sm"
+                  title="Synchroniser avec votre email"
+                >
+                  <Mail size={13} className="text-emerald-300" />
+                  <span>Email</span>
+                </button>
                 <button
                   onClick={signInWithGoogle}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-zinc-100 text-black text-xs font-bold transition-all shadow-md active:scale-95"
@@ -692,6 +706,8 @@ export default function PersonalSpaceModal({
                       ? `Google (${firebaseUser.email})`
                       : userSpace?.provider === "apple"
                       ? `Apple iCloud (${userSpace.email})`
+                      : userSpace?.provider === "email"
+                      ? `Email (${userSpace.email})`
                       : "Session Invité"}
                   </span>
                 </div>
@@ -711,7 +727,7 @@ export default function PersonalSpaceModal({
               </div>
 
               <div className="flex gap-3">
-                {firebaseUser || userSpace?.provider === "apple" ? (
+                {firebaseUser || userSpace?.provider === "apple" || userSpace?.provider === "email" ? (
                   <button
                     onClick={signOut}
                     className="w-full flex items-center justify-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-400/30 font-semibold py-3 rounded-full transition-colors text-xs backdrop-blur-xl"
@@ -720,7 +736,15 @@ export default function PersonalSpaceModal({
                     Se déconnecter
                   </button>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+                    <button
+                      onClick={openEmailSyncModal}
+                      className="w-full flex items-center justify-center gap-2 bg-emerald-400/20 hover:bg-emerald-400/30 text-emerald-200 font-bold py-3 rounded-full transition-all text-xs border border-emerald-300/40 active:scale-98 shadow-sm"
+                    >
+                      <Mail size={15} className="text-emerald-300" />
+                      <span>Connexion Email</span>
+                    </button>
+
                     <button
                       onClick={signInWithGoogle}
                       className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black font-bold py-3 rounded-full transition-all text-xs shadow-lg active:scale-98"
@@ -731,7 +755,7 @@ export default function PersonalSpaceModal({
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                       </svg>
-                      <span>Connexion Google</span>
+                      <span>Google</span>
                     </button>
 
                     <button

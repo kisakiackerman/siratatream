@@ -709,13 +709,16 @@ export default function VideoSuggestionModal({
                   <video src={previewVideoUrl} controls autoPlay className="w-full h-full object-contain" />
                 ) : (
                   <iframe
-                    src={
-                      previewVideoUrl.includes("watch?v=")
-                        ? `https://www.youtube-nocookie.com/embed/${previewVideoUrl.split("v=")[1]?.split("&")[0]}?autoplay=1&rel=0`
+                    src={(() => {
+                      const ytId = previewVideoUrl.includes("watch?v=")
+                        ? previewVideoUrl.split("v=")[1]?.split("&")[0]
                         : previewVideoUrl.includes("youtu.be/")
-                        ? `https://www.youtube-nocookie.com/embed/${previewVideoUrl.split("youtu.be/")[1]?.split("?")[0]}?autoplay=1&rel=0`
-                        : previewVideoUrl
-                    }
+                        ? previewVideoUrl.split("youtu.be/")[1]?.split("?")[0]
+                        : "";
+                      return ytId
+                        ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${ytId}`
+                        : previewVideoUrl;
+                    })()}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen

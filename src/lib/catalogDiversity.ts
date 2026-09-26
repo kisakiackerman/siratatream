@@ -107,6 +107,12 @@ export function diversifyCatalogByChannel(
     result.push(spotlightItem);
   }
 
+  // Pointers for O(1) dequeue instead of O(N) array shift()
+  const queuePointers = new Map<string, number>();
+  for (const ch of sortedChannels) {
+    queuePointers.set(ch, 0);
+  }
+
   let lastChannel: string | null = spotlightItem ? spotlightItem.channel : null;
   let remainingCount = workingPool.length;
 
@@ -115,17 +121,22 @@ export function diversifyCatalogByChannel(
 
     for (const ch of sortedChannels) {
       const queue = channelGroups.get(ch);
-      if (queue && queue.length > 0) {
+      const ptr = queuePointers.get(ch) || 0;
+      if (queue && ptr < queue.length) {
         // Prevent consecutive duplicates if another channel has items
-        const hasOtherChannelsWithItems = sortedChannels.some(
-          (other) => other !== ch && (channelGroups.get(other)?.length || 0) > 0
-        );
+        const hasOtherChannelsWithItems = sortedChannels.some((other) => {
+          if (other === ch) return false;
+          const otherQueue = channelGroups.get(other);
+          const otherPtr = queuePointers.get(other) || 0;
+          return otherQueue ? otherPtr < otherQueue.length : false;
+        });
 
         if (ch === lastChannel && hasOtherChannelsWithItems) {
           continue;
         }
 
-        const nextItem = queue.shift()!;
+        const nextItem = queue[ptr];
+        queuePointers.set(ch, ptr + 1);
         result.push(nextItem);
         lastChannel = ch;
         remainingCount--;
@@ -137,11 +148,17 @@ export function diversifyCatalogByChannel(
     if (!progressed) {
       for (const ch of sortedChannels) {
         const queue = channelGroups.get(ch);
-        while (queue && queue.length > 0) {
-          result.push(queue.shift()!);
-          remainingCount--;
+        let ptr = queuePointers.get(ch) || 0;
+        if (queue) {
+          while (ptr < queue.length) {
+            result.push(queue[ptr]);
+            ptr++;
+            remainingCount--;
+          }
+          queuePointers.set(ch, ptr);
         }
       }
+      break;
     }
   }
 

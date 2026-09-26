@@ -10,13 +10,18 @@ import {
   RotateCw,
   Sparkles,
   Music,
-  FastForward,
+  AlertCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { ContentItem } from "@/data/catalog";
 import { loadYouTubeAPI } from "@/lib/youtube";
 import { fetchVideoPlaybackSource, markVideoAsUnplayable } from "@/lib/youtubeApi";
 import { getReciterForItem } from "@/lib/reciterData";
+import {
+  detectNetworkSpeed,
+  applyAdaptiveConnectionQuality,
+  subscribeToNetworkQualityChanges,
+} from "@/lib/adaptiveConnectionQuality";
 
 type MiniPlayerProps = {
   item: ContentItem;
@@ -45,6 +50,8 @@ export default function MiniPlayer({
   const [useIframe, setUseIframe] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [showConfirmExit, setShowConfirmExit] = useState(false);
   const [playbackRate, setPlaybackRate] = useState<number>(() => {
     try {
       const v = Number(localStorage.getItem("nexstream_playback_speed"));
@@ -80,6 +87,59 @@ export default function MiniPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressTimer = useRef<any>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const controlsTimer = useRef<any>(null);
+  const isTouchInteraction = useRef<boolean>(false);
+
+  // Minuteur d'affichage des commandes et bandes cinéma (synchronisé avec le plein écran) :
+  // - En lecture : reste affiché au moins 6 secondes après tout mouvement ou survol à la souris
+  // - Sur écran tactile : reste affiché tant que l'écran est touché,
+  //   puis au moins 6 secondes après que l'utilisateur cesse de toucher l'écran
+  // - En pause : reste affiché en continu
+  const resetControlsTimer = useCallback(() => {
+    clearTimeout(controlsTimer.current);
+    setShowControls(true);
+    controlsTimer.current = setTimeout(() => {
+      if (playing) setShowControls(false);
+    }, 6000);
+  }, [playing]);
+
+  const handleTouchStart = useCallback(() => {
+    isTouchInteraction.current = true;
+    clearTimeout(controlsTimer.current);
+    setShowControls(true);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    isTouchInteraction.current = true;
+    clearTimeout(controlsTimer.current);
+    setShowControls(true);
+    controlsTimer.current = setTimeout(() => {
+      if (playing) setShowControls(false);
+      setTimeout(() => {
+        isTouchInteraction.current = false;
+      }, 300);
+    }, 6000); // Reste au moins 6 secondes après que l'utilisateur cesse de toucher l'écran
+  }, [playing]);
+
+  const handleMouseMove = useCallback(() => {
+    if (isTouchInteraction.current) return;
+    resetControlsTimer();
+  }, [resetControlsTimer]);
+
+  useEffect(() => {
+    resetControlsTimer();
+    return () => clearTimeout(controlsTimer.current);
+  }, [playing, resetControlsTimer]);
+
+  // Surveillance en continu pour maintenir le Full HD sans coupure
+  useEffect(() => {
+    const unsubscribe = subscribeToNetworkQualityChanges(() => {
+      if (playerRef.current) {
+        applyAdaptiveConnectionQuality(playerRef.current);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   const isTarawih = item.channel === "Récitations Haramain" || item.categories.includes("Coran");
   const reciter = isTarawih ? getReciterForItem(item.title, item.description, item.channel) : null;
@@ -133,6 +193,8 @@ export default function MiniPlayer({
               fs: 0,
               vq: "hd1080",
               hd: 1,
+              loop: 1,
+              playlist: item.youtubeId,
             },
             events: {
               onReady: (e: any) => {
@@ -141,8 +203,7 @@ export default function MiniPlayer({
                   if (initialTime > 0) {
                     e.target.seekTo(initialTime, true);
                   }
-                  e.target.setPlaybackQuality?.("hd1080");
-                  e.target.setSuggestedQuality?.("hd1080");
+                  applyAdaptiveConnectionQuality(e.target);
                   e.target.playVideo();
                 } catch {
                   // ignore
@@ -162,7 +223,8 @@ export default function MiniPlayer({
               onStateChange: (e: any) => {
                 if (cancelled) return;
                 if (e.data === 1) {
-                  // Playing
+                  // Playing - vérifie et force Full HD minimum 1080p
+                  applyAdaptiveConnectionQuality(e.target);
                   setPlaying(true);
                   setIsBuffering(false);
                 } else if (e.data === 2) {
@@ -323,17 +385,6 @@ export default function MiniPlayer({
     }
   };
 
-  const activeSkipSegment = item.skipSegments?.find(
-    (seg) => currentTime >= seg.start && currentTime < seg.end
-  );
-
-  const handleSkipSegment = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (activeSkipSegment) {
-      handleSeek(activeSkipSegment.end);
-    }
-  };
-
   const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!progressBarRef.current || duration <= 0) return;
@@ -355,7 +406,8 @@ export default function MiniPlayer({
     }
   };
 
-  const handleExpand = () => {
+  const handleExpand = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     let finalTime = currentTime;
     if (videoRef.current) finalTime = videoRef.current.currentTime || currentTime;
     else if (playerRef.current) {
@@ -370,12 +422,22 @@ export default function MiniPlayer({
     onExpand(finalTime, mode);
   };
 
-  const handleClose = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleForceClose = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (onSaveProgress && currentTime > 0) {
       onSaveProgress(Math.floor(currentTime), Math.floor(duration));
     }
+    setShowConfirmExit(false);
     onClose();
+  };
+
+  const handleClose = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (playing) {
+      setShowConfirmExit(true);
+    } else {
+      handleForceClose(e);
+    }
   };
 
   const isAudio = mode === "audio";
@@ -386,15 +448,26 @@ export default function MiniPlayer({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 30, scale: 0.88 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
-      onClick={handleExpand}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-80 sm:w-96 max-w-[calc(100vw-2rem)] rounded-2xl bg-zinc-950/95 shadow-2xl overflow-hidden backdrop-blur-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer group select-none ring-1 ${
+      onMouseMove={handleMouseMove}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        if (!isTouchInteraction.current) {
+          resetControlsTimer();
+        }
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+      }}
+      className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-80 sm:w-96 max-w-[calc(100vw-2rem)] rounded-2xl bg-zinc-950/95 shadow-2xl overflow-hidden backdrop-blur-xl transition-all duration-300 hover:scale-[1.02] group select-none ring-1 ${
         isAudio
           ? "border border-emerald-500/40 ring-emerald-500/20 shadow-emerald-950/40"
           : "border border-amber-500/40 ring-white/10"
       }`}
-      title={isAudio ? "Cliquer pour agrandir le lecteur Audio HD" : "Cliquer pour agrandir le lecteur vidéo"}
+      title={isAudio ? "Lecteur Audio HD miniature" : "Lecteur vidéo miniature"}
     >
       {/* Video / Audio Viewport */}
       <div className="relative w-full aspect-video bg-black overflow-hidden">
@@ -406,7 +479,7 @@ export default function MiniPlayer({
             autoPlay
             playsInline
             muted={muted}
-            className={`w-full h-full object-cover ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
+            className={`w-full h-full object-cover scale-[1.03] ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
             onWaiting={() => setIsBuffering(true)}
             onPlaying={() => {
               setIsBuffering(false);
@@ -427,16 +500,34 @@ export default function MiniPlayer({
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(
               initialTime
-            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1`}
+            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&loop=1&playlist=${item.youtubeId}`}
             title={item.title}
-            className={`w-full h-full border-0 ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
+            className={`w-full h-full border-0 scale-[1.03] ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
           />
         ) : (
           /* 3. YouTube API Video Stream Container */
-          <div ref={playerDivRef} className={`w-full h-full ${isAudio ? "opacity-0 pointer-events-none" : ""}`} />
+          <div ref={playerDivRef} className={`w-full h-full scale-[1.03] ${isAudio ? "opacity-0 pointer-events-none" : ""}`} />
+        )}
+
+        {/* Zone tactile transparente sur la vidéo : un tap révèle les bandes cinéma qui restent 1s après le toucher */}
+        {!isAudio && (
+          <div
+            className="absolute inset-0 z-10 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!showControls) {
+                setShowControls(true);
+                resetControlsTimer();
+              } else {
+                togglePlay(e);
+              }
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          />
         )}
 
         {/* Audio HD specific visual overlay covering video completely */}
@@ -463,115 +554,142 @@ export default function MiniPlayer({
           </div>
         )}
 
-        {/* Live indicator badge */}
+        {/* Bande supérieure cinéma esthétique & occultante (masque les détails YouTube natifs dans la vidéo miniature) */}
         {!isAudio && (
-          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] text-amber-400 font-semibold pointer-events-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span>Miniature</span>
+          <div
+            className={`absolute top-0 left-0 right-0 z-20 transition-all duration-300 ease-out ${
+              showControls || !playing ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
+            }`}
+          >
+            {/* Dégradé velours progressif semi-transparent & flou satiné */}
+            <div className="absolute inset-x-0 top-0 h-16 sm:h-20 cinema-band-top pointer-events-none shadow-[0_8px_24px_rgba(0,0,0,0.35)]" />
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent pointer-events-none" />
+
+            <div className="relative z-10 flex items-center justify-between px-2.5 py-2">
+              {/* Badge Miniature */}
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px] text-amber-400 font-semibold pointer-events-none shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <span>Miniature</span>
+              </div>
+
+              {/* Boutons flottants hauts */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="p-1.5 rounded-full bg-black/70 hover:bg-black text-zinc-200 hover:text-white backdrop-blur-sm transition-colors border border-white/10 shadow-md"
+                  title={muted ? "Activer le son" : "Couper le son"}
+                >
+                  {muted ? <VolumeX size={14} className="text-amber-400" /> : <Volume2 size={14} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleExpand(e)}
+                  className="p-1.5 rounded-full bg-black/70 hover:bg-amber-500 text-zinc-200 hover:text-zinc-950 backdrop-blur-sm transition-colors border border-white/10 shadow-md"
+                  title="Agrandir en grand format"
+                >
+                  <Maximize2 size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="p-1.5 rounded-full bg-black/70 hover:bg-red-600 text-zinc-200 hover:text-white backdrop-blur-sm transition-colors border border-white/10 shadow-md"
+                  title="Fermer la miniature"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Top Floating Controls */}
-        <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20">
-          <button
-            onClick={toggleMute}
-            className="p-1.5 rounded-full bg-black/70 hover:bg-black text-zinc-200 hover:text-white backdrop-blur-sm transition-colors border border-white/10 shadow-md"
-            title={muted ? "Activer le son" : "Couper le son"}
-          >
-            {muted ? <VolumeX size={14} className="text-amber-400" /> : <Volume2 size={14} />}
-          </button>
-          <button
-            onClick={handleClose}
-            className="p-1.5 rounded-full bg-black/70 hover:bg-red-600 text-zinc-200 hover:text-white backdrop-blur-sm transition-colors border border-white/10 shadow-md"
-            title="Fermer la miniature"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        {/* Hover Action Overlay with full controls */}
-        <div
-          className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent transition-opacity duration-200 flex flex-col justify-end p-3 ${
-            isHovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <button
-              onClick={(e) => seekRelative(e, -10)}
-              className="p-2 rounded-full bg-white/15 hover:bg-white/30 text-white backdrop-blur-md transition-transform active:scale-95"
-              title="Reculer de 10s"
-            >
-              <RotateCcw size={14} />
-            </button>
-            <button
-              onClick={togglePlay}
-              className="p-3 rounded-full bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold backdrop-blur-md transition-transform hover:scale-105 active:scale-95 shadow-lg"
-              title={playing ? "Pause" : "Lecture"}
-            >
-              {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-            </button>
-            <button
-              onClick={(e) => seekRelative(e, 10)}
-              className="p-2 rounded-full bg-white/15 hover:bg-white/30 text-white backdrop-blur-md transition-transform active:scale-95"
-              title="Avancer de 10s"
-            >
-              <RotateCw size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* Interactive Progress Bar */}
-        <div
-          ref={progressBarRef}
-          onClick={handleProgressBarClick}
-          className="absolute bottom-0 left-0 right-0 h-1.5 bg-zinc-800/90 cursor-pointer group/progress hover:h-2 transition-all z-20"
-          title="Cliquer pour naviguer dans la vidéo"
-        >
-          {/* Creator ad / sponsor markers on miniplayer progress bar */}
-          {item.skipSegments?.map((seg, idx) => {
-            if (!duration || duration <= 0) return null;
-            const leftPct = Math.max(0, Math.min(100, (seg.start / duration) * 100));
-            const widthPct = Math.max(1, Math.min(100 - leftPct, ((seg.end - seg.start) / duration) * 100));
-            return (
-              <div
-                key={idx}
-                className="absolute top-0 bottom-0 bg-amber-400 rounded-full z-10 pointer-events-none"
-                style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-              />
-            );
-          })}
-
+        {/* Bande inférieure cinéma esthétique & contrôleur (disparaît en même temps que les éléments en période de lecture) */}
+        {!isAudio && (
           <div
-            className="h-full bg-gradient-to-r from-amber-500 to-amber-400 relative transition-all duration-150"
-            style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+            className={`absolute bottom-0 left-0 right-0 z-20 transition-all duration-300 ease-out ${
+              showControls || !playing ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
+            }`}
           >
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md scale-0 group-hover/progress:scale-100 transition-transform" />
-          </div>
-        </div>
+            {/* Dégradé velours progressif semi-transparent & flou satiné */}
+            <div className="absolute inset-x-0 bottom-0 h-28 sm:h-32 cinema-band-bottom pointer-events-none shadow-[0_-8px_24px_rgba(0,0,0,0.35)]" />
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent pointer-events-none" />
 
-        {/* MiniPlayer Floating Skip Intro/Ad Button */}
-        {activeSkipSegment && (
-          <button
-            onClick={handleSkipSegment}
-            className="absolute right-2 bottom-3 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-900 border border-amber-500/70 text-amber-300 text-[11px] font-bold shadow-lg backdrop-blur-md transition-all active:scale-95 cursor-pointer"
-            title={activeSkipSegment.label || "Passer la pub créateur"}
-          >
-            <FastForward size={12} className="fill-current text-amber-400" />
-            <span>Passer</span>
-          </button>
+            <div className="relative z-10 px-3 pb-2.5 pt-1">
+              {/* Commandes centrales de lecture */}
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <button
+                  type="button"
+                  onClick={(e) => seekRelative(e, -10)}
+                  className="p-1.5 rounded-full bg-white/15 hover:bg-white/30 text-white backdrop-blur-md transition-transform active:scale-95"
+                  title="Reculer de 10s"
+                >
+                  <RotateCcw size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="p-2.5 rounded-full bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold backdrop-blur-md transition-transform hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                  title={playing ? "Pause" : "Lecture"}
+                >
+                  {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => seekRelative(e, 10)}
+                  className="p-1.5 rounded-full bg-white/15 hover:bg-white/30 text-white backdrop-blur-md transition-transform active:scale-95"
+                  title="Avancer de 10s"
+                >
+                  <RotateCw size={13} />
+                </button>
+              </div>
+
+              {/* Barre de progression interactive */}
+              <div
+                ref={progressBarRef}
+                onClick={handleProgressBarClick}
+                className="relative h-1.5 bg-zinc-800/90 cursor-pointer group/progress hover:h-2 rounded-full overflow-hidden transition-all shadow-inner"
+                title="Cliquer pour naviguer dans la vidéo"
+              >
+                {/* Marqueurs de sponsors / intro */}
+                {item.skipSegments?.map((seg, idx) => {
+                  if (!duration || duration <= 0) return null;
+                  const leftPct = Math.max(0, Math.min(100, (seg.start / duration) * 100));
+                  const widthPct = Math.max(1, Math.min(100 - leftPct, ((seg.end - seg.start) / duration) * 100));
+                  return (
+                    <div
+                      key={idx}
+                      className="absolute top-0 bottom-0 bg-amber-400 rounded-full z-10 pointer-events-none"
+                      style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                    />
+                  );
+                })}
+
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-400 relative transition-all duration-150"
+                  style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                >
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md scale-0 group-hover/progress:scale-100 transition-transform" />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Mini Title & Expand Bar */}
       <div className="px-3.5 py-2.5 flex items-center justify-between gap-2 border-t border-zinc-800/80 bg-zinc-950/80">
-        <div className="min-w-0 flex-1">
-          <h4 className="text-xs font-semibold text-white truncate group-hover:text-amber-300 transition-colors">
+        <div
+          onClick={(e) => handleExpand(e)}
+          className="min-w-0 flex-1 cursor-pointer group/title"
+          title="Cliquer pour agrandir le lecteur"
+        >
+          <h4 className="text-xs font-semibold text-white truncate group-hover/title:text-amber-300 transition-colors vignette-title">
             {item.title}
           </h4>
-          <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5">
-            <span className="truncate max-w-[110px] sm:max-w-[140px]">{item.channel}</span>
+          <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-0.5 vignette-meta">
+            <span className="truncate max-w-[110px] sm:max-w-[140px] vignette-meta">{item.channel}</span>
             <span>•</span>
-            <span className="text-amber-400 font-medium font-mono">
+            <span className="text-amber-400 font-medium font-mono vignette-meta">
               {fmt(currentTime)} / {duration > 0 ? fmt(duration) : item.duration || "0:00"}
             </span>
           </div>
@@ -597,6 +715,45 @@ export default function MiniPlayer({
           </button>
         </div>
       </div>
+
+      {/* Confirmation de fermeture du MiniPlayer */}
+      {showConfirmExit && (
+        <div
+          id="miniplayer-confirm-exit"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowConfirmExit(false);
+          }}
+          className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md p-4 flex flex-col justify-center items-center text-center animate-in fade-in duration-150"
+        >
+          <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-2">
+            <AlertCircle size={16} />
+          </div>
+          <p className="text-white text-xs font-bold mb-1">Arrêter la lecture ?</p>
+          <p className="text-zinc-400 text-[11px] mb-3">La progression sera sauvegardée.</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              id="btn-cancel-mini-exit"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowConfirmExit(false);
+              }}
+              className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-zinc-200 text-xs font-medium transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              id="btn-confirm-mini-exit"
+              onClick={handleForceClose}
+              className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors shadow-sm"
+            >
+              Arrêter
+            </button>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -29,6 +29,9 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
     "camera=(), microphone=*, geolocation=*, payment=(), usb=(), display-capture=()"
   );
 
+  // Cross-Origin Opener Policy: allow Firebase Auth popup to communicate with opener
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+
   // Content-Security-Policy: allow required resources while allowing Nginx to handle frame-ancestors
   res.setHeader(
     "Content-Security-Policy",
@@ -37,7 +40,7 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
       "img-src 'self' https: data: blob:",
       "media-src 'self' https: blob: data:",
       "connect-src 'self' https: wss: data:",
-      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://*.google.com https://accounts.google.com",
+      "frame-src 'self' https://*.firebaseapp.com https://khaki-obelisk-6f6jr.firebaseapp.com https://*.firebaseio.com https://*.googleapis.com https://accounts.google.com https://appleid.apple.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://*.google.com",
     ].join("; ")
   );
 

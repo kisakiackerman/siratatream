@@ -6,6 +6,7 @@ import {
   type Channel,
   categories as baseCategories,
   parseDurationToSeconds,
+  isChannelExemptedFrom10MinRule,
 } from "@/data/catalog";
 import { deduplicateCatalog } from "@/lib/catalogDeduplication";
 import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
@@ -94,6 +95,7 @@ const DEFAULT_CHANNELS: CustomChannelInfo[] = [
   { name: "Towards Eternity", description: "Méditations spirituelles et quête du sens profond", avatar: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=100" },
   { name: "Croyant Rationnel", description: "Analyses théologiques, miracles scientifiques et débats", avatar: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=100" },
   { name: "Récitations Haramain", description: "Enregistrements historiques des Tarawih de La Mecque & Médine", avatar: "https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=100" },
+  { name: "Les Savants de la Sunnah", description: "Extraits, fatwas et précieux rappels des grands savants de l'Islam", avatar: "https://images.unsplash.com/photo-1564769625905-50e93615e769?w=100" },
 ];
 
 export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
@@ -283,6 +285,9 @@ export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
     "Blue Casquette",
     "La Quête",
     "Les Savants de la Sunnah",
+    "Purification & Education",
+    "Mosquée Mirail Toulouse",
+    "Dourous.net",
     ...customChannels.map((c) => c.name),
   ]));
 
@@ -311,6 +316,10 @@ export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
 
   const filteredCatalog = allCatalogIncludingDeleted.filter((item) => {
     if (deletedVideoIds.includes(item.id)) return false;
+    // Dérogation officielle accordée pour Les Savants de la Sunnah (extraits courts, sagesses et fatwas des savants)
+    if (isChannelExemptedFrom10MinRule(item.channel, item.id)) {
+      return true;
+    }
     const sec = parseDurationToSeconds(item.duration);
     if (sec > 0 && sec < 600) return false;
     const titleLower = item.title.toLowerCase();

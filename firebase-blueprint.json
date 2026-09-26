@@ -210,12 +210,60 @@
         }
       },
       "required": ["id", "title", "content"]
+    },
+    "ActiveSession": {
+      "title": "ActiveSession",
+      "description": "Heartbeat and health record of active client browser session across all IPs and accounts",
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Unique client session token"
+        },
+        "accountType": {
+          "type": "string",
+          "description": "Type of connected account: guest, google, apple"
+        },
+        "accountIdentifier": {
+          "type": "string",
+          "description": "Account identifier or guest label"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User UID or guest session id"
+        },
+        "appUrl": {
+          "type": "string",
+          "description": "Application link / URL accessed"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status: active, healed, scanning"
+        },
+        "errorsCleaned": {
+          "type": "number",
+          "description": "Number of local errors detected and cleaned"
+        },
+        "lastHeartbeat": {
+          "type": "number",
+          "description": "Timestamp of last active signal"
+        },
+        "lastHealedAt": {
+          "type": "number",
+          "description": "Timestamp of last AI Guardian healing"
+        }
+      },
+      "required": ["sessionId", "accountType", "status"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "Document holding user specific preferences, saved list, notes, and history"
+    },
+    "/active_sessions/{sessionId}": {
+      "schema": "ActiveSession",
+      "description": "Active instances and client links across guests, Google and Apple accounts"
     },
     "/users/{userId}/notes/{noteId}": {
       "schema": "UserSpiritualNote",

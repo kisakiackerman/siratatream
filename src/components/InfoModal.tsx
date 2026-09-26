@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { X, Play, Plus, ThumbsUp, Share2, Star, Check, DownloadCloud, CheckCircle, Tv } from "lucide-react";
+import { X, Play, Plus, ThumbsUp, Share2, Star, Check, CheckCircle, Tv } from "lucide-react";
 import { motion } from "motion/react";
 import { ContentItem, catalog, getSeriesEpisodes } from "@/data/catalog";
 import { useMyList } from "@/lib/useMyList";
@@ -7,9 +7,9 @@ import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useContentStats } from "@/hooks/useContentStats";
 import RatingStars from "@/components/RatingStars";
 import VideoNotesSection from "@/components/VideoNotesSection";
-import { isDownloadedOffline, saveOfflineDownload, removeOfflineDownload } from "@/lib/offlineStorage";
 import { getReciterForItem } from "@/lib/reciterData";
 import { getLocalWatchHistory } from "@/lib/watchHistory";
+import { getThematicFallbackBanner } from "@/lib/heroBanners";
 
 type InfoModalProps = {
   item: ContentItem;
@@ -20,7 +20,6 @@ type InfoModalProps = {
 export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
   const { inList, toggle } = useMyList();
   const saved = inList(item.id);
-  const [downloaded, setDownloaded] = useState(() => isDownloadedOffline(item.id));
   const [copied, setCopied] = useState(false);
   const isTarawih = item.channel === "Récitations Haramain" || item.categories.includes("Coran");
   const reciter = isTarawih ? getReciterForItem(item.title, item.description, item.channel) : null;
@@ -61,16 +60,6 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
       window.removeEventListener("keydown", handler);
     };
   }, [onClose]);
-
-  const handleToggleDownload = () => {
-    if (downloaded) {
-      removeOfflineDownload(item.id);
-      setDownloaded(false);
-    } else {
-      saveOfflineDownload(item);
-      setDownloaded(true);
-    }
-  };
 
   const handleShare = async () => {
     // Generate share link pointing directly to this content
@@ -127,23 +116,37 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
         className="relative z-10 w-full sm:max-w-2xl max-h-[90vh] liquid-glass-modal rounded-3xl overflow-hidden flex flex-col shadow-2xl"
       >
         {/* Hero */}
-        <div className="relative h-64 sm:h-72 flex-shrink-0">
+        <div className="relative h-64 sm:h-72 flex-shrink-0 overflow-hidden bg-zinc-950">
+          {/* Ambient Blur Layer */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <img
+              src={item.heroImage || item.image || getThematicFallbackBanner(item)}
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-cover scale-125 filter blur-2xl opacity-40 brightness-75"
+            />
+          </div>
+
+          {/* Sharp Foreground Image */}
           <img
-            src={item.heroImage ?? item.image}
+            src={item.heroImage ?? item.image ?? getThematicFallbackBanner(item)}
             alt={item.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover relative z-0"
             onError={(e) => {
               const img = e.target as HTMLImageElement;
-              if (!img.dataset.triedHq) {
+              if (!img.dataset.triedHq && item.youtubeId) {
                 img.dataset.triedHq = "true";
                 img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+              } else if (!img.dataset.triedThematic) {
+                img.dataset.triedThematic = "true";
+                img.src = getThematicFallbackBanner(item);
               } else if (!img.dataset.triedReciter) {
                 img.dataset.triedReciter = "true";
                 img.src = reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg";
               }
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/40 to-transparent z-10" />
 
           {/* Close */}
           <button
@@ -203,19 +206,6 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
               <ThumbsUp size={16} fill={userVote === true ? "currentColor" : "none"} />
             </button>
             {likes > 0 && <span className="text-zinc-300 text-xs font-mono">{likes}</span>}
-
-            <button
-              onClick={handleToggleDownload}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-medium transition-all ${
-                downloaded
-                  ? "liquid-glass-emerald text-emerald-300 border-emerald-400/40"
-                  : "liquid-glass text-zinc-200 border-white/20 hover:bg-white/15"
-              }`}
-              title="Mode hors-ligne"
-            >
-              {downloaded ? <CheckCircle size={14} /> : <DownloadCloud size={14} />}
-              {downloaded ? "Enregistré hors-ligne" : "Télécharger"}
-            </button>
 
             <button
               onClick={handleShare}

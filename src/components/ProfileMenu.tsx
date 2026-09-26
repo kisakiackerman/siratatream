@@ -7,7 +7,6 @@ import {
   LogOut,
   ChevronDown,
   Sparkles,
-  DownloadCloud,
   Layers,
   BarChart3,
   Moon,
@@ -28,6 +27,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { getAvatarIcon } from "@/data/avatarIcons";
 import { gregorianToHijri } from "@/lib/hijri";
 import type { SettingsTab } from "@/components/AccountSettingsModal";
+import ExitAppModal from "@/components/ExitAppModal";
 
 type ProfileMenuProps = {
   onOpenCreatorStudio?: () => void;
@@ -38,7 +38,6 @@ type ProfileMenuProps = {
   onOpenAccountSettings: (tab?: SettingsTab) => void;
   onSwitchProfile: () => void;
   onOpenIslamicHub: () => void;
-  onOpenOffline: () => void;
   onOpenStats?: () => void;
   onOpenSuggestions?: () => void;
   onOpenShorts?: () => void;
@@ -53,7 +52,6 @@ export default function ProfileMenu({
   onOpenAccountSettings,
   onSwitchProfile,
   onOpenIslamicHub,
-  onOpenOffline,
   onOpenStats,
   onOpenSuggestions,
   onOpenShorts,
@@ -63,6 +61,7 @@ export default function ProfileMenu({
   const { theme, resolvedTheme, systemTheme, toggleTheme } = useTheme();
   const hijriToday = useMemo(() => gregorianToHijri(), []);
   const [open, setOpen] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,9 +132,9 @@ export default function ProfileMenu({
       )}
 
       {open && (
-        <div className="absolute top-full right-0 mt-2.5 w-72 max-w-[calc(100vw-1.5rem)] bg-zinc-950/95 backdrop-blur-2xl border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 z-50 divide-y divide-zinc-800/70">
-          {/* Active Profile & Account Info */}
-          <div className="px-4 py-3 bg-zinc-900/60">
+        <div className="absolute top-full right-0 mt-2.5 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] max-h-[68vh] sm:max-h-[75vh] bg-zinc-950/95 backdrop-blur-2xl border border-zinc-800/90 rounded-2xl shadow-2xl overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-zinc-700/60 [scrollbar-width:thin] animate-in fade-in zoom-in-95 duration-150 z-50 divide-y divide-zinc-800/70">
+          {/* Active Profile & Account Info (Sticky Header) */}
+          <div className="sticky top-0 z-20 px-4 py-3 bg-zinc-950/95 backdrop-blur-xl border-b border-zinc-800/70">
             <div className="flex items-center justify-between">
               <p className="text-zinc-400 text-[11px] uppercase tracking-wider font-semibold">
                 Profil actif
@@ -281,7 +280,7 @@ export default function ProfileMenu({
             )}
           </div>
 
-          {/* Section: Library & Stats & Offline */}
+          {/* Section: Library & Stats */}
           <div className="p-1">
             <MenuItem
               icon={<Bookmark size={16} className="text-emerald-400" />}
@@ -301,32 +300,14 @@ export default function ProfileMenu({
                 else onOpenAccountSettings("stats");
               })}
             />
-            <MenuItem
-              icon={<DownloadCloud size={16} className="text-zinc-400" />}
-              label="Mode Hors-Ligne"
-              onClick={() => handleAction(onOpenOffline)}
-            />
           </div>
 
           {/* Section: Theme, Profile Switching & Settings */}
           <div className="p-1">
             <MenuItem
-              icon={
-                theme === "system" ? (
-                  <Monitor size={16} className="text-zinc-400" />
-                ) : resolvedTheme === "dark" ? (
-                  <Moon size={16} className="text-emerald-400" />
-                ) : (
-                  <Sun size={16} className="text-zinc-400" />
-                )
-              }
-              label={
-                theme === "system"
-                  ? `Thème : Auto (${systemTheme === "dark" ? "Sombre" : "Clair"})`
-                  : resolvedTheme === "dark"
-                  ? "Thème : Sombre"
-                  : "Thème : Clair"
-              }
+              icon={<Moon size={16} className="text-emerald-400" />}
+              label="Thème : Sombre"
+              badge="Permanent"
               onClick={() => toggleTheme()}
             />
             <MenuItem
@@ -341,23 +322,36 @@ export default function ProfileMenu({
               onClick={() => handleAction(() => onOpenAccountSettings("notifications"))}
             />
             <MenuItem
+              icon={<ShieldCheck size={16} className="text-emerald-400" />}
+              label="IA Gardienne Active"
+              badge="24/7"
+              onClick={() => handleAction(() => onOpenAccountSettings("guardian"))}
+            />
+            <MenuItem
               icon={<Settings size={16} className="text-zinc-400" />}
               label="Paramètres du compte"
               onClick={() => handleAction(onOpenAccountSettings)}
             />
           </div>
 
-          {/* Section: Sign out */}
+          {/* Section: Sign out / Exit App */}
           <div className="p-1">
             <MenuItem
               icon={<LogOut size={16} />}
-              label="Se déconnecter"
-              onClick={() => handleAction(() => signOut())}
+              label="Quitter l'application"
+              onClick={() => handleAction(() => setShowExitModal(true))}
               danger
             />
           </div>
         </div>
       )}
+
+      {/* Confirmation pour quitter l'application */}
+      <ExitAppModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onConfirmExit={() => signOut()}
+      />
     </div>
   );
 }

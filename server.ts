@@ -37,6 +37,36 @@ app.disable("x-powered-by");
 // Apply comprehensive HTTP security headers (CSP, HSTS, X-Content-Type-Options, Permissions-Policy)
 app.use(securityHeadersMiddleware);
 
+// Firebase Auth Reverse Proxy to circumvent 3rd-party cookie blocking and cross-domain iframe handshake failures
+app.use("/__/auth", async (req, res) => {
+  try {
+    const targetUrl = `https://khaki-obelisk-6f6jr.firebaseapp.com/__/auth${req.url}`;
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (key.toLowerCase() !== "host" && typeof value === "string") {
+        headers[key] = value;
+      }
+    }
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+    });
+
+    res.status(response.status);
+    response.headers.forEach((val, key) => {
+      const lower = key.toLowerCase();
+      if (lower !== "content-encoding" && lower !== "content-length" && lower !== "transfer-encoding") {
+        res.setHeader(key, val);
+      }
+    });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.send(buffer);
+  } catch (err) {
+    console.error("Firebase Auth proxy error:", err);
+    res.status(502).send("Auth proxy error");
+  }
+});
+
 // Strict JSON body size limit to prevent memory exhaustion DoS
 app.use(express.json({ limit: "2mb" }));
 
@@ -68,6 +98,24 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"),
+  });
+});
+
+// Build & App version check endpoint for auto-updating clients with the latest link
+const SERVER_BOOT_TIMESTAMP = Date.now();
+const CURRENT_APP_VERSION = "2.4.3";
+
+app.get("/api/app-version", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost:3000";
+  const fullUrl = `${protocol}://${host}`;
+  res.json({
+    version: CURRENT_APP_VERSION,
+    buildTimestamp: SERVER_BOOT_TIMESTAMP,
+    currentUrl: fullUrl,
+    timestamp: Date.now(),
+    status: "up-to-date",
   });
 });
 
@@ -1545,6 +1593,7 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

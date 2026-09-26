@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   X,
   Search,
@@ -53,6 +53,11 @@ export default function ShortsCatalogPage({
   const [sortOption, setSortOption] = useState<SortOption>("score");
   const [showChannelDropdown, setShowChannelDropdown] = useState(false);
   const [voiceNotification, setVoiceNotification] = useState<string | null>(null);
+
+  // Pagination progressive par lots de 36 pour un affichage instantané
+  const PAGE_SIZE = 36;
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Audio / Voice Search
   const handleVoiceResult = useCallback((transcript: string) => {
@@ -153,6 +158,34 @@ export default function ShortsCatalogPage({
       return (b.score || 0) - (a.score || 0);
     });
   }, [query, selectedCategory, selectedChannel, sortOption]);
+
+  // Réinitialiser la pagination lors de changements de filtre ou de tri
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [query, selectedCategory, selectedChannel, sortOption]);
+
+  const displayedShorts = useMemo(() => {
+    return filteredShorts.slice(0, visibleCount);
+  }, [filteredShorts, visibleCount]);
+
+  // IntersectionObserver pour défilement infini sans saccade
+  useEffect(() => {
+    if (visibleCount >= filteredShorts.length) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredShorts.length));
+        }
+      },
+      { rootMargin: "600px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleCount, filteredShorts.length]);
 
   const toggleVoiceSearch = () => {
     toggleVoice();
@@ -403,66 +436,88 @@ export default function ShortsCatalogPage({
 
           {/* Grid of 9:16 Shorts Cards */}
           {filteredShorts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-              {filteredShorts.map((item, idx) => {
-                const primaryCat = item.categories[0] || "Rappels";
-                const viewsStr = item.viewsStr || (item.score ? `${Math.floor(item.score * 5)}k vues` : "5k vues");
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                {displayedShorts.map((item, idx) => {
+                  const primaryCat = item.categories[0] || "Rappels";
+                  const viewsStr = item.viewsStr || (item.score ? `${Math.floor(item.score * 5)}k vues` : "5k vues");
 
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => onPlayShort(item.id)}
-                    className="group relative aspect-[9/16] rounded-2xl overflow-hidden bg-zinc-900 border border-white/10 hover:border-emerald-400/60 transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.25)] hover:-translate-y-1 cursor-pointer flex flex-col justify-between p-3"
-                  >
-                    {/* Background poster image */}
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      loading="lazy"
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-95 group-hover:brightness-105"
-                    />
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onPlayShort(item.id)}
+                      className="group relative aspect-[9/16] rounded-2xl overflow-hidden bg-zinc-900 border border-white/10 hover:border-emerald-400/60 transition-all duration-300 hover:shadow-[0_0_30px_rgba(16,185,129,0.25)] hover:-translate-y-1 cursor-pointer flex flex-col justify-between p-3"
+                    >
+                      {/* Background poster image */}
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-95 group-hover:brightness-105"
+                      />
 
-                    {/* Gradient overlay for readability */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-black/60 pointer-events-none" />
+                      {/* Gradient overlay for readability */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-black/60 pointer-events-none" />
 
-                    {/* Top row: Category tag & duration */}
-                    <div className="relative z-10 flex items-start justify-between gap-1">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md border border-white/20 text-emerald-300">
-                        {primaryCat}
-                      </span>
-
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-black/70 backdrop-blur-md text-zinc-300 border border-white/10">
-                        {item.duration || "00:59"}
-                      </span>
-                    </div>
-
-                    {/* Center: Play icon on hover */}
-                    <div className="relative z-10 flex items-center justify-center my-auto">
-                      <div className="w-12 h-12 rounded-full bg-emerald-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.7)]">
-                        <Play size={22} className="fill-white ml-0.5" />
-                      </div>
-                    </div>
-
-                    {/* Bottom: Title & stats */}
-                    <div className="relative z-10 space-y-1.5">
-                      <h3 className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-emerald-200 transition-colors drop-shadow-md">
-                        {item.title}
-                      </h3>
-
-                      <div className="flex items-center justify-between text-[11px] text-zinc-300 font-medium">
-                        <span className="truncate max-w-[100px] text-zinc-400">
-                          {item.channel}
+                      {/* Top row: Category tag & duration */}
+                      <div className="relative z-10 flex items-start justify-between gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/60 backdrop-blur-md border border-white/20 text-emerald-300">
+                          {primaryCat}
                         </span>
-                        <div className="flex items-center gap-1 text-emerald-400">
-                          <Eye size={12} />
-                          <span>{viewsStr}</span>
+
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-black/70 backdrop-blur-md text-zinc-300 border border-white/10">
+                          {item.duration || "00:59"}
+                        </span>
+                      </div>
+
+                      {/* Center: Play icon on hover */}
+                      <div className="relative z-10 flex items-center justify-center my-auto">
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.7)]">
+                          <Play size={22} className="fill-white ml-0.5" />
+                        </div>
+                      </div>
+
+                      {/* Bottom: Title & stats */}
+                      <div className="relative z-10 space-y-1.5">
+                        <h3 className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-emerald-200 transition-colors drop-shadow-md vignette-title">
+                          {item.title}
+                        </h3>
+
+                        <div className="flex items-center justify-between text-[11px] text-zinc-300 font-medium vignette-meta">
+                          <span className="truncate max-w-[100px] text-zinc-400 vignette-meta">
+                            {item.channel}
+                          </span>
+                          <div className="flex items-center gap-1 text-emerald-400 vignette-meta">
+                            <Eye size={12} className="vignette-meta" />
+                            <span className="vignette-meta">{viewsStr}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+
+              {/* Sentinelle pour chargement infini fluide */}
+              {visibleCount < filteredShorts.length && (
+                <div
+                  ref={sentinelRef}
+                  className="py-10 flex flex-col items-center justify-center gap-3 w-full"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredShorts.length))}
+                    className="px-6 py-2.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-xs font-bold text-zinc-200 hover:text-white border border-white/20 transition-all flex items-center gap-2 cursor-pointer shadow-xl hover:scale-105 active:scale-95"
+                  >
+                    <span>Afficher plus ({visibleCount} sur {filteredShorts.length})</span>
+                    <ChevronDown size={14} className="animate-bounce text-emerald-400" />
+                  </button>
+                  <p className="text-[11px] text-zinc-500 font-mono">
+                    Défilement automatique instantané • {filteredShorts.length - visibleCount} shorts restants
+                  </p>
+                </div>
+              )}
+            </>
           ) : (
             /* Empty State */
             <div className="py-20 text-center max-w-md mx-auto space-y-4">

@@ -35,7 +35,6 @@ export const minuteIslamRaw: [string, string, string][] = [
   ["FQ-fBfh4oDY", "Iran et Grand Israel, Mahdi et Mashia (fin des temps)", "Rappel et analyse documentaire approfondie par Minute Islam : « Iran et Grand Israel, Mahdi et Mashia (fin des temps) ». Un enseignement clair pour méditer et fortifier sa foi (13:11)."],
   ["eDR8LIihOZA", "J’ai Enquêté sur les ONG & Association internationale (vous n’êtes pas prêts)", "Enquête immersive sur le fonctionnement trouble de certaines grandes ONG et associations humanitaires internationales : où va réellement l'argent des dons ?"],
   ["6zm_ktPWG1Y", "J'ai Enquêté sur Les French Arabics (et c'est bien Plus Troublant Que Vous Ne Le Croyez..)", "Rappel et analyse documentaire approfondie par Minute Islam : « J'ai Enquêté sur Les French Arabics (et c'est bien Plus Troublant Que Vous Ne Le Croyez..) ». Un enseignement clair pour méditer et fortifier sa foi (22:15)."],
-  ["MlJ-tz6t4kc", "J'ai Enquêté sur EPSTEIN et son Obsession Secrète de L'islam", "Rappel et analyse documentaire approfondie par Minute Islam : « J'ai Enquêté sur EPSTEIN et son Obsession Secrète de L'islam ». Un enseignement clair pour méditer et fortifier sa foi (11:36)."],
   ["l25LowW5j-s", "J'ai Enquêté sur l'Horrible Imam de CNEWS (et c'était pas facile)", "Rappel et analyse documentaire approfondie par Minute Islam : « J'ai Enquêté sur l'Horrible Imam de CNEWS (et c'était pas facile) ». Un enseignement clair pour méditer et fortifier sa foi (10:23)."],
   ["eE0xruxZxUA", "Peu de Musulmans savent ce que cache réellement Baphomet & Le Temple Satanique", "Rappel et analyse documentaire approfondie par Minute Islam : « Peu de Musulmans savent ce que cache réellement Baphomet & Le Temple Satanique ». Un enseignement clair pour méditer et fortifier sa foi (10:07)."],
   ["L7S72BYjym0", "Personne ne s'attend à ÇA après sa M0rt", "Rappel et analyse documentaire approfondie par Minute Islam : « Personne ne s'attend à ÇA après sa M0rt ». Un enseignement clair pour méditer et fortifier sa foi (16:41)."],
@@ -111,7 +110,6 @@ export const minuteIslamRaw: [string, string, string][] = [
   ["fQbFAVYqPQ0", "ESSAYE DE RÉPONDRE À CES QUESTIONS", "Rappel et analyse documentaire approfondie par Minute Islam : « ESSAYE DE RÉPONDRE À CES QUESTIONS ». Un enseignement clair pour méditer et fortifier sa foi (10:19)."],
   ["HNQ611NodfY", "7 SECRETS DU DIABLE ! - LE MONDE INVISIBLE DES DJINNS", "Rappel et analyse documentaire approfondie par Minute Islam : « 7 SECRETS DU DIABLE ! - LE MONDE INVISIBLE DES DJINNS ». Un enseignement clair pour méditer et fortifier sa foi (10:08)."],
   ["2E21pRKtkmU", "LE DIABLE COMME SI TU LE VOYAIS - LE MONDE INVISIBLE DES DJINNS EP2", "Rappel et analyse documentaire approfondie par Minute Islam : « LE DIABLE COMME SI TU LE VOYAIS - LE MONDE INVISIBLE DES DJINNS EP2 ». Un enseignement clair pour méditer et fortifier sa foi (10:06)."],
-  ["RjKl2jWa9Eg", "CE QUE CACHENT LES ANIMÉS JAPONAIS (MANGA)", "Rappel et analyse documentaire approfondie par Minute Islam : « CE QUE CACHENT LES ANIMÉS JAPONAIS (MANGA) ». Un enseignement clair pour méditer et fortifier sa foi (10:00)."],
   ["iqmGNWRzArA", "ZAKAT AL MAAL - SAUVE DES VIES GRÂCE À CETTE ADORATION !", "Rappel et analyse documentaire approfondie par Minute Islam : « ZAKAT AL MAAL - SAUVE DES VIES GRÂCE À CETTE ADORATION ! ». Un enseignement clair pour méditer et fortifier sa foi (10:46)."],
   ["3RQ-9Q8-Vl4", "LES SOURATES PAR ORDRE DE REVELATION", "Rappel et analyse documentaire approfondie par Minute Islam : « LES SOURATES PAR ORDRE DE REVELATION ». Un enseignement clair pour méditer et fortifier sa foi (13:15)."]
 ];
@@ -295,14 +293,6 @@ export const minuteIslamMeta: Record<string, MinuteIslamMetaItem> = {
     cats: ["Histoire & Mystère"],
     year: 2025,
     duration: "22:15",
-    featured: false,
-    isNew: true,
-    isTrending: false
-  },
-  "MlJ-tz6t4kc": {
-    cats: ["Histoire & Mystère"],
-    year: 2025,
-    duration: "11:36",
     featured: false,
     isNew: true,
     isTrending: false
@@ -903,14 +893,6 @@ export const minuteIslamMeta: Record<string, MinuteIslamMetaItem> = {
     cats: ["Anges & Djinns"],
     year: 2025,
     duration: "10:06",
-    featured: false,
-    isNew: false,
-    isTrending: false
-  },
-  "RjKl2jWa9Eg": {
-    cats: ["Histoire & Mystère"],
-    year: 2025,
-    duration: "10:00",
     featured: false,
     isNew: false,
     isTrending: false

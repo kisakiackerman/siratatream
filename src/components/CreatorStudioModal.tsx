@@ -55,8 +55,12 @@ import {
   Zap,
   Bot,
   EyeOff,
+  BarChart3,
+  Globe,
+  Image as ImageIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { HERO_BANNER_PRESETS, getThematicFallbackBanner } from "@/lib/heroBanners";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useCreatorCatalog,
@@ -67,6 +71,8 @@ import { useVideoSuggestions, VideoSuggestion } from "@/hooks/useVideoSuggestion
 import { useCreatorMessages, CreatorMessage } from "@/hooks/useCreatorMessages";
 import { type ContentItem, type Category, type Channel } from "@/data/catalog";
 import { dinulQayyimaRaw, dinulQayyimaMeta } from "@/data/dinulQayyimaVideos";
+import CreatorStudioAnalyticsCharts from "@/components/CreatorStudioAnalyticsCharts";
+import AIGuardianStatusSection from "@/components/AIGuardianStatusSection";
 import {
   minuteIslamVideosOver10Min,
   minuteIslamTotalCount,
@@ -81,8 +87,10 @@ import {
   surLeCheminAlreadyInAppCount,
   surLeCheminNewOver10MinCount,
 } from "@/data/surLeCheminExport";
-import { exportYouTubeStatsToCSV, exportYouTubeStatsToJSON } from "@/lib/youtubeApi";
+import { savantsSunnahRaw, savantsSunnahMeta } from "@/data/savantsSunnahVideos";
+import { exportYouTubeStatsToCSV, exportYouTubeStatsToJSON, fetchYouTubeVideosBatch } from "@/lib/youtubeApi";
 import SponsorSegmentManager from "@/components/SponsorSegmentManager";
+import { saveLocalVideoFile, extractVideoMetadata } from "@/lib/videoStorage";
 
 interface CreatorStudioModalProps {
   onClose: () => void;
@@ -91,6 +99,8 @@ interface CreatorStudioModalProps {
 }
 
 type StudioTab =
+  | "dashboard"
+  | "ai-guardian"
   | "ai-studio"
   | "catalog-editor"
   | "ad-manager"
@@ -199,6 +209,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
   const [copiedDqLinks, setCopiedDqLinks] = useState(false);
   const [copiedMiLinks, setCopiedMiLinks] = useState(false);
   const [copiedSlcLinks, setCopiedSlcLinks] = useState(false);
+  const [copiedSsLinks, setCopiedSsLinks] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<ContentItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; id: string; title: string } | null>(null);
@@ -270,6 +281,85 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
   const [isAgentSyncing, setIsAgentSyncing] = useState(false);
   const [agentSyncMessage, setAgentSyncMessage] = useState<string | null>(null);
 
+  // Self-hosted local video file upload & direct stream states
+  const [isUploadingLocalVideo, setIsUploadingLocalVideo] = useState(false);
+  const [uploadProgressNotice, setUploadProgressNotice] = useState<string | null>(null);
+  const [showHostingGuide, setShowHostingGuide] = useState(false);
+
+  const handleLocalVideoUpload = async (file: File) => {
+    if (!file || !editingItem) return;
+    if (!file.type.startsWith("video/") && !file.name.match(/\.(mp4|webm|mov|mkv|m4v)$/i)) {
+      alert("Veuillez sélectionner un fichier vidéo valide (.mp4, .webm, .mov).");
+      return;
+    }
+
+    setIsUploadingLocalVideo(true);
+    setUploadProgressNotice("Traitement du fichier et extraction des métadonnées (durée, miniature)...");
+    try {
+      const videoId = editingItem.id || `direct_${Date.now()}`;
+      const localUrl = await saveLocalVideoFile(videoId, file);
+      const meta = await extractVideoMetadata(file);
+
+      setEditingItem((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          id: videoId,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, ""),
+          videoUrl: localUrl,
+          videoSourceType: "direct",
+          youtubeId: videoId,
+          duration: meta.durationFormatted || prev.duration || "10:00",
+          thumbnail: meta.thumbnail || prev.thumbnail,
+          image: meta.thumbnail || prev.image,
+          heroImage: meta.thumbnail || prev.heroImage,
+        };
+      });
+      setUploadProgressNotice(`Vidéo "${file.name}" importée avec succès ! (100% sans YouTube)`);
+      setTimeout(() => setUploadProgressNotice(null), 5000);
+    } catch (err: any) {
+      console.error("Erreur import vidéo locale:", err);
+      alert("Impossible de charger le fichier vidéo : " + (err?.message || "erreur inconnue"));
+    } finally {
+      setIsUploadingLocalVideo(false);
+    }
+  };
+
+  const [videoSourceTab, setVideoSourceTab] = useState<"youtube" | "direct">("youtube");
+  const [isFetchingYTMeta, setIsFetchingYTMeta] = useState(false);
+  const [ytFetchNotice, setYtFetchNotice] = useState<string | null>(null);
+
+  const handleFetchYouTubeMeta = async (ytId: string) => {
+    if (!ytId) return;
+    setIsFetchingYTMeta(true);
+    setYtFetchNotice("Récupération des métadonnées de la vidéo YouTube...");
+    try {
+      const res = await fetchYouTubeVideosBatch([ytId]);
+      const data = res[0];
+      if (data && editingItem) {
+        setEditingItem({
+          ...editingItem,
+          title: editingItem.title || data.title,
+          description: editingItem.description || data.description,
+          duration: data.duration || editingItem.duration || "15:00",
+          thumbnail: data.thumbnail || editingItem.thumbnail,
+          image: data.thumbnail || editingItem.image,
+          heroImage: data.thumbnail || editingItem.heroImage,
+        });
+        setYtFetchNotice(`Métadonnées de "${data.title}" importées !`);
+        setTimeout(() => setYtFetchNotice(null), 4000);
+      } else {
+        setYtFetchNotice("Lien YouTube détecté et prêt.");
+        setTimeout(() => setYtFetchNotice(null), 3000);
+      }
+    } catch {
+      setYtFetchNotice("Vidéo YouTube enregistrée.");
+      setTimeout(() => setYtFetchNotice(null), 2500);
+    } finally {
+      setIsFetchingYTMeta(false);
+    }
+  };
+
   const fetchAgentStatus = async () => {
     try {
       const res = await fetch("/api/agent/status");
@@ -325,14 +415,28 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
       const parts = clean.includes("dai.ly/") ? clean.split("dai.ly/") : clean.split("video/");
       return { videoId: parts[1]?.split("?")[0] || clean, videoUrl: clean, type: "dailymotion" };
     }
-    if (clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.startsWith("blob:") || (clean.startsWith("http") && !clean.includes("youtu") && !clean.includes("vimeo"))) {
+    if (
+      clean.endsWith(".mp4") ||
+      clean.endsWith(".webm") ||
+      clean.endsWith(".mov") ||
+      clean.endsWith(".m3u8") ||
+      clean.startsWith("blob:") ||
+      clean.includes("b-cdn.net") ||
+      clean.includes("cloudflarestream.com") ||
+      clean.includes("videodelivery.net") ||
+      clean.includes("firebasestorage.googleapis.com") ||
+      clean.includes("storage.googleapis.com") ||
+      (clean.startsWith("http") && !clean.includes("youtu") && !clean.includes("vimeo") && !clean.includes("dailymotion"))
+    ) {
       return { videoId: `direct_${Date.now()}`, videoUrl: clean, type: "direct" };
     }
     if (clean.includes("youtube.com/watch?v=")) {
-      return { videoId: clean.split("v=")[1]?.split("&")[0] || clean, type: "youtube" };
+      const id = clean.split("v=")[1]?.split("&")[0];
+      return { videoId: id || clean, type: "youtube" };
     }
     if (clean.includes("youtu.be/")) {
-      return { videoId: clean.split("youtu.be/")[1]?.split("?")[0] || clean, type: "youtube" };
+      const id = clean.split("youtu.be/")[1]?.split("?")[0];
+      return { videoId: id || clean, type: "youtube" };
     }
     return { videoId: clean, type: "youtube" };
   };
@@ -372,6 +476,38 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
     }
     return spotlightItem;
   }, [previewItemId, catalog, spotlightItem]);
+
+  // Metrics for CreatorStudio Dashboard
+  const dashboardStats = useMemo(() => {
+    const totalVideos = catalog.length;
+    
+    // Unique channels count from active catalog items and customChannels
+    const catalogChannels = new Set<string>(catalog.map((v) => v.channel).filter(Boolean));
+    customChannels.forEach((c) => {
+      if (c.name) catalogChannels.add(c.name);
+    });
+    const totalChannels = catalogChannels.size;
+
+    // Metadata storage volume estimation (JSON serialized payload size)
+    const catalogJson = JSON.stringify(catalog);
+    const customItemsJson = JSON.stringify(customItems);
+    const channelsJson = JSON.stringify(customChannels);
+    const categoriesJson = JSON.stringify(customCategories);
+    const deletedJson = JSON.stringify(deletedVideoIds);
+    const totalBytes = new Blob([catalogJson, customItemsJson, channelsJson, categoriesJson, deletedJson]).size;
+
+    const formattedStorage =
+      totalBytes >= 1024 * 1024
+        ? (totalBytes / (1024 * 1024)).toFixed(2) + ' Mo'
+        : (totalBytes / 1024).toFixed(1) + ' Ko';
+
+    return {
+      totalVideos,
+      totalChannels,
+      totalBytes,
+      formattedStorage,
+    };
+  }, [catalog, customChannels, customItems, customCategories, deletedVideoIds]);
 
   // AI Studio Generation Action
   const handleAIGenerate = async (customPrompt?: string) => {
@@ -652,6 +788,32 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Quick Metrics Badge */}
+            <div
+              onClick={() => setActiveTab("dashboard")}
+              role="button"
+              tabIndex={0}
+              className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-full liquid-glass border border-white/15 text-[11px] text-zinc-300 hover:border-amber-400/40 hover:text-white transition-all cursor-pointer shadow-sm"
+              title="Ouvrir le Tableau de bord des métadonnées"
+            >
+              <div className="flex items-center gap-1.5">
+                <Film size={13} className="text-amber-400" />
+                <span className="font-bold text-white">{dashboardStats.totalVideos}</span>
+                <span className="text-zinc-400 text-[10px]">vidéos</span>
+              </div>
+              <span className="w-1 h-1 rounded-full bg-white/20" />
+              <div className="flex items-center gap-1.5">
+                <Tv size={13} className="text-blue-400" />
+                <span className="font-bold text-white">{dashboardStats.totalChannels}</span>
+                <span className="text-zinc-400 text-[10px]">chaînes</span>
+              </div>
+              <span className="w-1 h-1 rounded-full bg-white/20" />
+              <div className="flex items-center gap-1.5">
+                <Database size={13} className="text-emerald-400" />
+                <span className="font-bold text-emerald-300 font-mono">{dashboardStats.formattedStorage}</span>
+              </div>
+            </div>
+
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full liquid-glass border border-white/15 text-[11px] text-zinc-300 font-mono">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>AI Studio Sandbox Ready</span>
@@ -669,6 +831,33 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
 
         {/* Navigation Tabs */}
         <div className="px-6 border-b border-white/10 bg-black/30 backdrop-blur-md flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none py-2">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex items-center gap-2 py-1.5 px-3.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap ${
+              activeTab === "dashboard"
+                ? "liquid-glass text-amber-300 border border-amber-400/40 font-bold shadow-md"
+                : "liquid-glass text-zinc-400 hover:text-white hover:bg-white/10 border border-white/10"
+            }`}
+          >
+            <BarChart3 size={15} className={activeTab === "dashboard" ? "text-amber-300" : "text-zinc-400"} />
+            <span>Tableau de bord</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("ai-guardian")}
+            className={`flex items-center gap-2 py-1.5 px-3.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap ${
+              activeTab === "ai-guardian"
+                ? "liquid-glass-emerald text-emerald-300 border border-emerald-400/50 font-bold shadow-lg"
+                : "liquid-glass text-zinc-400 hover:text-white hover:bg-white/10 border border-white/10"
+            }`}
+          >
+            <ShieldCheck size={15} className={activeTab === "ai-guardian" ? "text-emerald-300" : "text-zinc-400"} />
+            <span>IA Gardienne Globale</span>
+            <span className="px-1.5 py-0.2 bg-emerald-500/25 text-emerald-300 rounded-full text-[9px] font-extrabold border border-emerald-400/30">
+              RÉSEAU MULTI-IP
+            </span>
+          </button>
+
           <button
             onClick={() => setActiveTab("ai-studio")}
             className={`flex items-center gap-2 py-1.5 px-3.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap ${
@@ -811,6 +1000,281 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
 
         {/* Tab Contents Area */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {/* TAB 0: TABLEAU DE BORD (MÉTRIQUES DU CATALOGUE) */}
+          {activeTab === "dashboard" && (
+            <div className="max-w-6xl mx-auto space-y-6">
+              {/* Header Banner */}
+              <div className="p-6 rounded-3xl liquid-glass-card border border-white/15 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shadow-sm">
+                      <BarChart3 size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white tracking-wide">
+                        Tableau de bord du Catalogue &amp; Stockage
+                      </h3>
+                      <p className="text-xs text-zinc-400">
+                        Vue d'ensemble des index, des sources vérifiées et de l'empreinte mémoire des métadonnées
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-stretch md:self-auto">
+                  <button
+                    onClick={() => setActiveTab("catalog-editor")}
+                    className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl liquid-glass border border-white/15 text-xs font-semibold text-zinc-200 hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    <Edit3 size={14} />
+                    <span>Gérer le catalogue</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("cloud-sync")}
+                    className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 text-xs font-semibold text-amber-200 transition-all"
+                  >
+                    <UploadCloud size={14} />
+                    <span>Sauvegarde &amp; Export</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Bannière d'accès direct à l'IA Gardienne Globale Multi-Comptes */}
+              <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-950/60 via-zinc-900/95 to-zinc-950 border border-emerald-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.25)]">
+                    <ShieldCheck size={26} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm sm:text-base font-extrabold text-white">
+                        IA Gardienne : Balayage Réseau Multi-Comptes &amp; Adresses IP
+                      </h4>
+                      <span className="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 font-bold">
+                        100% Opérationnel
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-300 mt-1">
+                      Parcourt toutes les sessions ouvertes, adresses IP et comptes (Google, Apple, Invités) pour identifier et effacer toutes les erreurs.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab("ai-guardian")}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-black flex items-center gap-2 transition-all shadow-md self-stretch sm:self-auto justify-center shrink-0"
+                >
+                  <Globe size={15} />
+                  <span>Ouvrir l'IA Gardienne</span>
+                </button>
+              </div>
+
+              {/* Core KPI Metrics Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* Metric 1: Total Videos Traitées */}
+                <div className="p-6 rounded-3xl liquid-glass-card border border-white/15 relative overflow-hidden shadow-lg group hover:border-amber-400/30 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      Vidéos Traitées
+                    </span>
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-400/25 flex items-center justify-center text-amber-300">
+                      <Film size={20} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-4xl font-extrabold text-white tracking-tight font-mono">
+                      {dashboardStats.totalVideos.toLocaleString()}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1.5 flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-400" />
+                      <span>{customItems.length} vidéo(s) personnalisée(s)</span>
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>Conformes &amp; approuvées</span>
+                    <span className="font-mono text-emerald-400 font-semibold">100% Islamique</span>
+                  </div>
+                </div>
+
+                {/* Metric 2: Chaînes Indexées */}
+                <div className="p-6 rounded-3xl liquid-glass-card border border-white/15 relative overflow-hidden shadow-lg group hover:border-blue-400/30 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      Chaînes Indexées
+                    </span>
+                    <div className="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-400/25 flex items-center justify-center text-blue-300">
+                      <Tv size={20} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-4xl font-extrabold text-white tracking-tight font-mono">
+                      {dashboardStats.totalChannels.toLocaleString()}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1.5 flex items-center gap-1.5">
+                      <Users size={13} className="text-blue-400" />
+                      <span>{customChannels.length} chaîne(s) ajoutée(s) manuellement</span>
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>Sources du catalogue</span>
+                    <button
+                      onClick={() => setActiveTab("categories-channels")}
+                      className="text-blue-300 hover:text-blue-200 font-semibold flex items-center gap-1"
+                    >
+                      <span>Voir la liste</span>
+                      <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metric 3: Volume de Stockage des Métadonnées */}
+                <div className="p-6 rounded-3xl liquid-glass-card border border-white/15 relative overflow-hidden shadow-lg group hover:border-emerald-400/30 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      Stockage Métadonnées
+                    </span>
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-400/25 flex items-center justify-center text-emerald-300">
+                      <Database size={20} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-4xl font-extrabold text-emerald-300 tracking-tight font-mono">
+                      {dashboardStats.formattedStorage}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1.5 flex items-center gap-1.5 font-mono">
+                      <span className="text-zinc-500">Taille brute :</span>
+                      <span className="text-zinc-300">{dashboardStats.totalBytes.toLocaleString()} octets</span>
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-zinc-400">
+                    <span>Local &amp; Synchro Cloud</span>
+                    <span className="font-mono text-emerald-400 font-semibold">Optimisé</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Recharts Visualizations: Category Distribution & Catalog Growth */}
+              <CreatorStudioAnalyticsCharts catalog={catalog} />
+
+              {/* Breakdown Cards: Categories & Channels Overview */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Channels Breakdown */}
+                <div className="p-6 rounded-3xl liquid-glass-card border border-white/15 space-y-4 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Tv size={16} className="text-blue-400" />
+                      <h4 className="text-sm font-bold text-white">Top Chaînes Indexées</h4>
+                    </div>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      {dashboardStats.totalChannels} chaînes actives
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+                    {Array.from(
+                      catalog.reduce((acc, item) => {
+                        acc.set(item.channel, (acc.get(item.channel) || 0) + 1);
+                        return acc;
+                      }, new Map<string, number>())
+                    )
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 8)
+                      .map(([channelName, count]) => {
+                        const pct = Math.round((count / (catalog.length || 1)) * 100);
+                        return (
+                          <div
+                            key={channelName}
+                            className="p-3 rounded-2xl liquid-glass border border-white/10 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-7 h-7 rounded-xl bg-white/10 flex items-center justify-center font-bold text-white text-xs shrink-0">
+                                {channelName.slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="truncate">
+                                <p className="font-semibold text-white truncate">{channelName}</p>
+                                <p className="text-[10px] text-zinc-400 font-mono">{pct}% du catalogue</p>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full font-mono text-[11px] font-bold bg-white/10 text-zinc-200 shrink-0">
+                              {count} vidéo{count > 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Storage & Integrity Breakdown */}
+                <div className="p-6 rounded-3xl liquid-glass-card border border-white/15 space-y-4 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Database size={16} className="text-emerald-400" />
+                      <h4 className="text-sm font-bold text-white">Détail du Volume Mémoire</h4>
+                    </div>
+                    <span className="text-[11px] text-emerald-300 font-mono font-bold">
+                      {dashboardStats.formattedStorage}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 text-xs text-zinc-300">
+                    <div className="p-3 rounded-2xl liquid-glass border border-white/10 flex items-center justify-between">
+                      <span className="text-zinc-400">Catalogue principal ({catalog.length} entrées)</span>
+                      <span className="font-mono font-semibold text-white">
+                        {(new Blob([JSON.stringify(catalog)]).size / 1024).toFixed(1)} Ko
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-2xl liquid-glass border border-white/10 flex items-center justify-between">
+                      <span className="text-zinc-400">Vidéos personnalisées ({customItems.length} entrées)</span>
+                      <span className="font-mono font-semibold text-white">
+                        {(new Blob([JSON.stringify(customItems)]).size / 1024).toFixed(1)} Ko
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-2xl liquid-glass border border-white/10 flex items-center justify-between">
+                      <span className="text-zinc-400">Chaînes personnalisées ({customChannels.length} entrées)</span>
+                      <span className="font-mono font-semibold text-white">
+                        {(new Blob([JSON.stringify(customChannels)]).size / 1024).toFixed(1)} Ko
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-2xl liquid-glass border border-white/10 flex items-center justify-between">
+                      <span className="text-zinc-400">Catégories &amp; exclusions ({deletedVideoIds.length} masquées)</span>
+                      <span className="font-mono font-semibold text-white">
+                        {(new Blob([JSON.stringify(deletedVideoIds)]).size / 1024).toFixed(1)} Ko
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between text-[11px] text-zinc-400 border-t border-white/10">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck size={14} className="text-emerald-400" />
+                      <span>Conformité stricte islamique active</span>
+                    </span>
+                    <button
+                      onClick={() => setActiveTab("cloud-sync")}
+                      className="text-amber-300 hover:text-amber-200 font-semibold"
+                    >
+                      Exporter les données
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: IA GARDIENNE GLOBALE (MULTI-COMPTES & RÉSEAU D'ADRESSES IP) */}
+          {activeTab === "ai-guardian" && (
+            <div className="max-w-6xl mx-auto space-y-6">
+              <AIGuardianStatusSection embeddedInCreatorStudio={true} />
+            </div>
+          )}
+
           {/* TAB 1: ASSISTANT IA STUDIO (AVEC LECTEUR VIDÉO INTÉGRÉ) */}
           {activeTab === "ai-studio" && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto items-start">
@@ -958,7 +1422,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                         />
                       ) : (
                         <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${aiGeneratedItem.youtubeId || "Xs26kdKEwlg"}?autoplay=0&rel=0&modestbranding=1&enablejsapi=1`}
+                          src={`https://www.youtube-nocookie.com/embed/${aiGeneratedItem.youtubeId || "Xs26kdKEwlg"}?autoplay=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${aiGeneratedItem.youtubeId || "Xs26kdKEwlg"}&enablejsapi=1`}
                           className="w-full h-full border-0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                           allowFullScreen
@@ -1117,6 +1581,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                   <button
                     onClick={() => {
                       setIsNewItemMode(true);
+                      setVideoSourceTab("youtube");
                       setEditingItem({
                         id: `custom-${Date.now()}`,
                         title: "",
@@ -1214,12 +1679,25 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                           >
                             <DownloadCloud size={14} />
                           </button>
+
+                          <button
+                            onClick={() => setSpotlightId(isSpotlight ? null : item.id)}
+                            className={`p-2 rounded-xl liquid-glass border text-xs transition-all shadow-sm ${
+                              isSpotlight
+                                ? "bg-amber-500/20 border-amber-400/40 text-amber-300"
+                                : "hover:bg-white/15 border-white/15 text-zinc-400 hover:text-amber-300"
+                            }`}
+                            title={isSpotlight ? "Retirer de la une (Hero)" : "Mettre à la une (Hero de l'accueil)"}
+                          >
+                            <Star size={14} className={isSpotlight ? "fill-current" : ""} />
+                          </button>
                         </div>
 
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => {
                               setEditingItem(item);
+                              setVideoSourceTab(item.videoSourceType === "direct" ? "direct" : "youtube");
                               setIsNewItemMode(false);
                             }}
                             className="p-2 rounded-xl liquid-glass hover:bg-white/15 border border-white/15 text-zinc-300 hover:text-white transition-all shadow-sm"
@@ -1501,7 +1979,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                         />
                       ) : (
                         <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${currentPreviewItem.youtubeId || "Xs26kdKEwlg"}?autoplay=0&rel=0&modestbranding=1`}
+                          src={`https://www.youtube-nocookie.com/embed/${currentPreviewItem.youtubeId || "Xs26kdKEwlg"}?autoplay=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${currentPreviewItem.youtubeId || "Xs26kdKEwlg"}`}
                           className="w-full h-full border-0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
@@ -2494,6 +2972,113 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                 </div>
               </div>
 
+              {/* Export Dédié Les Savants de la Sunnah (@SavantsSunnah) avec Exception Officielle */}
+              <div className="bg-emerald-950/20 p-6 rounded-3xl border border-emerald-500/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-white text-base flex items-center gap-2">
+                      <span className="text-emerald-400">💎</span> Export Chaîne : Les Savants de la Sunnah (@SavantsSunnah)
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Intégralité des <strong>{savantsSunnahRaw.length} rappels, fatwas et sagesses</strong> des grands savants de l'Islam (Cheikh Al-Rouhayli, Cheikh Al-Badr, Cheikh Al-Fawzân, etc.).
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-emerald-900/60 text-emerald-300 text-xs font-semibold border border-emerald-500/50 flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-400" />
+                      Exception accordée : Formats courts autorisés (&lt; 10 min)
+                    </span>
+                    <span className="px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 text-xs font-bold border border-emerald-800">
+                      {savantsSunnahRaw.length} vidéos actives
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    onClick={() => {
+                      const data = savantsSunnahRaw.map(([id, title, desc]) => {
+                        const meta = savantsSunnahMeta[id] || {};
+                        return {
+                          id,
+                          url: `https://www.youtube.com/watch?v=${id}`,
+                          title,
+                          duration: meta.duration || "—",
+                          categories: meta.categories || ["Savants & Sunnah"],
+                          description: desc,
+                        };
+                      });
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `savants_sunnah_videos_export_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-950/50"
+                  >
+                    <DownloadCloud size={16} />
+                    <span>Télécharger Export JSON ({savantsSunnahRaw.length} vidéos)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const headers = ["ID YouTube", "Titre", "Duree", "Lien_YouTube", "Categories", "Description"];
+                      const rows = savantsSunnahRaw.map(([id, title, desc]) => {
+                        const meta = savantsSunnahMeta[id] || {};
+                        return [
+                          `"${id}"`,
+                          `"${title.replace(/"/g, '""')}"`,
+                          `"${meta.duration || ""}"`,
+                          `"https://www.youtube.com/watch?v=${id}"`,
+                          `"${(meta.categories || []).join(", ")}"`,
+                          `"${desc.replace(/"/g, '""')}"`,
+                        ].join(";");
+                      });
+                      const csvContent = "\uFEFF" + [headers.join(";"), ...rows].join("\n");
+                      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `savants_sunnah_videos_export_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all"
+                  >
+                    <FileDown size={16} />
+                    <span>Télécharger Tableau CSV (Excel)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const urls = savantsSunnahRaw
+                        .map(([id, title]) => {
+                          const meta = savantsSunnahMeta[id];
+                          return `https://www.youtube.com/watch?v=${id} — ${title} (${meta?.duration || "—"})`;
+                        })
+                        .join("\n");
+                      navigator.clipboard.writeText(urls);
+                      setCopiedSsLinks(true);
+                      setTimeout(() => setCopiedSsLinks(false), 2500);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                      copiedSsLinks
+                        ? "bg-emerald-900/60 text-emerald-300 border-emerald-500"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700"
+                    }`}
+                  >
+                    {copiedSsLinks ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                    <span>
+                      {copiedSsLinks
+                        ? `${savantsSunnahRaw.length} Liens Copiés !`
+                        : `Copier les ${savantsSunnahRaw.length} Liens YouTube`}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               <div className="bg-zinc-900/80 p-6 rounded-3xl border border-zinc-800 space-y-4">
                 <h3 className="font-bold text-white text-base">Sauvegarde &amp; Export Global</h3>
                 <p className="text-xs text-zinc-400">
@@ -2566,26 +3151,269 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-zinc-300 font-semibold">
-                    Lien Vidéo (YouTube, URL MP4 directe, Vimeo, Dailymotion) *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="https://www.youtube.com/watch?v=... ou https://.../video.mp4"
-                    value={editingItem.videoUrl || editingItem.youtubeId || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const parsed = extractVideoInfo(val);
-                      setEditingItem({
-                        ...editingItem,
-                        youtubeId: parsed.videoId,
-                        videoUrl: parsed.videoUrl || val,
-                        videoSourceType: parsed.type,
-                      });
-                    }}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white"
-                  />
+                {/* Choix de la Source Vidéo : YouTube OU Fichier Direct / Local */}
+                <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-200 font-bold text-xs flex items-center gap-2">
+                      <Video size={15} className="text-amber-400" />
+                      <span>Source de la vidéo</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {videoSourceTab === "youtube" ? "Intégration YouTube" : "Hébergement direct sans YouTube"}
+                    </span>
+                  </div>
+
+                  {/* Boutons Sélecteurs de Source */}
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 rounded-xl border border-zinc-800/80">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoSourceTab("youtube");
+                        if (editingItem.videoSourceType === "direct") {
+                          setEditingItem({
+                            ...editingItem,
+                            videoSourceType: "youtube",
+                          });
+                        }
+                      }}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                        videoSourceTab === "youtube"
+                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      <Tv size={14} className={videoSourceTab === "youtube" ? "text-rose-400" : "text-zinc-500"} />
+                      <span>Importer une Vidéo YouTube</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setVideoSourceTab("direct")}
+                      className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                        videoSourceTab === "direct"
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      <UploadCloud size={14} className={videoSourceTab === "direct" ? "text-emerald-400" : "text-zinc-500"} />
+                      <span>Fichier direct / Sans YouTube</span>
+                    </button>
+                  </div>
+
+                  {/* Mode 1 : Importation YouTube */}
+                  {videoSourceTab === "youtube" && (
+                    <div className="space-y-2.5 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-zinc-300 font-semibold text-[11px]">
+                          Lien ou ID de la vidéo YouTube *
+                        </label>
+                        <span className="text-[10px] text-zinc-400">
+                          Lecteur personnalisé avec suggestions bloquées
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="https://www.youtube.com/watch?v=... ou https://youtu.be/... ou ID (ex: Xs26kdKEwlg)"
+                          value={editingItem.youtubeId || editingItem.videoUrl || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const parsed = extractVideoInfo(val);
+                            setEditingItem({
+                              ...editingItem,
+                              youtubeId: parsed.videoId,
+                              videoUrl: parsed.type === "youtube" ? `https://www.youtube.com/watch?v=${parsed.videoId}` : (parsed.videoUrl || val),
+                              videoSourceType: "youtube",
+                            });
+                          }}
+                          className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 font-mono"
+                        />
+
+                        {editingItem.youtubeId && (
+                          <button
+                            type="button"
+                            disabled={isFetchingYTMeta}
+                            onClick={() => handleFetchYouTubeMeta(editingItem.youtubeId)}
+                            className="px-3 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-amber-200 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5"
+                            title="Récupérer le titre, la durée et la miniature YouTube"
+                          >
+                            {isFetchingYTMeta ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : (
+                              <Sparkles size={13} />
+                            )}
+                            <span>Auto-remplir</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {ytFetchNotice && (
+                        <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-center gap-1.5">
+                          <CheckCircle2 size={13} className="text-rose-400 shrink-0" />
+                          <span>{ytFetchNotice}</span>
+                        </div>
+                      )}
+
+                      {editingItem.youtubeId && (
+                        <div className="flex items-center gap-3 p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                          <img
+                            src={`https://i.ytimg.com/vi/${editingItem.youtubeId}/mqdefault.jpg`}
+                            alt="Miniature YouTube"
+                            className="w-16 h-10 object-cover rounded-lg bg-zinc-900 border border-zinc-800"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                          <div className="text-[11px] text-zinc-400">
+                            <span className="font-semibold text-zinc-200">ID détecté : </span>
+                            <code className="text-amber-300">{editingItem.youtubeId}</code>
+                            <p className="text-[10px] text-emerald-400/90 mt-0.5">
+                              ✓ Vidéo prête à être intégrée au catalogue
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mode 2 : Fichier Local ou URL Directe (Sans YouTube) */}
+                  {videoSourceTab === "direct" && (
+                    <div className="space-y-3 pt-1">
+                      {/* Drag and drop / File upload zone */}
+                      <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const file = e.dataTransfer.files?.[0];
+                          if (file) handleLocalVideoUpload(file);
+                        }}
+                        className="relative border-2 border-dashed border-zinc-700/80 hover:border-emerald-500/60 rounded-2xl p-4 text-center transition-all bg-zinc-950/50 hover:bg-emerald-950/10 cursor-pointer group"
+                      >
+                        <input
+                          type="file"
+                          accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.mov,.mkv,.m4v"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleLocalVideoUpload(file);
+                          }}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                          disabled={isUploadingLocalVideo}
+                        />
+
+                        <div className="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                          {isUploadingLocalVideo ? (
+                            <>
+                              <Loader2 size={24} className="text-emerald-400 animate-spin" />
+                              <span className="text-xs font-semibold text-emerald-300">
+                                Importation et analyse du fichier en cours...
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <UploadCloud size={20} />
+                              </div>
+                              <span className="text-xs font-semibold text-zinc-200">
+                                Glissez-déposez votre vidéo ici, ou{" "}
+                                <span className="text-emerald-400 underline">parcourez vos fichiers</span>
+                              </span>
+                              <span className="text-[10px] text-zinc-400">
+                                Formats acceptés : MP4, WebM, MOV, MKV (Lecture directe dans l'app)
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Upload progress or success banner */}
+                      {uploadProgressNotice && (
+                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-2">
+                          <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+                          <span>{uploadProgressNotice}</span>
+                        </div>
+                      )}
+
+                      {/* Or Direct URL Input */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-zinc-300 font-semibold text-[11px]">
+                            Ou entrez une URL directe (Cloudflare R2, Bunny.net, Firebase Storage, MP4) :
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowHostingGuide(!showHostingGuide)}
+                            className="text-[10px] text-emerald-400 hover:text-emerald-300 underline flex items-center gap-1"
+                          >
+                            <HelpCircle size={11} />
+                            <span>{showHostingGuide ? "Masquer le guide" : "Où héberger sans YouTube ?"}</span>
+                          </button>
+                        </div>
+
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="https://votre-cdn.com/video.mp4 ou https://.../stream.m3u8"
+                            value={editingItem.videoUrl || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const parsed = extractVideoInfo(val);
+                              setEditingItem({
+                                ...editingItem,
+                                youtubeId: parsed.videoId,
+                                videoUrl: parsed.videoUrl || val,
+                                videoSourceType: "direct",
+                              });
+                            }}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 font-mono"
+                          />
+                          {editingItem.videoSourceType === "direct" && (
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                              <Check size={11} />
+                              <span>Direct MP4</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Collapsible Cloud Hosting Guide */}
+                      {showHostingGuide && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5 text-[11px] text-zinc-300"
+                        >
+                          <div className="font-bold text-white flex items-center gap-1.5 text-xs">
+                            <span>🚀 Les meilleures solutions pour héberger sans YouTube :</span>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800/80">
+                              <span className="font-bold text-emerald-400">1. Bunny.net Stream (Recommandé) :</span>
+                              <p className="text-zinc-400 mt-0.5">
+                                La solution la plus simple et économique (~0,005 $/Go). Vous uploadez vos vidéos, activez la lecture directe et collez le lien du flux dans le champ ci-dessus.
+                              </p>
+                            </div>
+                            <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800/80">
+                              <span className="font-bold text-amber-400">2. Cloudflare R2 / Cloudflare Stream :</span>
+                              <p className="text-zinc-400 mt-0.5">
+                                Zéro frais de bande passante (egress gratuit). Idéal pour stocker vos fichiers .mp4 et les distribuer à haute vitesse dans le monde entier.
+                              </p>
+                            </div>
+                            <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800/80">
+                              <span className="font-bold text-blue-400">3. Firebase Storage / Google Cloud Storage :</span>
+                              <p className="text-zinc-400 mt-0.5">
+                                Déposez votre vidéo dans un bucket de stockage public et collez le lien de téléchargement direct.
+                              </p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -2629,6 +3457,93 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                {/* Section Bannière Hero 16:9 */}
+                <div className="space-y-2.5 p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-200 font-bold text-xs flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-emerald-400" />
+                      <span>Bannière Hero 16:9 (Affichage grand format / À la une)</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {editingItem.heroImage ? "Visuel personnalisé" : "Auto (Ambiance thématique)"}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400">
+                    Attribuez une bannière 16:9 haute résolution pour sublimer cette vidéo si elle n'a pas de visuel hero ou si sa miniature est en 4:3.
+                  </p>
+
+                  {/* Aperçu */}
+                  <div className="relative h-28 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800">
+                    <img
+                      src={
+                        editingItem.heroImage ||
+                        editingItem.image ||
+                        (editingItem.youtubeId
+                          ? `https://i.ytimg.com/vi/${editingItem.youtubeId}/maxresdefault.jpg`
+                          : getThematicFallbackBanner(editingItem))
+                      }
+                      alt="Aperçu Hero"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = getThematicFallbackBanner(editingItem);
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent" />
+                    <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[11px] text-white font-medium">
+                      <span className="truncate max-w-[70%]">{editingItem.title || "Titre de la vidéo"}</span>
+                      <span className="text-[10px] text-emerald-300 bg-zinc-950/70 px-2 py-0.5 rounded-full border border-emerald-400/30 shrink-0">
+                        16:9 Widescreen
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Input URL */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="URL de l'image Hero 16:9 (laisser vide pour détection automatique)"
+                      value={editingItem.heroImage || ""}
+                      onChange={(e) => setEditingItem({ ...editingItem, heroImage: e.target.value })}
+                      className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                    {editingItem.heroImage && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingItem({ ...editingItem, heroImage: undefined })}
+                        className="px-2.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs"
+                        title="Réinitialiser en mode automatique"
+                      >
+                        Auto
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sélecteur de présets thématiques en 1 clic */}
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">
+                      Bannières thématiques 16:9 immersives (1 clic) :
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {HERO_BANNER_PRESETS.slice(0, 4).map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => setEditingItem({ ...editingItem, heroImage: preset.url })}
+                          className={`p-1.5 rounded-xl border text-left transition-all text-[10px] flex flex-col gap-0.5 ${
+                            editingItem.heroImage === preset.url
+                              ? "border-emerald-400 bg-emerald-500/15 text-emerald-200"
+                              : "border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300"
+                          }`}
+                        >
+                          <span className="font-bold truncate">{preset.name}</span>
+                          <span className="text-[9px] text-zinc-400 truncate">{preset.categoryHint}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -2875,7 +3790,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                   <video src={testVideoItem.videoUrl} controls autoPlay className="w-full h-full object-contain" />
                 ) : (
                   <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${testVideoItem.youtubeId || "Xs26kdKEwlg"}?autoplay=1&rel=0`}
+                    src={`https://www.youtube-nocookie.com/embed/${testVideoItem.youtubeId || "Xs26kdKEwlg"}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${testVideoItem.youtubeId || "Xs26kdKEwlg"}`}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen

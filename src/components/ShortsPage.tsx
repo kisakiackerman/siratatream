@@ -11,10 +11,12 @@ import {
   Sparkles,
   LayoutGrid,
   Mic,
+  Smile,
+  Dices,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { type ContentItem, type Category } from "@/data/catalog";
-import { allShortsList } from "@/data/shortsCatalog";
+import { allShortsList, isComedyShort } from "@/data/shortsCatalog";
 import { ShortVideoCard } from "@/components/ShortVideoCard";
 import ShortsCatalogPage from "@/components/ShortsCatalogPage";
 
@@ -25,7 +27,8 @@ type ShortsPageProps = {
 };
 
 const CATEGORY_FILTERS: { id: string; label: string }[] = [
-  { id: "all", label: "Tous les Shorts" },
+  { id: "all", label: "Tous les Quick Plays" },
+  { id: "comedy", label: "Pour rire & Stand-ups" },
   { id: "Coran", label: "Coran" },
   { id: "Prophètes", label: "Prophètes" },
   { id: "Miracles du Coran", label: "Miracles" },
@@ -47,9 +50,12 @@ export default function ShortsPage({
   const [showFilters, setShowFilters] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
 
-  // Filtered list of shorts
+  // Filtered list of shorts including dedicated comedy / fast laughs
   const items = useMemo(() => {
     if (selectedCategory === "all") return allShortsList;
+    if (selectedCategory === "comedy") {
+      return allShortsList.filter((item) => isComedyShort(item));
+    }
     return allShortsList.filter((item) =>
       item.categories.includes(selectedCategory as Category)
     );
@@ -247,14 +253,52 @@ export default function ShortsPage({
           </button>
         </div>
 
-        {/* Center: Branding & Short label with Liquid Glass */}
-        <div className="pointer-events-auto hidden md:flex items-center gap-2 bg-white/[0.12] border border-white/30 px-4 py-1.5 rounded-full backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_8px_32px_rgba(0,0,0,0.5)]">
+        {/* Center: Quick Plays / Pour rire branding with Liquid Glass */}
+        <div className="pointer-events-auto hidden md:flex items-center gap-2 bg-white/[0.12] border border-white/30 px-3.5 py-1.5 rounded-full backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_8px_32px_rgba(0,0,0,0.5)]">
           <Zap size={14} className="text-emerald-400 fill-emerald-400" />
-          <span className="font-extrabold text-xs tracking-wider uppercase text-white">Short</span>
+          <span className="font-extrabold text-xs tracking-wider uppercase text-white">Quick Plays</span>
+          <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full font-bold border border-emerald-400/30">
+            Flux TikTok
+          </span>
         </div>
 
-        {/* Right: Counter badge & Mute status toggle with Liquid Glass */}
+        {/* Right: Quick actions, Counter badge & Mute status toggle with Liquid Glass */}
         <div className="pointer-events-auto flex items-center gap-2">
+          {/* Bouton rapide "Trouver une idée" (Aléatoire) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (items.length <= 1) return;
+              const nextIdx = Math.floor(Math.random() * items.length);
+              setActiveIndex(nextIdx);
+              scrollToIndex(nextIdx);
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.10] hover:bg-white/[0.20] border border-white/25 text-amber-300 hover:text-amber-200 backdrop-blur-2xl text-xs font-semibold shadow-sm transition-all active:scale-95"
+            title="Trouver une idée rapidement (Extrait aléatoire)"
+          >
+            <Sparkles size={13} className="text-amber-300" />
+            <span>Idée rapide</span>
+          </button>
+
+          {/* Filtre direct Pour rire / Stand-ups */}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory((prev) => (prev === "comedy" ? "all" : "comedy"));
+              setActiveIndex(0);
+              scrollToIndex(0);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-2xl transition-all active:scale-95 text-xs font-semibold ${
+              selectedCategory === "comedy"
+                ? "bg-gradient-to-b from-amber-500/40 to-amber-600/30 border-amber-400/60 text-amber-200 shadow-[0_0_16px_rgba(245,158,11,0.35)]"
+                : "bg-white/[0.10] hover:bg-white/[0.18] border-white/25 text-zinc-300 hover:text-white"
+            }`}
+            title="Filtrer les extraits de comédies, stand-ups et moments Pour rire"
+          >
+            <Smile size={14} className={selectedCategory === "comedy" ? "text-amber-300" : "text-zinc-400"} />
+            <span className="hidden sm:inline">Pour rire</span>
+          </button>
+
           {/* Position counter with Liquid Glass */}
           <div className="px-3 py-1.5 rounded-full bg-white/[0.10] border border-white/25 backdrop-blur-2xl text-[11px] font-mono font-semibold text-zinc-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35),0_4px_16px_rgba(0,0,0,0.4)]">
             <span className="text-emerald-300 font-bold">{activeIndex + 1}</span>

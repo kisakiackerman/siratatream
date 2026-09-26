@@ -15,7 +15,7 @@ export interface ParsedAction {
   title?: string;
   searchQuery?: string;
   reason?: string;
-  tool?: "qibla" | "prayer" | "zakat" | "duas" | "tasbih" | "tarawih" | "offline" | "mylist" | "history" | "catalog";
+  tool?: "qibla" | "prayer" | "zakat" | "duas" | "tasbih" | "tarawih" | "mylist" | "history" | "catalog";
   videoItem?: ContentItem;
 }
 
@@ -58,6 +58,7 @@ const characterAliases: Record<string, string[]> = {
   tarawih: ["tarawih", "taraweeh", "sudais", "shuraim", "haramain", "mecque 199", "recitation", "ali jaber"],
   dajjal: ["dajjal", "antechrist", "fin des temps", "eschatologie", "gog", "magog", "yajuj", "majuj", "barzakh", "tombe"],
   miracles: ["miracle", "fente de la lune", "expansion de l univers", "mer"],
+  savants: ["savants", "sunnah", "rouhayli", "fawzan", "badr", "sindi", "utheymin", "raslan", "fatwa"],
 };
 
 // Strict, high-precision search that only returns a video if genuinely relevant

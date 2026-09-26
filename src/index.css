@@ -51,6 +51,77 @@
   transition: opacity 150ms ease;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRANSITIONS FLUIDES D'OPACITÉ DU TEXTE ET DES MÉTADONNÉES DES VIGNETTES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Titres dans les composants de vignettes et cartes vidéo */
+.vignette-title,
+.vignette-text-title,
+.video-card-title {
+  transition: opacity 0.3s ease, color 0.3s ease;
+}
+
+/* Métadonnées (nom de chaîne, badges, durée, année, score match) */
+.vignette-meta,
+.vignette-text-meta,
+.video-card-meta {
+  transition: opacity 0.3s ease, color 0.3s ease;
+}
+
+/* Conteneur de textes, badges et surcouches d'informations de vignette */
+.vignette-overlay-text,
+.vignette-fade-smooth {
+  transition: opacity 0.3s ease;
+}
+
+/* Transitions douces et raffinées au survol sur les textes des vignettes */
+.group:hover .vignette-title,
+.group\/card:hover .vignette-title {
+  opacity: 1;
+}
+
+.group:hover .vignette-meta,
+.group\/card:hover .vignette-meta {
+  opacity: 0.95;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BANDES CINÉMA ESTHÉTIQUES ET OCCULTANTES (PLAYER OVERLAY HAUTE FIDÉLITÉ)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Bande supérieure cinéma : dégradé velours plus transparent et aéré avec flou satiné progressif */
+.cinema-band-top {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.84) 0%,
+    rgba(0, 0, 0, 0.76) 35%,
+    rgba(0, 0, 0, 0.52) 65%,
+    rgba(0, 0, 0, 0.18) 86%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  mask-image: linear-gradient(180deg, black 0%, black 58%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, black 0%, black 58%, transparent 100%);
+}
+
+/* Bande inférieure cinéma : dégradé velours semi-transparent pour socle élégant du contrôleur */
+.cinema-band-bottom {
+  background: linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.77) 38%,
+    rgba(0, 0, 0, 0.50) 68%,
+    rgba(0, 0, 0, 0.16) 88%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  mask-image: linear-gradient(0deg, black 0%, black 62%, transparent 100%);
+  -webkit-mask-image: linear-gradient(0deg, black 0%, black 62%, transparent 100%);
+}
+
 /* Modal and heavy panels with high contrast backing */
 .liquid-glass-modal {
   background-color: rgba(14, 22, 18, 0.96);

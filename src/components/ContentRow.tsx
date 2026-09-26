@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ContentItem } from "@/data/catalog";
 import VideoTitleTooltip from "@/components/VideoTitleTooltip";
@@ -128,7 +128,7 @@ function PosterCard({
             key={item.id}
             src={imgSrc}
             alt={item.title}
-            className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover group-hover/card:scale-105 transition-all duration-500 opacity-100"
             loading="lazy"
             decoding="async"
             onLoad={handleImageLoad}
@@ -155,7 +155,7 @@ function PosterCard({
 
         {/* Bouton de lecture au survol en verre liquide vert */}
         <div
-          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-200"
+          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-200 z-20"
           onClick={(e) => {
             e.stopPropagation();
             onPlay(item.id);
@@ -167,19 +167,19 @@ function PosterCard({
         </div>
       </div>
 
-      {/* Titre et détails sous la carte portrait avec tool-tip de description */}
+      {/* Titre et détails sous la carte portrait avec tool-tip de description et transitions fluides */}
       <VideoTitleTooltip
         item={item}
         as="p"
-        titleClassName="text-xs sm:text-sm font-semibold text-white group-hover/card:text-emerald-200 transition-colors leading-snug"
+        titleClassName="text-xs sm:text-sm font-semibold text-white group-hover/card:text-emerald-200 transition-colors vignette-title leading-snug"
         lineClamp={2}
       />
-      <p className="text-[11px] text-zinc-400 truncate mt-1 flex items-center gap-1.5">
-        <span className="text-emerald-400/80 font-medium truncate">{item.channel}</span>
+      <p className="text-[11px] text-zinc-400 truncate mt-1 flex items-center gap-1.5 vignette-meta">
+        <span className="text-emerald-400/80 font-medium truncate vignette-meta">{item.channel}</span>
         {item.year && (
           <>
             <span className="text-zinc-600">·</span>
-            <span className="text-zinc-500 font-mono text-[10px]">{item.year}</span>
+            <span className="text-zinc-500 font-mono text-[10px] vignette-meta">{item.year}</span>
           </>
         )}
       </p>

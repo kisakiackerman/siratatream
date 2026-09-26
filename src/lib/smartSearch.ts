@@ -60,6 +60,8 @@ const SYNONYMS: Record<string, string[]> = {
   "bataille": ["bataille", "badr", "guerre", "combat"],
   "pardon": ["pardon", "misericorde", "lecon"],
   "pacte": ["pacte", "alliance", "ame"],
+  // Savants de la Sunnah
+  "savants": ["savants", "sunnah", "savants de la sunnah", "fatwa", "rappel", "rouhayli", "fawzan", "badr", "sindi", "utheymin", "raslan", "farhan", "daghash", "sheikh"],
 };
 
 function getSynonyms(term: string): string[] {
@@ -123,11 +125,16 @@ function scoreItem(item: ContentItem, query: string): number {
   return score;
 }
 
-export function smartSearch(query: string, limit = 8): ContentItem[] {
+export function smartSearch(
+  query: string,
+  limit = 10,
+  sourceCatalog?: ContentItem[]
+): ContentItem[] {
   const q = query.trim();
-  if (q.length < 2) return [];
+  if (q.length < 1) return [];
 
-  return catalog
+  const list = sourceCatalog && sourceCatalog.length > 0 ? sourceCatalog : catalog;
+  return list
     .map((item) => ({ item, score: scoreItem(item, q) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)

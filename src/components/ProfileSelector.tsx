@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, User, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, User, Loader2, LogOut } from "lucide-react";
 import { useViewerProfile, AVATAR_COLORS } from "@/hooks/useViewerProfile";
+import { useAuth } from "@/hooks/useAuth";
 import type { ViewerProfile } from "@/lib/supabase";
 import { AVATAR_ICONS, getAvatarIcon, type AvatarIconId } from "@/data/avatarIcons";
 import type { Category } from "@/data/catalog";
+import ExitAppModal from "@/components/ExitAppModal";
 
 type ProfileSelectorProps = {
   onSelect: () => void;
@@ -79,6 +81,7 @@ function AvatarIconPicker({
 }
 
 export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
+  const { signOut, user } = useAuth();
   const {
     profiles,
     loading,
@@ -91,6 +94,7 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
   } = useViewerProfile();
 
   const [manageMode, setManageMode] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
@@ -489,16 +493,27 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
         </div>
       )}
 
-      <button
-        onClick={() => {
-          setManageMode((m) => !m);
-          cancelEdit();
-          cancelAdd();
-        }}
-        className="px-6 py-2.5 border border-zinc-600 text-zinc-300 hover:text-white hover:border-white rounded-lg text-sm font-semibold tracking-wider uppercase transition-colors"
-      >
-        {manageMode ? "Terminer" : "Gérer les profils"}
-      </button>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <button
+          onClick={() => {
+            setManageMode((m) => !m);
+            cancelEdit();
+            cancelAdd();
+          }}
+          className="px-6 py-2.5 border border-zinc-600 text-zinc-300 hover:text-white hover:border-white rounded-lg text-sm font-semibold tracking-wider uppercase transition-colors"
+        >
+          {manageMode ? "Terminer" : "Gérer les profils"}
+        </button>
+
+        <button
+          onClick={() => setShowExitModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 border border-red-500/30 text-red-400 hover:text-red-300 hover:border-red-500/60 rounded-lg text-sm font-semibold transition-colors bg-red-950/20 cursor-pointer"
+          title="Quitter l'application"
+        >
+          <LogOut size={15} />
+          <span>Quitter l'application</span>
+        </button>
+      </div>
 
       {pinProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
@@ -562,6 +577,13 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
           </div>
         </div>
       )}
+
+      {/* Confirmation pour quitter l'application */}
+      <ExitAppModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onConfirmExit={() => signOut()}
+      />
     </div>
   );
 }

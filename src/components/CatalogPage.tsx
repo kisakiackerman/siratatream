@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   X,
   Sparkles,
@@ -23,6 +23,7 @@ import YouTubeHoverPreview from "@/components/YouTubeHoverPreview";
 import { getReciterForItem } from "@/lib/reciterData";
 import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
 import VideoTitleTooltip from "@/components/VideoTitleTooltip";
+import { useUserInterests } from "@/lib/userInterestEngine";
 
 type CatalogPageProps = {
   onClose: () => void;
@@ -42,6 +43,7 @@ export default function CatalogPage({
   initialChannels = [],
 }: CatalogPageProps) {
   const { catalog, allActiveCategories, allActiveChannels } = useCreatorCatalog();
+  const userInterests = useUserInterests(catalog);
   const [query, setQuery] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<string[]>(initialChannels);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategories);
@@ -50,21 +52,29 @@ export default function CatalogPage({
   const [minYear, setMinYear] = useState<number>(1980);
   const [maxYear, setMaxYear] = useState<number>(2026);
 
-  const channelCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const ch of allActiveChannels) {
-      counts[ch] = catalog.filter((c) => c.channel === ch).length;
-    }
-    return counts;
-  }, [allActiveChannels, catalog]);
+  // Pagination progressive : charger par lots de 36 pour un affichage instantané à 60 FPS
+  const PAGE_SIZE = 36;
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const cat of allActiveCategories) {
-      counts[cat] = catalog.filter((c) => c.categories.includes(cat as Category)).length;
+  // Comptage O(N) optimisé en un seul passage sur le catalogue
+  const { channelCounts, categoryCounts } = useMemo(() => {
+    const chCounts: Record<string, number> = {};
+    const catCounts: Record<string, number> = {};
+    for (let i = 0; i < catalog.length; i++) {
+      const item = catalog[i];
+      if (item.channel) {
+        chCounts[item.channel] = (chCounts[item.channel] || 0) + 1;
+      }
+      const cats = item.categories;
+      if (cats) {
+        for (let j = 0; j < cats.length; j++) {
+          catCounts[cats[j]] = (catCounts[cats[j]] || 0) + 1;
+        }
+      }
     }
-    return counts;
-  }, [allActiveCategories, catalog]);
+    return { channelCounts: chCounts, categoryCounts: catCounts };
+  }, [catalog]);
 
   const toggleChannel = (ch: string) => {
     setSelectedChannels((prev) =>
@@ -107,18 +117,63 @@ export default function CatalogPage({
       result = result.filter((c) => c.year >= minYear && c.year <= maxYear);
     }
 
-    const sorted = [...result].sort((a, b) => {
-      if (sortMode === "score") return b.score - a.score;
-      if (sortMode === "title") return a.title.localeCompare(b.title, "fr");
-      return b.year - a.year;
-    });
+    // Tri optimisé : pré-calculer les scores en O(N) pour éviter 40 000 calculs redondants dans le sort
+    if (sortMode === "score") {
+      const scoreMap = new Map<string, number>();
+      for (let i = 0; i < result.length; i++) {
+        scoreMap.set(result[i].id, userInterests.getScore(result[i]));
+      }
+      const sorted = [...result].sort((a, b) => {
+        const diff = (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0);
+        if (diff !== 0) return diff;
+        return b.score - a.score;
+      });
 
-    if (selectedChannels.length === 0 && sortMode !== "title") {
-      return diversifyCatalogByChannel(sorted, { prioritizeQuality: sortMode === "score" });
+      if (selectedChannels.length === 0) {
+        return diversifyCatalogByChannel(sorted, { prioritizeQuality: true });
+      }
+      return sorted;
     }
 
-    return sorted;
-  }, [catalog, query, selectedChannels, selectedCategories, minYear, maxYear, sortMode]);
+    if (sortMode === "title") {
+      return [...result].sort((a, b) => a.title.localeCompare(b.title, "fr"));
+    }
+
+    const sortedByYear = [...result].sort((a, b) => b.year - a.year);
+    if (selectedChannels.length === 0) {
+      return diversifyCatalogByChannel(sortedByYear, { prioritizeQuality: false });
+    }
+    return sortedByYear;
+  }, [catalog, query, selectedChannels, selectedCategories, minYear, maxYear, sortMode, userInterests]);
+
+  // Réinitialiser la pagination lors de l'application d'un filtre ou changement de tri
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [query, selectedChannels, selectedCategories, minYear, maxYear, sortMode]);
+
+  // Éléments affichés en mémoire dans le DOM pour fluidité instantanée
+  const displayedItems = useMemo(() => {
+    return filtered.slice(0, visibleCount);
+  }, [filtered, visibleCount]);
+
+  // IntersectionObserver pour défilement infini transparent sans aucun blocage
+  useEffect(() => {
+    if (visibleCount >= filtered.length) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filtered.length));
+        }
+      },
+      { rootMargin: "800px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleCount, filtered.length]);
 
   const hasActiveFilters =
     selectedChannels.length > 0 ||
@@ -472,6 +527,11 @@ export default function CatalogPage({
                   </h2>
                   <p className="text-xs text-zinc-300 font-medium">
                     {filtered.length} titre{filtered.length > 1 ? "s" : ""} trouvé{filtered.length > 1 ? "s" : ""}
+                    {filtered.length > visibleCount && (
+                      <span className="text-emerald-400/90 ml-1.5 font-mono text-[11px]">
+                        ({visibleCount} affichés)
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -540,119 +600,149 @@ export default function CatalogPage({
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
-                {filtered.map((item) => {
-                  const isTarawih =
-                    item.channel === "Récitations Haramain" || item.categories.includes("Coran");
-                  const reciter = isTarawih
-                    ? getReciterForItem(item.title, item.description, item.channel)
-                    : null;
-                  const isNew = item.year >= 2025 || item.score >= 97;
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
+                  {displayedItems.map((item) => {
+                    const isTarawih =
+                      item.channel === "Récitations Haramain" || item.categories.includes("Coran");
+                    const reciter = isTarawih
+                      ? getReciterForItem(item.title, item.description, item.channel)
+                      : null;
+                    const isNew = item.year >= 2025 || item.score >= 97;
 
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => onInfo(item.id)}
-                      className="video-thumb-interactive group relative flex flex-col rounded-2xl liquid-glass-card hover:bg-white/10 border border-white/18 hover:border-emerald-400/40 shadow-xl cursor-pointer"
-                    >
-                      {/* Image format portrait vertical */}
-                      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-t-2xl bg-zinc-950">
-                        <YouTubeHoverPreview
-                          youtubeId={item.youtubeId}
-                          image={item.image}
-                          alt={item.title}
-                          imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          fallbackImage={reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg"}
-                        />
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => onInfo(item.id)}
+                        className="video-thumb-interactive group relative flex flex-col rounded-2xl liquid-glass-card hover:bg-white/10 border border-white/18 hover:border-emerald-400/40 shadow-xl cursor-pointer"
+                      >
+                        {/* Image format portrait vertical */}
+                        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-t-2xl bg-zinc-950">
+                          <YouTubeHoverPreview
+                            youtubeId={item.youtubeId}
+                            image={item.image}
+                            alt={item.title}
+                            imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            fallbackImage={reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg"}
+                          />
 
-                        {/* Dégradé sombre du bas vers le haut pour lisibilité */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/25 to-transparent pointer-events-none" />
+                          {/* Dégradé sombre du bas vers le haut pour lisibilité */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/25 to-transparent pointer-events-none" />
 
-                        {/* Badge haut gauche : Série, Nouveau ou Catégorie en Liquid Glass */}
-                        <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1 items-start max-w-[85%]">
-                          {item.seriesId ? (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-400/50 text-amber-200 text-[10px] font-black uppercase tracking-wider backdrop-blur-xl shadow-md">
-                              {item.episodeNumber ? `Ép. ${item.episodeNumber}` : "Série"}
-                            </span>
-                          ) : isNew ? (
-                            <span className="px-2 py-0.5 rounded-full liquid-glass-badge-emerald text-[10px] font-black uppercase tracking-wider shadow-md">
-                              Nouveau
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full liquid-glass-badge text-zinc-100 text-[10px] font-bold truncate max-w-full shadow-sm border border-white/20">
-                              {item.categories[0] || item.channel}
-                            </span>
+                          {/* Badge haut gauche : Série, Nouveau ou Catégorie en Liquid Glass */}
+                          <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1 items-start max-w-[85%]">
+                            {item.seriesId ? (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-400/50 text-amber-200 text-[10px] font-black uppercase tracking-wider backdrop-blur-xl shadow-md">
+                                {item.episodeNumber ? `Ép. ${item.episodeNumber}` : "Série"}
+                              </span>
+                            ) : isNew ? (
+                              <span className="px-2 py-0.5 rounded-full liquid-glass-badge-emerald text-[10px] font-black uppercase tracking-wider shadow-md">
+                                Nouveau
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full liquid-glass-badge text-zinc-100 text-[10px] font-bold truncate max-w-full shadow-sm border border-white/20">
+                                {item.categories[0] || item.channel}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Badge récitateur si Tarawih/Coran */}
+                          {reciter && (
+                            <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 liquid-glass-subtle px-1.5 py-0.5 rounded-full border border-white/25 shadow">
+                              <img
+                                src={reciter.photoUrl}
+                                alt={reciter.name}
+                                className="w-3.5 h-3.5 rounded-full object-cover border border-white/40"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
+                              <span className="text-[9px] text-zinc-200 font-semibold truncate leading-none max-w-[65px]">
+                                {reciter.name.replace("Sheikh ", "")}
+                              </span>
+                            </div>
                           )}
-                        </div>
 
-                        {/* Badge récitateur si Tarawih/Coran */}
-                        {reciter && (
-                          <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 liquid-glass-subtle px-1.5 py-0.5 rounded-full border border-white/25 shadow">
-                            <img
-                              src={reciter.photoUrl}
-                              alt={reciter.name}
-                              className="w-3.5 h-3.5 rounded-full object-cover border border-white/40"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
-                            <span className="text-[9px] text-zinc-200 font-semibold truncate leading-none max-w-[65px]">
-                              {reciter.name.replace("Sheikh ", "")}
+                          {/* Année affichée en bas à gauche en overlay sur l'image */}
+                          <div className="absolute bottom-2.5 left-3 z-10 flex items-center gap-2">
+                            <span className="text-[11px] font-extrabold text-zinc-200 font-mono liquid-glass-badge px-1.5 py-0.5 rounded-md border border-white/20">
+                              {item.year}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-300 drop-shadow">
+                              {item.score}%
                             </span>
                           </div>
-                        )}
 
-                        {/* Année affichée en bas à gauche en overlay sur l'image */}
-                        <div className="absolute bottom-2.5 left-3 z-10 flex items-center gap-2">
-                          <span className="text-[11px] font-extrabold text-zinc-200 font-mono liquid-glass-badge px-1.5 py-0.5 rounded-md border border-white/20">
-                            {item.year}
-                          </span>
-                          <span className="text-[10px] font-bold text-emerald-300 drop-shadow">
-                            {item.score}%
-                          </span>
+                          {/* Bouton de lecture rapide au survol */}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPlay(item.id);
+                              }}
+                              className="w-11 h-11 rounded-full liquid-glass-emerald flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-105 active:scale-95 transition-all shadow-xl border border-emerald-300/50 cursor-pointer"
+                              title="Lire la vidéo"
+                            >
+                              <Play size={18} fill="currentColor" className="ml-0.5" />
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Bouton de lecture rapide au survol */}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPlay(item.id);
-                            }}
-                            className="w-11 h-11 rounded-full liquid-glass-emerald flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-105 active:scale-95 transition-all shadow-xl border border-emerald-300/50 cursor-pointer"
-                            title="Lire la vidéo"
-                          >
-                            <Play size={18} fill="currentColor" className="ml-0.5" />
-                          </button>
-                        </div>
-                      </div>
+                        {/* Informations textuelles sous la miniature */}
+                        <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-amber-300/90 line-clamp-1 vignette-meta">
+                              {item.channel}
+                            </p>
+                            <VideoTitleTooltip
+                              item={item}
+                              as="h4"
+                              titleClassName="text-xs sm:text-sm font-bold text-white leading-snug mt-0.5 group-hover:text-emerald-300 transition-colors vignette-title"
+                              lineClamp={2}
+                            />
+                          </div>
 
-                      {/* Informations textuelles sous la miniature */}
-                      <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider font-bold text-amber-300/90 line-clamp-1">
-                            {item.channel}
-                          </p>
-                          <VideoTitleTooltip
-                            item={item}
-                            as="h4"
-                            titleClassName="text-xs sm:text-sm font-bold text-white leading-snug mt-0.5 group-hover:text-emerald-300 transition-colors"
-                            lineClamp={2}
-                          />
-                        </div>
-
-                        <div className="pt-1.5 flex items-center justify-between border-t border-white/10 text-[10px] text-zinc-300">
-                          <span className="truncate max-w-[120px]">
-                            {item.categories.slice(0, 2).join(" · ")}
-                          </span>
-                          <span className="font-mono text-zinc-400">{item.duration || "15 min"}</span>
+                          <div className="pt-1.5 flex items-center justify-between border-t border-white/10 text-[10px] text-zinc-300 vignette-meta">
+                            <span className="truncate max-w-[120px] vignette-meta">
+                              {item.categories.slice(0, 2).join(" · ")}
+                            </span>
+                            <span className="font-mono text-zinc-400 vignette-meta">{item.duration || "15 min"}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                {/* Sentinelle pour chargement infini fluide et bouton de chargement manuel */}
+                {visibleCount < filtered.length && (
+                  <div
+                    ref={sentinelRef}
+                    className="py-10 flex flex-col items-center justify-center gap-3 w-full"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filtered.length))}
+                      className="px-6 py-2.5 rounded-full liquid-glass hover:bg-white/10 text-xs font-bold text-zinc-200 hover:text-white border border-white/20 transition-all flex items-center gap-2 cursor-pointer shadow-xl hover:scale-105 active:scale-95"
+                    >
+                      <span>Afficher plus ({visibleCount} sur {filtered.length})</span>
+                      <ChevronDown size={14} className="animate-bounce text-emerald-400" />
+                    </button>
+                    <p className="text-[11px] text-zinc-400 font-mono">
+                      Défilement automatique instantané • {filtered.length - visibleCount} vidéos restantes
+                    </p>
+                  </div>
+                )}
+
+                {visibleCount >= filtered.length && filtered.length > PAGE_SIZE && (
+                  <div className="py-8 text-center text-xs text-zinc-400 w-full">
+                    <span className="px-4 py-1.5 rounded-full liquid-glass-subtle border border-white/15">
+                      ✓ Toutes les {filtered.length} vidéos sont affichées
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </main>
         </div>

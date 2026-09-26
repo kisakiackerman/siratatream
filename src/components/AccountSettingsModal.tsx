@@ -10,6 +10,7 @@ import {
   Info,
   Trash2,
   Check,
+  Copy,
   Moon,
   Sun,
   Monitor,
@@ -22,7 +23,6 @@ import {
   Tv,
   Laptop,
   KeyRound,
-  DownloadCloud,
   RefreshCw,
   AlertTriangle,
   ChevronRight,
@@ -63,17 +63,14 @@ import {
   StoredHistoryEntry,
   LOCAL_HISTORY_PREFIX,
 } from "@/lib/watchHistory";
-import {
-  getOfflineDownloads,
-  removeOfflineDownload,
-  OfflineDownload,
-} from "@/lib/offlineStorage";
 import { useConnectedDevices } from "@/hooks/useConnectedDevices";
 import { formatRelativeTime, DeviceType } from "@/lib/deviceSessions";
 import UserStatsSection from "@/components/UserStatsSection";
 import NotificationsSettingsSection from "@/components/NotificationsSettingsSection";
 import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
 import { GlassPanel } from "@/components/GlassSurface";
+import ExitAppModal from "@/components/ExitAppModal";
+import AIGuardianStatusSection from "@/components/AIGuardianStatusSection";
 
 type AccountSettingsModalProps = {
   onClose: () => void;
@@ -84,6 +81,7 @@ type AccountSettingsModalProps = {
 
 export type SettingsTab =
   | "account"
+  | "guardian"
   | "notifications"
   | "stats"
   | "playback"
@@ -110,6 +108,7 @@ export default function AccountSettingsModal({
     isCreator,
     signInWithGoogle,
     signInWithApple,
+    openEmailSyncModal,
     signOut,
     updateUserSpace,
   } = useAuth();
@@ -125,6 +124,7 @@ export default function AccountSettingsModal({
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showExitModal, setShowExitModal] = useState(false);
 
   // --- Microphone permission state ---
   const [micStatus, setMicStatus] = useState<"checking" | "granted" | "prompt" | "denied" | "unsupported">("prompt");
@@ -224,12 +224,6 @@ export default function AccountSettingsModal({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => {
     return Number(localStorage.getItem("nexstream_playback_speed")) || 1;
   });
-  const [downloadQuality, setDownloadQuality] = useState<"standard" | "high">(() => {
-    return (localStorage.getItem("nexstream_download_quality") as "standard" | "high") || "high";
-  });
-  const [downloadWifiOnly, setDownloadWifiOnly] = useState<boolean>(() => {
-    return localStorage.getItem("nexstream_download_wifi_only") !== "false";
-  });
   const [shortsEnabled, setShortsEnabled] = useState<boolean>(() => {
     return localStorage.getItem("sirat_shorts_enabled") === "true";
   });
@@ -243,7 +237,6 @@ export default function AccountSettingsModal({
 
   // --- Storage & History items ---
   const [historyItems, setHistoryItems] = useState<StoredHistoryEntry[]>([]);
-  const [downloads, setDownloads] = useState<OfflineDownload[]>([]);
   const [cacheSizeMB, setCacheSizeMB] = useState<number>(34.8);
 
   // --- Diagnostics Network Test ---
@@ -259,12 +252,11 @@ export default function AccountSettingsModal({
     }
   }, [activeProfile]);
 
-  // Load history & downloads
+  // Load history
   useEffect(() => {
     if (activeProfile?.id) {
       setHistoryItems(getLocalWatchHistory(activeProfile.id));
     }
-    setDownloads(getOfflineDownloads());
   }, [activeProfile]);
 
   // Escape to close
@@ -465,17 +457,6 @@ export default function AccountSettingsModal({
     localStorage.setItem("nexstream_playback_speed", String(speed));
   };
 
-  const handleDownloadQuality = (q: "standard" | "high") => {
-    setDownloadQuality(q);
-    localStorage.setItem("nexstream_download_quality", q);
-  };
-
-  const handleToggleDownloadWifiOnly = () => {
-    const next = !downloadWifiOnly;
-    setDownloadWifiOnly(next);
-    localStorage.setItem("nexstream_download_wifi_only", String(next));
-  };
-
   // --- Storage & History Handlers ---
   const handleClearCache = () => {
     try {
@@ -506,21 +487,6 @@ export default function AccountSettingsModal({
     }
   };
 
-  const handleDeleteOfflineItem = (contentId: string) => {
-    const updated = removeOfflineDownload(contentId);
-    setDownloads(updated);
-    showToast("Téléchargement supprimé.");
-  };
-
-  const handleClearAllOffline = () => {
-    if (confirm("Supprimer tous les téléchargements hors-ligne ?")) {
-      localStorage.removeItem("nexstream_offline_downloads");
-      setDownloads([]);
-      window.dispatchEvent(new CustomEvent("nexstream-offline-changed"));
-      showToast("Tous les téléchargements ont été effacés.");
-    }
-  };
-
   // RGPD Export
   const handleExportDataJSON = () => {
     try {
@@ -535,7 +501,6 @@ export default function AccountSettingsModal({
         activeProfile,
         profiles,
         watchHistory: activeProfile ? getLocalWatchHistory(activeProfile.id) : [],
-        offlineDownloads: downloads,
         preferences: {
           theme,
           autoplayNext,
@@ -547,8 +512,6 @@ export default function AccountSettingsModal({
           qualityWifi,
           qualityMobile,
           playbackSpeed,
-          downloadQuality,
-          downloadWifiOnly,
         },
       };
 
@@ -563,6 +526,39 @@ export default function AccountSettingsModal({
     } catch (e) {
       showToast("Erreur lors de l'export des données.");
     }
+  };
+
+  const [urlCopied, setUrlCopied] = useState(false);
+
+  const handleCopyAppUrl = () => {
+    if (typeof window !== "undefined") {
+      const link =
+        window.location.origin.includes("sirat-stream") || window.location.hostname.includes("ai.studio")
+          ? "https://sirat-stream.ai.studio/"
+          : window.location.origin;
+      navigator.clipboard?.writeText(link);
+      setUrlCopied(true);
+      showToast("Lien officiel copié dans le presse-papiers !");
+      setTimeout(() => setUrlCopied(false), 2500);
+    }
+  };
+
+  const handleForceRefreshUpdate = () => {
+    showToast("Lancement de la mise à jour avec le nouveau lien...");
+    try {
+      if (typeof window !== "undefined" && "caches" in window) {
+        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+      }
+    } catch {
+      // ignore
+    }
+    setTimeout(() => {
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("updated", Date.now().toString());
+        window.location.replace(url.toString());
+      }
+    }, 400);
   };
 
   // Network test simulation
@@ -658,6 +654,19 @@ export default function AccountSettingsModal({
           </button>
 
           <button
+            onClick={() => setActiveTab("guardian")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === "guardian"
+                ? "liquid-glass-emerald text-emerald-200 border border-emerald-300/40 font-bold shadow-md"
+                : "liquid-glass text-zinc-300 hover:text-white hover:bg-white/15 border border-white/15"
+            }`}
+          >
+            <Shield size={14} className={activeTab === "guardian" ? "text-emerald-300" : "text-emerald-400"} />
+            <span>IA Gardienne</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </button>
+
+          <button
             onClick={() => setActiveTab("notifications")}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
               activeTab === "notifications"
@@ -740,6 +749,32 @@ export default function AccountSettingsModal({
           {/* ============================================================ */}
           {activeTab === "account" && (
             <div className="space-y-6">
+              {/* Carte IA Gardienne Active - Surveillance du compte */}
+              <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/25 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 flex-shrink-0">
+                    <Shield size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-white flex items-center gap-1.5 truncate">
+                      <span>IA Gardienne Active</span>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-400/30">
+                        100% Opérationnel
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-zinc-300 truncate">
+                      Ajustement des profils et fonctionnalités surveillés chaque jour sans erreur.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab("guardian")}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-semibold text-[11px] flex-shrink-0 transition-colors"
+                >
+                  Voir l'état complet
+                </button>
+              </div>
+
               {/* 1. Informations du profil actif */}
               <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1219,7 +1254,7 @@ export default function AccountSettingsModal({
                 </div>
               </GlassPanel>
 
-              {/* 5. Synchronisation Cloud Google / Apple */}
+              {/* 5. Synchronisation Cloud Google / Apple / Email */}
               <GlassPanel variant="emerald" className="p-5 border border-emerald-400/30 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1234,6 +1269,10 @@ export default function AccountSettingsModal({
                     <span className="px-2.5 py-0.5 rounded-full liquid-glass text-white border border-white/20 text-[10px] font-bold">
                       Apple iCloud Connecté
                     </span>
+                  ) : userSpace?.provider === "email" ? (
+                    <span className="px-2.5 py-0.5 rounded-full liquid-glass text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
+                      Email Synchronisé
+                    </span>
                   ) : (
                     <span className="px-2.5 py-0.5 rounded-full liquid-glass text-zinc-400 text-[10px]">
                       Mode Invité
@@ -1243,10 +1282,17 @@ export default function AccountSettingsModal({
                 <p className="text-zinc-300 text-xs leading-relaxed">
                   {firebaseUser || userSpace?.email?.includes("@")
                     ? `Connecté avec ${userSpace?.email || firebaseUser?.email}. Vos favoris, notes et historique sont sauvegardés en temps réel.`
-                    : "Associez votre compte Google ou Apple pour retrouver vos profils, votre progression et vos favoris sur votre TV, tablette et téléphone."}
+                    : "Associez votre adresse email ou votre compte Google / Apple pour retrouver vos profils, votre progression et vos favoris sur votre TV, tablette et téléphone."}
                 </p>
-                {!firebaseUser && userSpace?.provider !== "apple" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {!firebaseUser && userSpace?.provider !== "apple" && userSpace?.provider !== "email" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <button
+                      onClick={openEmailSyncModal}
+                      className="flex items-center justify-center gap-2 bg-emerald-400/20 hover:bg-emerald-400/30 text-emerald-200 border border-emerald-300/40 text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm active:scale-95"
+                    >
+                      <Mail size={14} className="text-emerald-300" />
+                      <span>Connexion Email</span>
+                    </button>
                     <button
                       onClick={signInWithGoogle}
                       className="flex items-center justify-center gap-2 bg-white hover:bg-zinc-200 text-black text-xs font-bold py-2.5 rounded-xl transition-all shadow-md active:scale-95"
@@ -1257,7 +1303,7 @@ export default function AccountSettingsModal({
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                       </svg>
-                      <span>Connexion Google</span>
+                      <span>Google</span>
                     </button>
                     <button
                       onClick={() => signInWithApple()}
@@ -1326,10 +1372,25 @@ export default function AccountSettingsModal({
           )}
 
           {/* ============================================================ */}
+          {/* TAB: IA GARDIENNE & MAINTENANCE */}
+          {/* ============================================================ */}
+          {activeTab === "guardian" && (
+            <div className="space-y-6">
+              <AIGuardianStatusSection />
+            </div>
+          )}
+
+          {/* ============================================================ */}
           {/* TAB: NOTIFICATIONS */}
           {/* ============================================================ */}
           {activeTab === "notifications" && (
-            <NotificationsSettingsSection onShowToast={showToast} />
+            <NotificationsSettingsSection
+              onShowToast={showToast}
+              onPlayVideo={(id) => {
+                onPlayVideo?.(id);
+                onClose();
+              }}
+            />
           )}
 
           {/* ============================================================ */}
@@ -1349,59 +1410,33 @@ export default function AccountSettingsModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-white text-sm font-semibold flex items-center gap-2">
-                      <Monitor size={16} className="text-emerald-400" />
-                      <span>Thème & Détection Système</span>
+                      <Moon size={16} className="text-emerald-400" />
+                      <span>Thème de l'application</span>
                     </h4>
                     <p className="text-zinc-300 text-xs mt-0.5 max-w-sm">
-                      Bascule automatiquement entre clair et sombre selon votre système ou choisissez un mode fixe.
+                      L'application est configurée en mode sombre permanent pour un confort de visionnage optimal.
                     </p>
                   </div>
-                  {theme === "system" && (
-                    <span className="px-2.5 py-0.5 rounded-full liquid-glass-emerald text-emerald-300 border border-emerald-400/30 text-[10px] font-bold uppercase tracking-wider">
-                      Auto ({systemTheme === "dark" ? "Sombre" : "Clair"})
-                    </span>
-                  )}
+                  <span className="px-2.5 py-0.5 rounded-full liquid-glass-emerald text-emerald-300 border border-emerald-400/30 text-[10px] font-bold uppercase tracking-wider">
+                    Sombre (Actif)
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  <button
-                    onClick={() => setTheme("system")}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all text-xs font-semibold ${
-                      theme === "system"
-                        ? "liquid-glass-emerald text-emerald-200 border-emerald-300/50 shadow-md font-bold"
-                        : "liquid-glass hover:bg-white/15 text-zinc-300 border-white/15"
-                    }`}
-                  >
-                    <Monitor size={18} className={theme === "system" ? "text-emerald-300" : "text-zinc-400"} />
-                    <span>Système</span>
-                    <span className="text-[10px] opacity-75 font-normal">Automatique</span>
-                  </button>
-
-                  <button
-                    onClick={() => setTheme("dark")}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all text-xs font-semibold ${
-                      theme === "dark"
-                        ? "liquid-glass-emerald text-emerald-200 border-emerald-300/50 shadow-md font-bold"
-                        : "liquid-glass hover:bg-white/15 text-zinc-300 border-white/15"
-                    }`}
-                  >
-                    <Moon size={18} className={theme === "dark" ? "text-emerald-300" : "text-zinc-400"} />
-                    <span>Sombre</span>
-                    <span className="text-[10px] opacity-75 font-normal">Cinéma</span>
-                  </button>
-
-                  <button
-                    onClick={() => setTheme("light")}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all text-xs font-semibold ${
-                      theme === "light"
-                        ? "liquid-glass-emerald text-emerald-200 border-emerald-300/50 shadow-md font-bold"
-                        : "liquid-glass hover:bg-white/15 text-zinc-300 border-white/15"
-                    }`}
-                  >
-                    <Sun size={18} className={theme === "light" ? "text-emerald-300" : "text-zinc-400"} />
-                    <span>Clair</span>
-                    <span className="text-[10px] opacity-75 font-normal">Jour</span>
-                  </button>
+                <div className="pt-1">
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl border liquid-glass-emerald text-emerald-200 border-emerald-300/50 shadow-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-300 border border-emerald-400/30">
+                        <Moon size={20} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">Mode Sombre Permanent</p>
+                        <p className="text-[11px] text-zinc-400">Atmosphère cinéma sombre, reposante pour les yeux</p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-400/30">
+                      Toujours actif
+                    </span>
+                  </div>
                 </div>
               </GlassPanel>
 
@@ -1653,59 +1688,6 @@ export default function AccountSettingsModal({
                 </div>
               </GlassPanel>
 
-              {/* Téléchargements & Mode Hors-ligne */}
-              <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
-                <div className="flex items-center gap-2">
-                  <DownloadCloud size={16} className="text-emerald-400" />
-                  <h4 className="text-white text-sm font-semibold">Téléchargements & Mode Hors-ligne</h4>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleDownloadQuality("standard")}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      downloadQuality === "standard"
-                        ? "liquid-glass-emerald text-emerald-200 border-emerald-300/50 font-bold shadow-md"
-                        : "liquid-glass text-zinc-300 border-white/15 hover:bg-white/15"
-                    }`}
-                  >
-                    <p className="text-xs font-semibold">Qualité Standard</p>
-                    <p className="text-[11px] opacity-75">Plus rapide, prend moins d'espace (720p)</p>
-                  </button>
-
-                  <button
-                    onClick={() => handleDownloadQuality("high")}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      downloadQuality === "high"
-                        ? "liquid-glass-emerald text-emerald-200 border-emerald-300/50 font-bold shadow-md"
-                        : "liquid-glass text-zinc-300 border-white/15 hover:bg-white/15"
-                    }`}
-                  >
-                    <p className="text-xs font-semibold">Haute Définition</p>
-                    <p className="text-[11px] opacity-75">Détails optimaux pour grand écran (1080p)</p>
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <p className="text-white text-xs font-semibold">Télécharger en Wi-Fi uniquement</p>
-                    <p className="text-zinc-400 text-[11px]">Évite de consommer votre forfait mobile data.</p>
-                  </div>
-                  <button
-                    onClick={handleToggleDownloadWifiOnly}
-                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
-                      downloadWifiOnly ? "bg-emerald-500" : "bg-white/15"
-                    }`}
-                  >
-                    <div
-                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        downloadWifiOnly ? "translate-x-6" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-              </GlassPanel>
-
               {/* Permission Navigateur Microphone & Commandes Vocales */}
               <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1946,68 +1928,6 @@ export default function AccountSettingsModal({
                 )}
               </GlassPanel>
 
-              {/* Téléchargements hors-ligne */}
-              <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-white text-sm font-semibold flex items-center gap-2">
-                      <DownloadCloud size={16} className="text-emerald-400" />
-                      <span>Vidéos téléchargées (Hors-ligne)</span>
-                    </h4>
-                    <p className="text-zinc-300 text-xs mt-0.5">
-                      {downloads.length} vidéo(s) disponible(s) sans connexion internet.
-                    </p>
-                  </div>
-                  {downloads.length > 0 && (
-                    <button
-                      onClick={handleClearAllOffline}
-                      className="px-3 py-1.5 liquid-glass hover:bg-rose-500/20 text-rose-300 border border-rose-400/30 text-xs font-semibold rounded-xl transition-all flex items-center gap-1"
-                    >
-                      <Trash2 size={13} />
-                      <span>Tout supprimer</span>
-                    </button>
-                  )}
-                </div>
-
-                {downloads.length === 0 ? (
-                  <p className="text-zinc-400 text-xs italic py-2">
-                    Aucun téléchargement enregistré. Utilisez le bouton "Télécharger" sur n'importe quel récit pour le regarder hors-ligne.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {downloads.map((d) => (
-                      <div
-                        key={d.contentId}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl liquid-glass border border-white/10"
-                      >
-                        <div
-                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-                          onClick={() => onPlayVideo?.(d.contentId)}
-                        >
-                          <img
-                            src={d.item.thumbnail}
-                            alt=""
-                            className="w-16 aspect-video rounded-lg object-cover flex-shrink-0 border border-white/10"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-white text-xs font-semibold truncate">{d.item.title}</p>
-                            <p className="text-[11px] text-zinc-400">{d.sizeMB} Mo · Téléchargé en HD</p>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleDeleteOfflineItem(d.contentId)}
-                          className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors flex-shrink-0"
-                          title="Supprimer le fichier"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </GlassPanel>
-
               {/* Export RGPD des données personnelles */}
               <GlassPanel variant="emerald" className="p-5 border border-emerald-400/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -2040,7 +1960,7 @@ export default function AccountSettingsModal({
               <GlassPanel variant="card" className="p-5 border border-white/15 space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-6 bg-emerald-400 rounded-full" />
-                  <h4 className="text-white font-bold text-base">SiratStream v2.4.2 Pro</h4>
+                  <h4 className="text-white font-bold text-base">SiratStream v2.4.3 Pro</h4>
                 </div>
                 <p className="text-zinc-300 text-xs leading-relaxed">
                   Plateforme de streaming spirituel, historique et d'enseignements authentiques. Conçue avec une interface liquide de dernière génération, adaptée à tous les écrans et tous les membres du foyer.
@@ -2048,6 +1968,58 @@ export default function AccountSettingsModal({
                 <p className="text-zinc-400 text-[11px] pt-1">
                   Build : 2026.09-Release · PWA Offline Capable · Audio Engine HD
                 </p>
+              </GlassPanel>
+
+              {/* Lien d'accès officiel & Mises à jour en direct */}
+              <GlassPanel variant="card" className="p-5 border border-emerald-400/25 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-emerald-400" />
+                    <h4 className="text-white text-sm font-semibold">Lien d'accès officiel & Mises à jour</h4>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    Synchronisation active
+                  </span>
+                </div>
+
+                <p className="text-zinc-300 text-xs leading-relaxed">
+                  À chaque mise à jour de la plateforme, ce bouton vous permet de relancer immédiatement l'application avec le lien le plus récent et de vider le cache temporaire sans perdre vos profils.
+                </p>
+
+                <div className="p-3.5 rounded-xl bg-black/60 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-zinc-400 text-[10px] uppercase font-bold tracking-wider">Lien d'accès officiel</p>
+                      <span className="text-[10px] text-emerald-300 font-semibold bg-emerald-500/15 px-1.5 py-0.2 rounded border border-emerald-400/30">
+                        À jour
+                      </span>
+                    </div>
+                    <p className="text-emerald-200 text-xs font-mono truncate mt-0.5 select-all font-semibold">
+                      https://sirat-stream.ai.studio/
+                    </p>
+                    {typeof window !== "undefined" && !window.location.origin.includes("sirat-stream") && (
+                      <p className="text-zinc-400 text-[10px] font-mono truncate mt-0.5">
+                        Lien actif actuel : {window.location.origin}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
+                    <button
+                      onClick={handleCopyAppUrl}
+                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-zinc-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    >
+                      {urlCopied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                      <span>{urlCopied ? "Copié !" : "Copier le lien"}</span>
+                    </button>
+                    <button
+                      onClick={handleForceRefreshUpdate}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+                    >
+                      <RefreshCw size={13} />
+                      <span>Lancer le lien mis à jour</span>
+                    </button>
+                  </div>
+                </div>
               </GlassPanel>
 
               {/* Test de diagnostic réseau */}
@@ -2131,11 +2103,11 @@ export default function AccountSettingsModal({
 
               {/* Bouton Déconnexion bien visible */}
               <button
-                onClick={signOut}
-                className="w-full flex items-center justify-center gap-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/40 font-bold py-3.5 rounded-2xl transition-all text-sm backdrop-blur-xl shadow-lg active:scale-95"
+                onClick={() => setShowExitModal(true)}
+                className="w-full flex items-center justify-center gap-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/40 font-bold py-3.5 rounded-2xl transition-all text-sm backdrop-blur-xl shadow-lg active:scale-95 cursor-pointer"
               >
                 <LogOut size={18} />
-                <span>Se déconnecter de SiratStream</span>
+                <span>Quitter l'application / Se déconnecter</span>
               </button>
             </div>
           )}
@@ -2392,6 +2364,17 @@ export default function AccountSettingsModal({
         isOpen={showMicModal}
         onClose={() => setShowMicModal(false)}
         onPermissionGranted={() => setMicStatus("granted")}
+      />
+
+      {/* Confirmation pour quitter l'application */}
+      <ExitAppModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onConfirmExit={() => {
+          setShowExitModal(false);
+          onClose();
+          signOut();
+        }}
       />
     </div>
   );
