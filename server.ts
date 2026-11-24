@@ -4,7 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { requireAuth, type AuthRequest } from "./src/middleware/auth.ts";
+import { requireAuth, requireCreator, type AuthRequest } from "./src/middleware/auth.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
 import { getSavedLocations, addSavedLocation, deleteSavedLocation } from "./src/db/locations.ts";
 import {
@@ -197,18 +197,19 @@ app.get("/api/app-version", (req, res) => {
 // AGENT QUOTIDIEN AUTONOME (Mode Silencieux — Export des Vidéos >= 10 min)
 // ============================================================================
 
-// Obtenir le statut et l'état actuel de l'agent
-app.get("/api/agent/status", (req, res) => {
+// Obtenir le statut et l'état actuel de l'agent (strictement réservé au créateur)
+app.get("/api/agent/status", requireCreator, (_req, res) => {
   try {
     const state = dailyChannelSyncAgent.getState();
     res.json(state);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Agent status error:", err);
+    res.status(500).json({ error: "Impossible de récupérer l'état de l'agent." });
   }
 });
 
 // Obtenir la liste des nouvelles vidéos exportées (>= 10 minutes)
-app.get("/api/agent/exported-videos", (req, res) => {
+app.get("/api/agent/exported-videos", requireCreator, (_req, res) => {
   try {
     const videos = dailyChannelSyncAgent.getExportedVideos();
     res.json({
@@ -217,12 +218,13 @@ app.get("/api/agent/exported-videos", (req, res) => {
       videos,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Agent exported videos error:", err);
+    res.status(500).json({ error: "Impossible de charger les vidéos exportées." });
   }
 });
 
 // Télécharger les vidéos exportées en fichier JSON ou CSV
-app.get("/api/agent/download-export", (req, res) => {
+app.get("/api/agent/download-export", requireCreator, (req, res) => {
   try {
     const format = req.query.format === "csv" ? "csv" : "json";
     const timestamp = new Date().toISOString().split("T")[0];
@@ -239,7 +241,8 @@ app.get("/api/agent/download-export", (req, res) => {
       res.send(JSON.stringify(videos, null, 2));
     }
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Agent download export error:", err);
+    res.status(500).json({ error: "Impossible de générer le fichier d'export." });
   }
 });
 
@@ -273,7 +276,8 @@ app.get("/api/export/minute-islam", (req, res) => {
 
     res.status(404).json({ error: "Fichier d'export Minute Islam non trouvé" });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Minute Islam export error:", err);
+    res.status(500).json({ error: "Erreur lors de l'export Minute Islam" });
   }
 });
 
@@ -307,12 +311,13 @@ app.get("/api/export/sur-le-chemin", (req, res) => {
 
     res.status(404).json({ error: "Fichier d'export Sur le chemin non trouvé" });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Sur le chemin export error:", err);
+    res.status(500).json({ error: "Erreur lors de l'export Sur le chemin" });
   }
 });
 
-// Déclencher une vérification silencieuse immédiate
-app.post("/api/agent/sync-now", async (req, res) => {
+// Déclencher une vérification silencieuse immédiate (strictement réservé au créateur)
+app.post("/api/agent/sync-now", requireCreator, async (_req: AuthRequest, res) => {
   try {
     // Exécute la vérification silencieuse sans bloquer ni notifier avec alerte
     const result = await dailyChannelSyncAgent.runSilentSync("Déclenchement sécurisé API");
@@ -323,7 +328,8 @@ app.post("/api/agent/sync-now", async (req, res) => {
       state: dailyChannelSyncAgent.getState(),
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("Agent sync-now error:", err);
+    res.status(500).json({ error: "Erreur lors de la synchronisation silencieuse." });
   }
 });
 
@@ -543,9 +549,21 @@ function generateLocalFallbackReply(messages: any[]): { text: string } {
 // AI Chat Endpoint
 app.post("/api/ai/chat", async (req, res) => {
   try {
-    const { messages, userContext } = req.body;
+    const { messages } = req.body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Messages array is required" });
+    }
+
+    const sanitizedMessages = messages
+      .slice(-20)
+      .filter((m: any) => m && typeof m.content === "string" && m.content.trim().length > 0)
+      .map((m: any) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content.trim().slice(0, 4000),
+      }));
+
+    if (sanitizedMessages.length === 0) {
+      return res.status(400).json({ error: "Valid text messages are required" });
     }
 
     const ai = getGenAI();
@@ -600,12 +618,12 @@ TON & STYLE :
 Érudit, chaleureux, bienveillant, clair, structuré avec titres en gras et listes à puces. Termine les salutations par « Assalamu 'alaykum » ou des formules de bénédiction quand c'est approprié.`;
 
     if (!ai) {
-      return res.json(generateLocalFallbackReply(messages));
+      return res.json(generateLocalFallbackReply(sanitizedMessages));
     }
 
     // Format conversation history for Gemini SDK
     const contents: any[] = [];
-    for (const m of messages) {
+    for (const m of sanitizedMessages) {
       contents.push({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
@@ -623,17 +641,19 @@ TON & STYLE :
     }
 
     // If all Gemini remote models failed or returned 503, provide local fallback seamlessly
-    return res.json(generateLocalFallbackReply(messages));
+    return res.json(generateLocalFallbackReply(sanitizedMessages));
   } catch (error: any) {
     console.error("AI chat error handled gracefully:", error);
-    return res.json(generateLocalFallbackReply(req.body.messages || []));
+    return res.json(generateLocalFallbackReply(Array.isArray(req.body?.messages) ? req.body.messages.slice(-1) : []));
   }
 });
 
-// AI Creator Studio Endpoint for content generation and enhancement
-app.post("/api/creator/ai-studio", async (req, res) => {
+// AI Creator Studio Endpoint for content generation and enhancement (strictly réservé au créateur)
+app.post("/api/creator/ai-studio", requireCreator, async (req: AuthRequest, res) => {
   try {
-    const { action, prompt, currentData } = req.body;
+    const action = String(req.body?.action || "").slice(0, 80);
+    const prompt = String(req.body?.prompt || "").slice(0, 4000);
+    const currentData = req.body?.currentData && typeof req.body.currentData === "object" ? req.body.currentData : {};
     const ai = getGenAI();
 
     if (!ai) {
@@ -748,7 +768,7 @@ Réponds UNIQUEMENT avec un JSON valide :
     return res.json({ success: false, message: "Modèle indisponible" });
   } catch (error: any) {
     console.error("AI Creator Studio error:", error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: "Erreur lors de la génération AI Studio." });
   }
 });
 
@@ -811,6 +831,7 @@ app.get("/api/subtitles", async (req, res) => {
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "fr,fr-FR;q=0.9,ar;q=0.8,en;q=0.7",
       },
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!ytRes.ok) {
@@ -849,7 +870,25 @@ app.get("/api/subtitles", async (req, res) => {
       captionTracks.find((t: any) => t.languageCode?.toLowerCase().startsWith("en")) ||
       captionTracks[0];
 
-    const baseUrl = chosenTrack.baseUrl;
+    const baseUrl = String(chosenTrack.baseUrl || "");
+    let isAllowedCaptionOrigin = false;
+    try {
+      const parsedTrackUrl = new URL(baseUrl);
+      const host = parsedTrackUrl.hostname.toLowerCase();
+      isAllowedCaptionOrigin =
+        parsedTrackUrl.protocol === "https:" &&
+        (host === "www.youtube.com" ||
+          host === "youtube.com" ||
+          host.endsWith(".youtube.com") ||
+          host.endsWith(".googlevideo.com"));
+    } catch {
+      isAllowedCaptionOrigin = false;
+    }
+
+    if (!isAllowedCaptionOrigin) {
+      return res.status(403).json({ success: false, error: "Source de sous-titres non autorisée." });
+    }
+
     const fetchUrls = [
       baseUrl.includes("fmt=") ? baseUrl : `${baseUrl}&fmt=json3`,
       baseUrl, // raw XML format
@@ -866,6 +905,8 @@ app.get("/api/subtitles", async (req, res) => {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           },
+          redirect: "error",
+          signal: AbortSignal.timeout(8000),
         });
 
         if (subRes.ok) {
@@ -952,17 +993,20 @@ app.get("/api/subtitles", async (req, res) => {
     });
   } catch (err: any) {
     console.error("Subtitles extraction error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: "Erreur lors de l'extraction des sous-titres." });
   }
 });
 
 // AI Real-time Lyrics & Subtitles Translation Endpoint using Gemini API
 app.post("/api/ai/translate-lyrics", async (req, res) => {
   try {
-    const { lines, targetLang = "fr", contextTitle = "" } = req.body;
-    if (!lines || !Array.isArray(lines) || lines.length === 0) {
+    const rawLines = req.body?.lines;
+    const targetLang = String(req.body?.targetLang || "fr").slice(0, 10);
+    const contextTitle = String(req.body?.contextTitle || "").slice(0, 200);
+    if (!rawLines || !Array.isArray(rawLines) || rawLines.length === 0) {
       return res.status(400).json({ error: "Lines array is required" });
     }
+    const lines = rawLines.slice(0, 100);
 
     const ai = getGenAI();
     const langNames: Record<string, string> = {
@@ -1073,7 +1117,7 @@ Règles impératives :
     });
   } catch (err: any) {
     console.error("Lyrics translation API error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: "Erreur lors de la traduction." });
   }
 });
 
@@ -1250,7 +1294,7 @@ Consignes impératives :
     });
   } catch (err: any) {
     console.error("Dubbing script generation error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: "Erreur lors de la génération du doublage." });
   }
 });
 
@@ -1283,10 +1327,16 @@ const CREATOR_KNOWN_SPONSORS: Record<string, { start: number; end: number; label
 // AI YouTube Sponsor & Ad Detection Endpoint using Gemini API + SponsorBlock + Creator DB
 app.post("/api/ai/detect-video-sponsors", async (req, res) => {
   try {
-    const { videoId, title = "", description = "", channel = "", durationSec = 0 } = req.body;
-    if (!videoId) {
-      return res.status(400).json({ error: "videoId is required" });
+    const rawVideoId = String(req.body?.videoId || "").trim();
+    const title = String(req.body?.title || "").slice(0, 300);
+    const description = String(req.body?.description || "").slice(0, 2000);
+    const channel = String(req.body?.channel || "").slice(0, 150);
+    const durationSec = Math.max(0, Math.min(86400, Number(req.body?.durationSec) || 0));
+
+    if (!rawVideoId || !/^[a-zA-Z0-9_-]{6,30}$/.test(rawVideoId)) {
+      return res.status(400).json({ error: "Valid videoId is required" });
     }
+    const videoId = rawVideoId;
 
     // 1. Check in-memory cache
     if (sponsorSegmentsCache.has(videoId)) {
@@ -1452,7 +1502,7 @@ ${description.slice(0, 1500)}`;
     });
   } catch (err: any) {
     console.error("Detect video sponsors error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: "Erreur lors de l'analyse des sponsors." });
   }
 });
 
@@ -1499,18 +1549,30 @@ app.post("/api/locations", requireAuth, async (req: AuthRequest, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
     const { name, description, category, lat, lng, placeId, notes } = req.body;
-    if (!name || typeof lat !== "number" || typeof lng !== "number") {
-      return res.status(400).json({ error: "Name, lat, and lng are required" });
+    if (
+      typeof name !== "string" ||
+      name.trim().length === 0 ||
+      name.trim().length > 200 ||
+      typeof lat !== "number" ||
+      typeof lng !== "number" ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      return res.status(400).json({ error: "Valid name, lat (-90..90), and lng (-180..180) are required" });
     }
 
     const newLoc = await addSavedLocation(uid, email, {
-      name,
-      description,
-      category: category || "historical_monument",
+      name: name.trim(),
+      description: typeof description === "string" ? description.trim().slice(0, 1000) : undefined,
+      category: typeof category === "string" ? category.trim().slice(0, 80) : "historical_monument",
       lat,
       lng,
-      placeId,
-      notes,
+      placeId: typeof placeId === "string" ? placeId.trim().slice(0, 200) : undefined,
+      notes: typeof notes === "string" ? notes.trim().slice(0, 1000) : undefined,
     });
     res.json({ success: true, location: newLoc });
   } catch (error: any) {
@@ -1540,6 +1602,61 @@ app.delete("/api/locations/:id", requireAuth, async (req: AuthRequest, res) => {
 // Bypasses browser CORS & cross-origin download restrictions
 // ============================================================
 
+// Strict SSRF validator for assabile.com media proxy
+function validateAssabileUrl(rawUrl: string): URL | null {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    if (parsed.username || parsed.password) {
+      return null;
+    }
+    if (parsed.port && parsed.port !== "80" && parsed.port !== "443") {
+      return null;
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    // Require exact apex domain or explicit subdomain with leading dot (blocks evilassabile.com)
+    if (hostname !== "assabile.com" && !hostname.endsWith(".assabile.com")) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchValidatedAssabileMedia(initialUrl: URL, headers: Record<string, string>) {
+  let currentUrl = initialUrl;
+  for (let hop = 0; hop < 3; hop++) {
+    const response = await fetch(currentUrl.toString(), {
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (!location) return null;
+      let resolved: URL;
+      try {
+        resolved = new URL(location, currentUrl);
+      } catch {
+        return null;
+      }
+      const validatedNext = validateAssabileUrl(resolved.toString());
+      if (!validatedNext) {
+        return null;
+      }
+      currentUrl = validatedNext;
+      continue;
+    }
+
+    return response;
+  }
+  return null;
+}
+
 app.get("/api/adhan/stream", async (req, res) => {
   try {
     const rawUrl = req.query.url as string;
@@ -1547,9 +1664,9 @@ app.get("/api/adhan/stream", async (req, res) => {
       return res.status(400).json({ error: "URL param is required" });
     }
 
-    // Security: Only proxy media from assabile.com
-    const parsed = new URL(rawUrl);
-    if (!parsed.hostname.endsWith("assabile.com")) {
+    // Security: Strictly validate protocol, host boundary, and disallow open-redirect SSRF
+    const parsed = validateAssabileUrl(rawUrl);
+    if (!parsed) {
       return res.status(403).json({ error: "Only assabile.com audio is permitted" });
     }
 
@@ -1562,7 +1679,10 @@ app.get("/api/adhan/stream", async (req, res) => {
       headers["Range"] = req.headers.range;
     }
 
-    const response = await fetch(rawUrl, { headers });
+    const response = await fetchValidatedAssabileMedia(parsed, headers);
+    if (!response) {
+      return res.status(403).json({ error: "Redirect target not permitted" });
+    }
     if (!response.ok && response.status !== 206) {
       return res.status(response.status).send("Failed to fetch audio stream");
     }
@@ -1600,8 +1720,9 @@ app.get("/api/adhan/stream", async (req, res) => {
 
     await pump();
   } catch (err: any) {
+    console.error("Adhan stream error:", err);
     if (!res.headersSent) {
-      res.status(500).json({ error: err.message || "Failed to stream audio" });
+      res.status(500).json({ error: "Failed to stream audio" });
     }
   }
 });
@@ -1614,8 +1735,8 @@ app.get("/api/adhan/download", async (req, res) => {
       return res.status(400).json({ error: "URL param is required" });
     }
 
-    const parsed = new URL(rawUrl);
-    if (!parsed.hostname.endsWith("assabile.com")) {
+    const parsed = validateAssabileUrl(rawUrl);
+    if (!parsed) {
       return res.status(403).json({ error: "Only assabile.com audio is permitted" });
     }
 
@@ -1624,12 +1745,15 @@ app.get("/api/adhan/download", async (req, res) => {
       "Referer": "https://fr.assabile.com/",
     };
 
-    const response = await fetch(rawUrl, { headers });
+    const response = await fetchValidatedAssabileMedia(parsed, headers);
+    if (!response) {
+      return res.status(403).json({ error: "Redirect target not permitted" });
+    }
     if (!response.ok) {
       return res.status(response.status).send("Failed to fetch audio for download");
     }
 
-    const safeFilename = filename.replace(/[^a-zA-Z0-9_.-]/g, "_");
+    const safeFilename = filename.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 120) || "Adhan_Assabile.mp3";
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
@@ -1649,8 +1773,9 @@ app.get("/api/adhan/download", async (req, res) => {
     }
     res.end();
   } catch (err: any) {
+    console.error("Adhan download error:", err);
     if (!res.headersSent) {
-      res.status(500).json({ error: err.message || "Failed to download audio" });
+      res.status(500).json({ error: "Failed to download audio" });
     }
   }
 });

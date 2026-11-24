@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { db, collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { sanitizeHttpUrl } from "@/lib/safeUrl";
 
 export type VideoSourceType = "youtube" | "direct" | "vimeo" | "dailymotion" | "hls" | "other";
 
@@ -85,25 +86,30 @@ export function useVideoSuggestions() {
       submitterName?: string;
     }): Promise<{ success: boolean; error?: string }> => {
       try {
+        const safeUrl = sanitizeHttpUrl(data.url);
+        if (!safeUrl) {
+          return { success: false, error: "Veuillez saisir une URL valide commençant par http:// ou https://." };
+        }
+
         const id = "sug_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
         
         let videoSourceType: VideoSourceType = "youtube";
-        if (data.url.includes("vimeo.com")) videoSourceType = "vimeo";
-        else if (data.url.includes("dailymotion.com") || data.url.includes("dai.ly")) videoSourceType = "dailymotion";
-        else if (data.url.endsWith(".mp4") || data.url.endsWith(".webm") || data.url.includes("blob:") || data.url.startsWith("http")) {
-          if (data.url.includes("youtube.com") || data.url.includes("youtu.be")) videoSourceType = "youtube";
+        if (safeUrl.includes("vimeo.com")) videoSourceType = "vimeo";
+        else if (safeUrl.includes("dailymotion.com") || safeUrl.includes("dai.ly")) videoSourceType = "dailymotion";
+        else if (safeUrl.endsWith(".mp4") || safeUrl.endsWith(".webm") || safeUrl.startsWith("http")) {
+          if (safeUrl.includes("youtube.com") || safeUrl.includes("youtu.be")) videoSourceType = "youtube";
           else videoSourceType = "direct";
         }
 
         const newSuggestion: VideoSuggestion = {
           id,
-          title: data.title.trim(),
-          url: data.url.trim(),
+          title: data.title.trim().slice(0, 250),
+          url: safeUrl.slice(0, 600),
           videoSourceType,
-          category: data.category || "Prophètes",
-          note: data.note?.trim() || "",
-          submittedBy: data.submitterName?.trim() || firebaseUser?.displayName || "Membre Communauté",
-          submitterEmail: firebaseUser?.email || user?.email || "",
+          category: (data.category || "Prophètes").slice(0, 80),
+          note: (data.note?.trim() || "").slice(0, 1000),
+          submittedBy: (data.submitterName?.trim() || firebaseUser?.displayName || "Membre Communauté").slice(0, 100),
+          submitterEmail: "",
           voteCount: 1,
           voters: [voterId],
           status: "pending",

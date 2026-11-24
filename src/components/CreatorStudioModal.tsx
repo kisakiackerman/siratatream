@@ -93,6 +93,7 @@ import SponsorSegmentManager from "@/components/SponsorSegmentManager";
 import LiveAppPreview from "@/components/LiveAppPreview";
 import StudioMediaPreview from "@/components/StudioMediaPreview";
 import { saveLocalVideoFile, extractVideoMetadata } from "@/lib/videoStorage";
+import { sanitizeHttpUrl } from "@/lib/safeUrl";
 
 interface CreatorStudioModalProps {
   onClose: () => void;
@@ -362,9 +363,15 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
     }
   };
 
+  const getCreatorAuthHeaders = async (): Promise<Record<string, string>> => {
+    const token = firebaseUser ? await firebaseUser.getIdToken() : "";
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const fetchAgentStatus = async () => {
     try {
-      const res = await fetch("/api/agent/status");
+      const headers = await getCreatorAuthHeaders();
+      const res = await fetch("/api/agent/status", { headers });
       if (res.ok) {
         const data = await res.json();
         setAgentStatus(data);
@@ -375,25 +382,51 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
   };
 
   useEffect(() => {
-    if (activeTab === "cloud-sync") {
+    if (activeTab === "cloud-sync" && firebaseUser) {
       fetchAgentStatus();
     }
-  }, [activeTab]);
+  }, [activeTab, firebaseUser]);
 
   const handleTriggerAgentSync = async () => {
     setIsAgentSyncing(true);
     setAgentSyncMessage(null);
     try {
-      const res = await fetch("/api/agent/sync-now", { method: "POST" });
+      const headers = await getCreatorAuthHeaders();
+      const res = await fetch("/api/agent/sync-now", { method: "POST", headers });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setAgentSyncMessage(data.message || "Vérification silencieuse terminée avec succès");
         await fetchAgentStatus();
+      } else {
+        setAgentSyncMessage(data.error || "Accès créateur requis pour lancer la synchronisation.");
       }
     } catch (e: any) {
       setAgentSyncMessage("Erreur: " + e.message);
     } finally {
       setIsAgentSyncing(false);
+    }
+  };
+
+  const handleDownloadAgentExport = async (format: "json" | "csv") => {
+    try {
+      const headers = await getCreatorAuthHeaders();
+      const res = await fetch(`/api/agent/download-export?format=${format}`, { headers });
+      if (!res.ok) {
+        setAgentSyncMessage("Authentification créateur requise pour télécharger l'export.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const timestamp = new Date().toISOString().split("T")[0];
+      a.download = `siratstream_agent_export_${timestamp}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setAgentSyncMessage("Erreur export: " + e.message);
     }
   };
 
@@ -411,7 +444,10 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
 
     // Support pasting full <iframe src="...">...</iframe> HTML code
     const iframeSrcMatch = trimmed.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-    const clean = iframeSrcMatch ? iframeSrcMatch[1].trim() : trimmed;
+    const rawCandidate = iframeSrcMatch ? iframeSrcMatch[1].trim() : trimmed;
+    const isUrlLike = rawCandidate.includes(":") || rawCandidate.startsWith("//");
+    const clean = isUrlLike ? sanitizeHttpUrl(rawCandidate, { allowBlob: true }) : rawCandidate;
+    if (!clean) return { videoId: "", type: "youtube" };
 
     if (clean.includes("vimeo.com")) {
       const parts = clean.split("vimeo.com/");
@@ -536,9 +572,10 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
     setPreviewPlaying(false);
 
     try {
+      const authHeaders = await getCreatorAuthHeaders();
       const response = await fetch("/api/creator/ai-studio", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           action: "generate-content",
           prompt: `${promptToUse} ${aiVideoUrlInput ? `(Lien vidéo : ${aiVideoUrlInput})` : ""}`,
@@ -2137,15 +2174,19 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                         )}
 
                         <div className="flex items-center gap-4 text-xs text-zinc-500 flex-wrap">
-                          <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-amber-400 hover:underline flex items-center gap-1 truncate max-w-sm"
-                          >
-                            <ExternalLink size={12} />
-                            <span className="truncate">{item.url}</span>
-                          </a>
+                          {sanitizeHttpUrl(item.url) ? (
+                            <a
+                              href={sanitizeHttpUrl(item.url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-amber-400 hover:underline flex items-center gap-1 truncate max-w-sm"
+                            >
+                              <ExternalLink size={12} />
+                              <span className="truncate">{item.url}</span>
+                            </a>
+                          ) : (
+                            <span className="text-zinc-500 truncate max-w-sm">Lien non valide</span>
+                          )}
                           <span>Soumis par <strong className="text-zinc-300">{item.submittedBy}</strong> ({item.submitterEmail || "Membre"})</span>
                         </div>
                       </div>
@@ -2661,23 +2702,23 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-zinc-800/80">
-                  <a
-                    href="/api/agent/download-export?format=json"
-                    download
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-lg shadow-amber-950/40"
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAgentExport("json")}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-lg shadow-amber-950/40 cursor-pointer"
                   >
                     <DownloadCloud size={15} />
                     <span>Télécharger Export Agent (JSON)</span>
-                  </a>
+                  </button>
 
-                  <a
-                    href="/api/agent/download-export?format=csv"
-                    download
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all"
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAgentExport("csv")}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition-all cursor-pointer"
                   >
                     <FileDown size={15} />
                     <span>Télécharger Tableau CSV</span>
-                  </a>
+                  </button>
 
                   <button
                     onClick={handleTriggerAgentSync}

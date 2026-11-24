@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ShieldCheck, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { sanitizeHttpUrl } from "@/lib/safeUrl";
 
 type AdminSuggestionsProps = {
   onClose: () => void;
@@ -61,14 +62,18 @@ export default function AdminSuggestions({ onClose }: AdminSuggestionsProps) {
               <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <h3 className="text-white font-bold text-base">{item.title || "Sans titre"}</h3>
-                  <a
-                    href={item.youtube_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-emerald-400 text-xs hover:underline block truncate mt-1"
-                  >
-                    {item.youtube_url}
-                  </a>
+                  {sanitizeHttpUrl(item.youtube_url) ? (
+                    <a
+                      href={sanitizeHttpUrl(item.youtube_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 text-xs hover:underline block truncate mt-1"
+                    >
+                      {item.youtube_url}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-500 text-xs block truncate mt-1">Lien non valide</span>
+                  )}
                   {item.note && <p className="mt-2 text-xs text-zinc-400 bg-zinc-800/60 p-2.5 rounded-lg">{item.note}</p>}
                   <p className="mt-3 text-[11px] text-zinc-500">
                     Proposé par {item.user_email} le {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.created_at))}

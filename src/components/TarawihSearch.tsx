@@ -54,9 +54,13 @@ const QUERIES = [
 const TARGET = 100;
 
 function decodeHtml(str: string) {
-  const t = document.createElement("textarea");
-  t.innerHTML = str;
-  return t.value;
+  if (!str) return "";
+  try {
+    const doc = new DOMParser().parseFromString(str, "text/html");
+    return doc.body.textContent || "";
+  } catch {
+    return str;
+  }
 }
 
 function parseDuration(iso: string): number {

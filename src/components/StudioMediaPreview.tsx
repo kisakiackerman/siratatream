@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Play, ExternalLink, RotateCcw, MonitorPlay } from "lucide-react";
 import type { ContentItem } from "@/data/catalog";
 import { getThematicFallbackBanner } from "@/lib/heroBanners";
+import { sanitizeEmbedUrl, sanitizeHttpUrl, isValidYouTubeId } from "@/lib/safeUrl";
 
 interface StudioMediaPreviewProps {
   item: Partial<ContentItem>;
@@ -14,7 +15,8 @@ export function extractEmbedSrc(raw?: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();
   const iframeSrcMatch = trimmed.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-  return iframeSrcMatch ? iframeSrcMatch[1].trim() : trimmed;
+  const candidate = iframeSrcMatch ? iframeSrcMatch[1].trim() : trimmed;
+  return sanitizeHttpUrl(candidate, { allowBlob: true });
 }
 
 export default function StudioMediaPreview({
@@ -28,9 +30,10 @@ export default function StudioMediaPreview({
   const [mediaError, setMediaError] = useState(false);
 
   const cleanUrl = extractEmbedSrc(item.videoUrl);
+  const safeHttpsEmbed = sanitizeEmbedUrl(cleanUrl);
   const rawYtId = item.youtubeId || "";
   const validYtId =
-    rawYtId && !rawYtId.startsWith("embed_") && !rawYtId.startsWith("direct_")
+    rawYtId && !rawYtId.startsWith("embed_") && !rawYtId.startsWith("direct_") && isValidYouTubeId(rawYtId)
       ? rawYtId
       : "";
 
@@ -219,9 +222,9 @@ export default function StudioMediaPreview({
               onError={() => setMediaError(true)}
               className="w-full h-full object-contain"
             />
-          ) : isCustomEmbed && cleanUrl ? (
+          ) : isCustomEmbed && safeHttpsEmbed ? (
             <iframe
-              src={cleanUrl}
+              src={safeHttpsEmbed}
               title={item.title || "Aperçu vidéo"}
               className="w-full h-full border-0"
               allow="autoplay; fullscreen; picture-in-picture; encrypted-media"

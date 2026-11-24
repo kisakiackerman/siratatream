@@ -27,6 +27,7 @@ import { useVideoSuggestions, VideoSuggestion } from "@/hooks/useVideoSuggestion
 import { categories, Category } from "@/data/catalog";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreatorMessages, MessageCategory } from "@/hooks/useCreatorMessages";
+import { sanitizeHttpUrl, sanitizeEmbedUrl, isValidYouTubeId } from "@/lib/safeUrl";
 
 interface VideoSuggestionModalProps {
   onClose: () => void;
@@ -82,6 +83,11 @@ export default function VideoSuggestionModal({
       setFormError("Veuillez renseigner le lien de la vidéo.");
       return;
     }
+    const safeSubmittedUrl = sanitizeHttpUrl(url.trim());
+    if (!safeSubmittedUrl) {
+      setFormError("Veuillez saisir une URL valide commençant par http:// ou https://.");
+      return;
+    }
     if (!title.trim()) {
       setFormError("Veuillez indiquer un titre ou sujet pour la vidéo.");
       return;
@@ -92,7 +98,7 @@ export default function VideoSuggestionModal({
 
     const res = await submitSuggestion({
       title: title.trim(),
-      url: url.trim(),
+      url: safeSubmittedUrl,
       category,
       note: note.trim(),
       submitterName: user?.displayName || user?.email?.split("@")[0] || "Membre Communauté",
@@ -637,23 +643,29 @@ export default function VideoSuggestionModal({
                           )}
 
                           <div className="pt-1 flex items-center gap-3 text-[11px] text-zinc-500">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewVideoUrl(item.url)}
-                              className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20"
-                            >
-                              <Video size={11} />
-                              <span>Tester la lecture</span>
-                            </button>
-                            <a
-                              href={item.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-amber-400/90 hover:text-amber-300 hover:underline flex items-center gap-1 truncate max-w-xs"
-                            >
-                              <ExternalLink size={11} />
-                              <span className="truncate">{item.url}</span>
-                            </a>
+                            {sanitizeHttpUrl(item.url) && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewVideoUrl(sanitizeHttpUrl(item.url))}
+                                className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20"
+                              >
+                                <Video size={11} />
+                                <span>Tester la lecture</span>
+                              </button>
+                            )}
+                            {sanitizeHttpUrl(item.url) ? (
+                              <a
+                                href={sanitizeHttpUrl(item.url)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-amber-400/90 hover:text-amber-300 hover:underline flex items-center gap-1 truncate max-w-xs"
+                              >
+                                <ExternalLink size={11} />
+                                <span className="truncate">{item.url}</span>
+                              </a>
+                            ) : (
+                              <span className="text-zinc-500 truncate max-w-xs">Lien non valide</span>
+                            )}
                           </div>
                         </div>
 
@@ -705,27 +717,39 @@ export default function VideoSuggestionModal({
               </div>
 
               <div className="rounded-2xl overflow-hidden aspect-video bg-black border border-zinc-800">
-                {previewVideoUrl.endsWith(".mp4") || previewVideoUrl.endsWith(".webm") ? (
-                  <video src={previewVideoUrl} controls autoPlay className="w-full h-full object-contain" />
-                ) : (
-                  <iframe
-                    src={(() => {
-                      const iframeMatch = previewVideoUrl.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-                      const cleanUrl = iframeMatch ? iframeMatch[1].trim() : previewVideoUrl.trim();
-                      const ytId = cleanUrl.includes("watch?v=")
-                        ? cleanUrl.split("v=")[1]?.split("&")[0]
-                        : cleanUrl.includes("youtu.be/")
-                        ? cleanUrl.split("youtu.be/")[1]?.split("?")[0]
-                        : "";
-                      return ytId
-                        ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${ytId}`
-                        : cleanUrl;
-                    })()}
-                    className="w-full h-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                )}
+                {(() => {
+                  const safeDirect = sanitizeHttpUrl(previewVideoUrl, { allowBlob: true });
+                  if (safeDirect && (safeDirect.endsWith(".mp4") || safeDirect.endsWith(".webm"))) {
+                    return <video src={safeDirect} controls autoPlay className="w-full h-full object-contain" />;
+                  }
+                  const cleanUrl = sanitizeEmbedUrl(previewVideoUrl);
+                  const rawYtId = cleanUrl.includes("watch?v=")
+                    ? cleanUrl.split("v=")[1]?.split("&")[0]
+                    : cleanUrl.includes("youtu.be/")
+                    ? cleanUrl.split("youtu.be/")[1]?.split("?")[0]
+                    : "";
+                  const safeSrc = isValidYouTubeId(rawYtId)
+                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${rawYtId}`
+                    : cleanUrl;
+
+                  if (!safeSrc) {
+                    return (
+                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400 p-4 text-center">
+                        Impossible d'afficher l'aperçu : lien vidéo HTTPS non valide.
+                      </div>
+                    );
+                  }
+                  return (
+                    <iframe
+                      src={safeSrc}
+                      title="Lecteur Aperçu Suggestion"
+                      className="w-full h-full border-0"
+                      sandbox="allow-scripts allow-same-origin allow-presentation"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  );
+                })()}
               </div>
             </div>
           </div>

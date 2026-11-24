@@ -40,6 +40,9 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
       "img-src 'self' https: data: blob:",
       "media-src 'self' https: blob: data:",
       "connect-src 'self' https: wss: data:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
       "frame-src 'self' https://*.firebaseapp.com https://khaki-obelisk-6f6jr.firebaseapp.com https://*.firebaseio.com https://*.googleapis.com https://accounts.google.com https://appleid.apple.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://*.google.com",
     ].join("; ")
   );
@@ -60,6 +63,7 @@ interface RateLimitRecord {
 }
 
 const rateLimitStore = new Map<string, RateLimitRecord>();
+const MAX_RATE_LIMIT_ENTRIES = 10000;
 
 // Clean up stale IP records every 5 minutes to prevent memory leaks
 setInterval(() => {
@@ -87,6 +91,10 @@ export function createRateLimiter(options: {
 
     let record = rateLimitStore.get(key);
     if (!record || now > record.resetTime) {
+      if (rateLimitStore.size >= MAX_RATE_LIMIT_ENTRIES) {
+        const oldestKey = rateLimitStore.keys().next().value;
+        if (oldestKey) rateLimitStore.delete(oldestKey);
+      }
       record = {
         count: 1,
         resetTime: now + windowMs,

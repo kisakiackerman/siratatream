@@ -1,95 +1,260 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
+    // Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives & Identity Helpers
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Helper function to check if user is owner of the document
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper function to check if authenticated user is a verified creator/admin
+    // Verified Creator / Admin identity check (requires verified email claim)
     function isCreator() {
-      return isAuthenticated() && (
-        request.auth.token.email != null && (
-          request.auth.token.email.lower() == "kisakiackerman744@gmail.com" ||
-          request.auth.token.email.lower() == "zelephackerman3@gmail.com"
-        )
-      );
+      return isAuthenticated() &&
+             request.auth.token.email_verified == true &&
+             request.auth.token.email != null && (
+               request.auth.token.email.lower() == "kisakiackerman744@gmail.com" ||
+               request.auth.token.email.lower() == "zelephackerman3@gmail.com"
+             );
+    }
+
+    // Entity Validation Blueprints
+    function isValidUserProfile(data) {
+      return data.keys().hasOnly([
+               'userId', 'email', 'displayName', 'photoURL', 'provider',
+               'isCreator', 'myList', 'history', 'notes', 'folders',
+               'preferences', 'createdAt', 'updatedAt', 'lastHealedAt',
+               'aiGuardianClean', 'status'
+             ]) &&
+             (!('userId' in data) || (data.userId is string && data.userId.size() <= 128)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 320)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 150)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (!('provider' in data) || (data.provider is string && data.provider.size() <= 30)) &&
+             (!('isCreator' in data) || data.isCreator is bool) &&
+             (!('myList' in data) || (data.myList is string && data.myList.size() <= 500000)) &&
+             (!('history' in data) || (data.history is string && data.history.size() <= 500000)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500000)) &&
+             (!('folders' in data) || (data.folders is string && data.folders.size() <= 500000)) &&
+             (!('preferences' in data) || (data.preferences is string && data.preferences.size() <= 50000)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    function isValidUserNote(data, noteId) {
+      return data.keys().hasAll(['id', 'title', 'content']) &&
+             data.keys().hasOnly([
+               'id', 'contentId', 'contentTitle', 'title', 'content',
+               'verseReference', 'verseText', 'timestamp', 'date',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.id == noteId &&
+             data.title is string && data.title.size() <= 300 &&
+             data.content is string && data.content.size() <= 20000 &&
+             (!('contentId' in data) || (data.contentId is string && data.contentId.size() <= 128)) &&
+             (!('contentTitle' in data) || (data.contentTitle is string && data.contentTitle.size() <= 300)) &&
+             (!('verseReference' in data) || (data.verseReference is string && data.verseReference.size() <= 200)) &&
+             (!('verseText' in data) || (data.verseText is string && data.verseText.size() <= 4000)) &&
+             (!('timestamp' in data) || (data.timestamp is string && data.timestamp.size() <= 40)) &&
+             (!('date' in data) || (data.date is string && data.date.size() <= 64)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    function isValidActiveSession(data, sessionId) {
+      return data.keys().hasAll(['sessionId', 'accountType', 'status', 'lastHeartbeat']) &&
+             data.keys().hasOnly([
+               'sessionId', 'accountType', 'accountIdentifier', 'userId',
+               'appUrl', 'status', 'errorsCleaned', 'lastHeartbeat', 'lastHealedAt'
+             ]) &&
+             data.sessionId == sessionId &&
+             data.accountType in ['guest', 'google', 'apple', 'email'] &&
+             data.status in ['active', 'healed', 'scanning'] &&
+             data.lastHeartbeat is number &&
+             (!('accountIdentifier' in data) || (data.accountIdentifier is string && data.accountIdentifier.size() <= 120)) &&
+             (!('userId' in data) || (data.userId is string && data.userId.size() <= 128)) &&
+             (!('appUrl' in data) || (data.appUrl is string && data.appUrl.size() <= 300)) &&
+             (!('errorsCleaned' in data) || (data.errorsCleaned is number && data.errorsCleaned >= 0 && data.errorsCleaned <= 100000)) &&
+             (!('lastHealedAt' in data) || data.lastHealedAt is number);
+    }
+
+    function isValidSuggestion(data, suggestionId) {
+      return data.keys().hasAll(['id', 'title', 'url', 'voteCount', 'voters', 'status']) &&
+             data.keys().hasOnly([
+               'id', 'title', 'url', 'videoSourceType', 'category', 'note',
+               'submittedBy', 'submitterEmail', 'voteCount', 'voters',
+               'status', 'createdAt', 'updatedAt'
+             ]) &&
+             data.id == suggestionId &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 250 &&
+             data.url is string && data.url.size() >= 10 && data.url.size() <= 600 &&
+             data.url.matches('^https?://.+') &&
+             data.voteCount is number && data.voteCount >= 1 && data.voteCount <= 100000 &&
+             data.voters is list && data.voters.size() <= 5000 &&
+             data.status in ['pending', 'approved', 'published', 'rejected'] &&
+             (!('videoSourceType' in data) || (data.videoSourceType is string && data.videoSourceType.size() <= 30)) &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 80)) &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 1000)) &&
+             (!('submittedBy' in data) || (data.submittedBy is string && data.submittedBy.size() <= 100)) &&
+             (!('submitterEmail' in data) || (data.submitterEmail is string && data.submitterEmail.size() <= 200)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    function isValidCreatorMessage(data, messageId) {
+      return data.keys().hasAll(['id', 'senderName', 'subject', 'content', 'status', 'createdAt']) &&
+             data.keys().hasOnly([
+               'id', 'senderName', 'senderEmail', 'subject', 'content',
+               'category', 'videoContext', 'status', 'createdAt', 'updatedAt'
+             ]) &&
+             data.id == messageId &&
+             data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 150 &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() <= 300 &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 5000 &&
+             data.status in ['unread', 'read', 'archived'] &&
+             data.createdAt is string && data.createdAt.size() <= 64 &&
+             (!('senderEmail' in data) || (data.senderEmail is string && data.senderEmail.size() <= 320)) &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 40)) &&
+             (!('videoContext' in data) || (data.videoContext is string && data.videoContext.size() <= 300)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
     }
 
     // User personal space & preferences
     match /users/{userId} {
-      allow read, write: if isOwner(userId) || isCreator();
+      allow get: if isValidId(userId) && (isOwner(userId) || isCreator());
+      allow list: if isCreator();
+      allow create: if isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       (isOwner(userId) || isCreator()) &&
+                       (!('userId' in incoming()) || incoming().userId == userId) &&
+                       (!('isCreator' in incoming()) || incoming().isCreator == false || isCreator());
+      allow update: if isValidId(userId) &&
+                       isValidUserProfile(incoming()) && (
+                         isCreator() || (
+                           isOwner(userId) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'displayName', 'photoURL', 'myList', 'history',
+                             'notes', 'folders', 'preferences', 'updatedAt'
+                           ]) &&
+                           (!('isCreator' in incoming()) || incoming().isCreator == existing().isCreator)
+                         )
+                       );
+      allow delete: if isValidId(userId) && isCreator();
 
       match /notes/{noteId} {
-        allow read, write: if isOwner(userId) || isCreator();
+        allow get: if isValidId(userId) && isValidId(noteId) && (isOwner(userId) || isCreator());
+        allow list: if isValidId(userId) && (isOwner(userId) || isCreator());
+        allow create: if isValidId(userId) && isValidId(noteId) &&
+                         isValidUserNote(incoming(), noteId) &&
+                         (isOwner(userId) || isCreator());
+        allow update: if isValidId(userId) && isValidId(noteId) &&
+                         isValidUserNote(incoming(), noteId) &&
+                         (isOwner(userId) || isCreator()) &&
+                         (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt);
+        allow delete: if isValidId(userId) && isValidId(noteId) && (isOwner(userId) || isCreator());
       }
     }
 
     // App configurations (announcements, spotlight, deleted videos, metadata, etc.)
-    // Read is public so app UI functions for all visitors; Write is strictly restricted to Creators
+    // Read is public so app UI functions for all visitors; Write is strictly restricted to verified Creators
     match /app_config/{configId} {
-      allow read: if true;
-      allow write: if isCreator();
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow write: if isValidId(configId) && isCreator();
     }
 
-    // Active client sessions & IP links (Guests, Google, Apple across all instances)
+    // Active client sessions (read & purge strictly restricted to verified Creators to protect PII)
     match /active_sessions/{sessionId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if isCreator();
+      allow read: if isCreator();
+      allow create: if isValidId(sessionId) &&
+                       isValidActiveSession(incoming(), sessionId) &&
+                       (
+                         isCreator() ||
+                         (isAuthenticated() && incoming().userId == request.auth.uid) ||
+                         (!isAuthenticated() && incoming().accountType == 'guest')
+                       );
+      allow update: if isValidId(sessionId) &&
+                       isValidActiveSession(incoming(), sessionId) &&
+                       (
+                         isCreator() ||
+                         (isAuthenticated() && incoming().userId == request.auth.uid && existing().userId == request.auth.uid) ||
+                         (!isAuthenticated() && incoming().accountType == 'guest' && existing().accountType == 'guest')
+                       );
+      allow delete: if isValidId(sessionId) && isCreator();
     }
 
     // Creator published videos and catalog items
-    // Read is public; modifications are strictly restricted to Creators
+    // Read is public; modifications are strictly restricted to verified Creators
     match /creator_content/{contentId} {
-      allow read: if true;
-      allow write: if isCreator();
+      allow get: if isValidId(contentId);
+      allow list: if true;
+      allow write: if isValidId(contentId) && isCreator();
     }
 
-    // Video suggestions:
-    // Anyone can read and suggest videos with validation;
-    // Voting is allowed for community members; Moderation/deletion is reserved to Creators
+    // Community video suggestions:
+    // Strict HTTP/HTTPS URL validation & immutable core fields on non-creator updates
     match /video_suggestions/{suggestionId} {
-      allow read: if true;
-      allow create: if request.resource.data.title is string &&
-                       request.resource.data.title.size() > 0 &&
-                       request.resource.data.title.size() <= 250 &&
-                       request.resource.data.url is string &&
-                       request.resource.data.url.size() > 0 &&
-                       request.resource.data.url.size() <= 600;
-      allow update: if isCreator() || (
-        // Allow community upvoting: title, url and status cannot be altered by non-creators
-        request.resource.data.title == resource.data.title &&
-        request.resource.data.url == resource.data.url &&
-        request.resource.data.status == resource.data.status
-      );
-      allow delete: if isCreator();
+      allow get: if isValidId(suggestionId);
+      allow list: if true;
+      allow create: if isValidId(suggestionId) &&
+                       isValidSuggestion(incoming(), suggestionId) &&
+                       incoming().status == 'pending' &&
+                       incoming().voteCount == 1 &&
+                       incoming().voters.size() <= 1 &&
+                       (!('submitterEmail' in incoming()) || incoming().submitterEmail == "");
+      allow update: if isValidId(suggestionId) &&
+                       isValidSuggestion(incoming(), suggestionId) && (
+                         isCreator() || (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['voteCount', 'voters', 'updatedAt']) &&
+                           incoming().id == existing().id &&
+                           incoming().title == existing().title &&
+                           incoming().url == existing().url &&
+                           incoming().status == existing().status &&
+                           incoming().voteCount >= 1 &&
+                           (incoming().voteCount - existing().voteCount <= 1) &&
+                           (existing().voteCount - incoming().voteCount <= 1)
+                         )
+                       );
+      allow delete: if isValidId(suggestionId) && isCreator();
     }
 
     // Messages sent to the creator:
-    // Only the creator can read the incoming inbox (protects sender privacy);
-    // Anyone can send a valid message with size and type safety
+    // Only verified Creators can read/update/delete; anyone can create a strictly validated unread message
     match /creator_messages/{messageId} {
-      allow read: if isCreator();
-      allow create: if request.resource.data.content is string &&
-                       request.resource.data.content.size() > 0 &&
-                       request.resource.data.content.size() <= 5000 &&
-                       request.resource.data.subject is string &&
-                       request.resource.data.subject.size() > 0 &&
-                       request.resource.data.subject.size() <= 300;
-      allow update, delete: if isCreator();
+      allow get: if isValidId(messageId) && isCreator();
+      allow list: if isCreator();
+      allow create: if isValidId(messageId) &&
+                       isValidCreatorMessage(incoming(), messageId) &&
+                       incoming().status == 'unread';
+      allow update: if isValidId(messageId) &&
+                       isValidCreatorMessage(incoming(), messageId) &&
+                       isCreator();
+      allow delete: if isValidId(messageId) && isCreator();
     }
 
     // Connection health check
     match /test/{testId} {
-      allow read: if true;
+      allow get: if isValidId(testId);
       allow write: if false;
     }
   }
 }
-

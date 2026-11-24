@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, ChevronRight } from "lucide-react";
 import { useCreatorCatalog } from "@/hooks/useCreatorCatalog";
 import { type ContentItem } from "@/data/catalog";
+import { sanitizeHttpUrl } from "@/lib/safeUrl";
 
 interface AnnouncementBannerProps {
   onPlayContent?: (item: ContentItem) => void;
@@ -109,9 +110,9 @@ export default function AnnouncementBanner({
             <ChevronRight size={12} />
           </button>
         )}
-        {announcement.externalLink && !linkedItem && (
+        {sanitizeHttpUrl(announcement.externalLink) && !linkedItem && (
           <a
-            href={announcement.externalLink}
+            href={sanitizeHttpUrl(announcement.externalLink)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 border border-emerald-300/35 backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] font-medium text-[11px] transition-colors"

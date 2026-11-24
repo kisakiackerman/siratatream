@@ -51,6 +51,7 @@ import { ContentItem, catalog, getSeriesEpisodes } from "@/data/catalog";
 import Card3D from "@/components/3d/Card3D";
 import VideoNotesSection from "@/components/VideoNotesSection";
 import { loadYouTubeAPI } from "@/lib/youtube";
+import { sanitizeEmbedUrl, sanitizeHttpUrl } from "@/lib/safeUrl";
 import {
   fetchVideoPlaybackSource,
   getYouTubeErrorDetails,
@@ -99,13 +100,6 @@ const ORIGINAL_AUDIO_CODE = "original";
 // "Lecture & Affichage") persistés en localStorage, appliqués ici
 // à chaque nouvelle vidéo lancée dans le lecteur.
 // ─────────────────────────────────────────────────────────────
-function getStoredSubtitleDefault(): boolean {
-  try {
-    return localStorage.getItem("nexstream_subtitles_default") === "true";
-  } catch {
-    return false;
-  }
-}
 
 function getStoredSubtitleSize(): "small" | "medium" | "large" {
   try {
@@ -187,7 +181,7 @@ export default function PlayerModal({
   const [duration, setDuration] = useState(0);
   const [buffering, setBuffering] = useState(true);
   const [showControls, setShowControls] = useState(true);
-  const [captionsOn, setCaptionsOn] = useState(() => getStoredSubtitleDefault());
+  const [captionsOn, setCaptionsOn] = useState(true);
   const [captionToast, setCaptionToast] = useState<{ message: string; active: boolean } | null>(null);
   const [resumeToast, setResumeToast] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(() => getStoredPlaybackSpeed());
@@ -730,19 +724,19 @@ export default function PlayerModal({
   const customEmbedUrl = useMemo(() => {
     const raw = (item.videoUrl || "").trim();
     if (!raw) return null;
-    const iframeMatch = raw.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-    const extracted = iframeMatch ? iframeMatch[1].trim() : raw;
+    const safeEmbed = sanitizeEmbedUrl(raw);
+    if (!safeEmbed) return null;
     if (
       item.videoSourceType === "embed" ||
       item.videoSourceType === "vimeo" ||
       item.videoSourceType === "dailymotion" ||
-      extracted.includes("/embed") ||
-      extracted.includes("abumuslim.fr") ||
-      extracted.includes("cinefuse.") ||
-      extracted.includes("player.vimeo.com") ||
-      extracted.includes("dailymotion.com/embed")
+      safeEmbed.includes("/embed") ||
+      safeEmbed.includes("abumuslim.fr") ||
+      safeEmbed.includes("cinefuse.") ||
+      safeEmbed.includes("player.vimeo.com") ||
+      safeEmbed.includes("dailymotion.com/embed")
     ) {
-      return extracted;
+      return safeEmbed;
     }
     return null;
   }, [item.videoUrl, item.videoSourceType]);
@@ -755,16 +749,17 @@ export default function PlayerModal({
       setBuffering(false);
       return;
     }
+    const safeDirect = sanitizeHttpUrl(item.videoUrl, { allowBlob: true });
     if (
-      item.videoUrl &&
+      safeDirect &&
       (item.videoSourceType === "direct" ||
-        item.videoUrl.endsWith(".mp4") ||
-        item.videoUrl.endsWith(".webm") ||
-        item.videoUrl.endsWith(".m3u8") ||
-        item.videoUrl.startsWith("blob:") ||
-        (item.videoUrl.startsWith("http") && !item.videoUrl.includes("youtu") && !customEmbedUrl))
+        safeDirect.endsWith(".mp4") ||
+        safeDirect.endsWith(".webm") ||
+        safeDirect.endsWith(".m3u8") ||
+        safeDirect.startsWith("blob:") ||
+        (safeDirect.startsWith("http") && !safeDirect.includes("youtu") && !customEmbedUrl))
     ) {
-      setDirectStreamUrl(item.videoUrl);
+      setDirectStreamUrl(safeDirect);
       return;
     }
 
@@ -1198,7 +1193,7 @@ export default function PlayerModal({
             iv_load_policy: 3,
             disablekb: 1,
             fs: 0,
-            cc_load_policy: 1,
+            cc_load_policy: captionsOnRef.current ? 1 : 0,
             cc_lang_pref: "fr",
             vq: "hd1080",
             hd: 1,
@@ -1224,10 +1219,8 @@ export default function PlayerModal({
                   applyForcedHDQuality(e.target);
                   // Vitesse de lecture par défaut (réglage utilisateur)
                   e.target.setPlaybackRate?.(playbackRateRef.current);
-                  // Sous-titres activés par défaut (réglage utilisateur)
-                  if (captionsOnRef.current) {
-                    applyCaptionsToTargetRef.current(true);
-                  }
+                  // Synchronise l'état des sous-titres (activés à l'ouverture jusqu'à désactivation manuelle)
+                  applyCaptionsToTargetRef.current(captionsOnRef.current);
                   e.target.playVideo();
                 } catch {
                   // ignore
@@ -1946,9 +1939,10 @@ export default function PlayerModal({
   }
 
   const handleExportVideoFile = () => {
-    if (item.videoUrl && (item.videoUrl.endsWith(".mp4") || item.videoUrl.endsWith(".webm"))) {
+    const safeExportUrl = sanitizeHttpUrl(item.videoUrl, { allowBlob: true });
+    if (safeExportUrl && (safeExportUrl.endsWith(".mp4") || safeExportUrl.endsWith(".webm"))) {
       const a = document.createElement("a");
-      a.href = item.videoUrl;
+      a.href = safeExportUrl;
       a.download = `${item.title.replace(/[^a-zA-Z0-9-_]/g, "_")}.mp4`;
       document.body.appendChild(a);
       a.click();
@@ -2126,9 +2120,7 @@ export default function PlayerModal({
                   if (videoRef.current) {
                     videoRef.current.playbackRate = playbackRateRef.current;
                   }
-                  if (captionsOnRef.current) {
-                    applyCaptionsToTarget(true);
-                  }
+                  applyCaptionsToTarget(captionsOnRef.current);
                 }}
                 onWaiting={() => setBuffering(true)}
                 onPlaying={() => {
@@ -2151,7 +2143,7 @@ export default function PlayerModal({
                 <iframe
                   ref={iframeRef}
                   key={item.youtubeId}
-                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&cc_load_policy=${captionsOn ? 1 : 0}&cc_lang_pref=fr&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
                     typeof window !== "undefined" ? window.location.origin : ""
                   )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
                   title={item.title}
@@ -2160,9 +2152,7 @@ export default function PlayerModal({
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                   onLoad={() => {
-                    if (captionsOnRef.current) {
-                      setTimeout(() => applyCaptionsToTarget(true), 800);
-                    }
+                    setTimeout(() => applyCaptionsToTarget(captionsOnRef.current), 800);
                     if (playbackRateRef.current !== 1) {
                       setTimeout(
                         () => postIframeCommand("setPlaybackRate", [playbackRateRef.current]),
@@ -2935,11 +2925,13 @@ export default function PlayerModal({
 
                 {/* Sous-titres (CC) (Desktop) */}
                 <button
+                  type="button"
                   onClick={toggleCaptions}
+                  aria-pressed={captionsOn}
                   className={`hidden sm:flex p-1.5 sm:p-2 rounded-full transition-colors ${
                     captionsOn
-                      ? "text-emerald-300 bg-emerald-500/20 border border-emerald-400/40"
-                      : "text-zinc-300 hover:text-white hover:bg-white/10"
+                      ? "text-emerald-300 bg-emerald-500/20 border border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                      : "text-zinc-300 hover:text-white hover:bg-white/10 border border-transparent"
                   }`}
                   title={captionsOn ? "Désactiver les sous-titres (C)" : "Activer les sous-titres (C)"}
                 >
@@ -3128,7 +3120,9 @@ export default function PlayerModal({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={toggleCaptions}
+                  aria-pressed={captionsOn}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
                     captionsOn
                       ? "bg-emerald-500 text-zinc-950 font-extrabold"

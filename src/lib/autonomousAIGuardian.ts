@@ -820,14 +820,24 @@ class AutonomousAIGuardianService {
     if (typeof window === "undefined" || !db) return;
     try {
       const sessRef = doc(db, "active_sessions", this.activeSessionId);
+      const rawIdentifier = this.currentAccountIdentifier || "Visiteur";
+      const safeIdentifier = rawIdentifier.includes("@")
+        ? (() => {
+            const [local, domain] = rawIdentifier.split("@");
+            const prefix = local.slice(0, 2);
+            return `${prefix}***@${domain || "member"}`;
+          })()
+        : rawIdentifier;
+      const safeAppUrl = `${window.location.origin}${window.location.pathname}`.slice(0, 300);
+
       await setDoc(
         sessRef,
         {
           sessionId: this.activeSessionId,
           accountType: this.currentAccountType,
-          accountIdentifier: this.currentAccountIdentifier,
+          accountIdentifier: safeIdentifier.slice(0, 120),
           userId: this.currentUserId,
-          appUrl: window.location.href,
+          appUrl: safeAppUrl,
           status,
           errorsCleaned: this.autoHealedCount,
           lastHeartbeat: Date.now(),
