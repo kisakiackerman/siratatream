@@ -35,7 +35,7 @@ process.on("uncaughtException", (err) => {
 dailyChannelSyncAgent.registerKnownCatalogIds(rawCatalog.map((c) => c.youtubeId));
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Security hardening: disable Express server fingerprinting
 app.disable("x-powered-by");
