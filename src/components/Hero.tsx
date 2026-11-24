@@ -130,7 +130,7 @@ function HeroSlide({ item, direction }: { item: ContentItem; direction: number }
       initial="enter"
       animate="center"
       exit="exit"
-      className="absolute inset-0 w-full h-full overflow-hidden"
+      className="absolute inset-0 w-full h-full overflow-hidden hero-slide-layer"
     >
       <img
         src={src}
@@ -152,7 +152,7 @@ function HeroAmbientBackground({ item, ambientGlow }: { item: ContentItem; ambie
   }, [item]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none hero-ambient-layer">
       <AnimatePresence mode="popLayout">
         <motion.div
           key={item.id + "-ambient"}
@@ -346,6 +346,10 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
     [currentIndex]
   );
 
+  const handleMouseLeave = useCallback(() => {
+    setIsPaused(false);
+  }, []);
+
   // Rotation automatique toutes les 9 secondes si non survolé
   useEffect(() => {
     if (isPaused || pool.length <= 1) return;
@@ -360,65 +364,50 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
 
   return (
     <section
-      className="relative h-[80vh] min-h-[520px] sm:min-h-[560px] max-h-[760px] w-full overflow-hidden bg-zinc-950 group"
+      data-theme="dark"
+      className="relative z-10 h-[80vh] min-h-[520px] sm:min-h-[560px] max-h-[760px] w-full overflow-hidden bg-zinc-950 hero-section player-cinema-modal dark group"
       onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      onMouseLeave={handleMouseLeave}
     >
       {/* 1. Ambient Background Layer: Diffuse les couleurs du visuel avec transition fluide */}
       <HeroAmbientBackground item={featured} ambientGlow={ambientTheme.glowColor} />
 
       {/* 2. Image Principale Haute Définition avec transition directionnelle popLayout */}
-      <AnimatePresence mode="popLayout" custom={direction}>
-        <HeroSlide key={featured.id} item={featured} direction={direction} />
-      </AnimatePresence>
+      <div className="absolute inset-0 pointer-events-none">
+        <AnimatePresence mode="popLayout" custom={direction}>
+          <HeroSlide key={featured.id} item={featured} direction={direction} />
+        </AnimatePresence>
+      </div>
 
-      {/* 3. Dégradés Cinématiques multi-couches pour garantir une lisibilité optimale des textes et boutons */}
-      <div
-        className="absolute inset-0 pointer-events-none z-[5]"
-        style={{
-          background:
-            "linear-gradient(90deg, rgba(9,9,11,0.96) 0%, rgba(9,9,11,0.82) 42%, rgba(9,9,11,0.30) 75%, transparent 100%)",
-        }}
-      />
-      <div
-        className="absolute inset-0 pointer-events-none z-[5]"
-        style={{
-          background: "linear-gradient(0deg, rgba(9,9,11,1) 0%, rgba(9,9,11,0.6) 25%, rgba(9,9,11,0) 65%)",
-        }}
-      />
-      <div
-        className="absolute inset-x-0 top-0 h-28 pointer-events-none z-[5]"
-        style={{
-          background: "linear-gradient(180deg, rgba(9,9,11,0.65) 0%, transparent 100%)",
-        }}
-      />
+      {/* 3. Dégradés Cinématiques multi-couches sombres permanents pour garantir une lisibilité optimale des textes et boutons */}
+      <div className="absolute inset-0 pointer-events-none z-[5] bg-gradient-to-r from-zinc-950 via-zinc-950/85 to-transparent hero-gradient-x" />
+      <div className="absolute inset-0 pointer-events-none z-[5] bg-gradient-to-t from-zinc-950 via-zinc-950/45 to-transparent hero-gradient-y" />
+      <div className="absolute inset-x-0 top-0 h-28 pointer-events-none z-[5] bg-gradient-to-b from-zinc-950/80 to-transparent hero-gradient-top" />
 
       {/* Navigation Arrows for Hero Carousel */}
       {pool.length > 1 && (
         <>
-          <motion.button
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
+          <button
+            type="button"
             onClick={handlePrev}
             aria-label="Vidéo à la une précédente"
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 cursor-pointer"
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
           >
             <ChevronLeft size={22} />
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
+          </button>
+          <button
+            type="button"
             onClick={handleNext}
             aria-label="Vidéo à la une suivante"
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 cursor-pointer"
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
           >
             <ChevronRight size={22} />
-          </motion.button>
+          </button>
         </>
       )}
 
       {/* Content Info Container */}
-      <div className="relative z-10 h-full flex flex-col justify-end px-4 sm:px-6 lg:px-12 pb-32 sm:pb-36 lg:pb-40 max-w-2xl">
+      <div className="relative z-20 h-full flex flex-col justify-end px-4 sm:px-6 lg:px-12 pb-32 sm:pb-36 lg:pb-40 max-w-2xl">
         {/* Animated text block (badges, title, description) */}
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -448,58 +437,47 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
               )}
             </div>
 
-            <h1 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-2 sm:mb-3 leading-tight text-white line-clamp-2 sm:line-clamp-3 drop-shadow-md">
+            <h1 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight mb-2 sm:mb-3 leading-tight text-white hero-title line-clamp-2 sm:line-clamp-3 drop-shadow-md">
               {featured.title}
             </h1>
 
-            <p className="text-xs sm:text-sm md:text-base text-zinc-300 mb-4 sm:mb-6 line-clamp-2 leading-relaxed drop-shadow">
+            <p className="text-xs sm:text-sm md:text-base text-zinc-300 hero-desc mb-4 sm:mb-6 line-clamp-2 leading-relaxed drop-shadow">
               {featured.description}
             </p>
           </motion.div>
         </AnimatePresence>
 
         {/* Buttons and Carousel Indicators */}
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+        <div className="relative z-30 flex items-center gap-3 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
+            <button
+              type="button"
               onClick={() => onPlay(featured.id, watchProgress?.progressSec)}
-              className="flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-xs sm:text-sm text-zinc-950 bg-emerald-400 hover:bg-emerald-300 transition-colors shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_20px_rgba(16,185,129,0.35)] cursor-pointer"
+              className="flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-bold text-xs sm:text-sm text-zinc-950 bg-emerald-400 hover:bg-emerald-300 transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_20px_rgba(16,185,129,0.35)] cursor-pointer active:scale-95"
             >
               <Play size={17} fill="currentColor" />
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={watchProgress && watchProgress.progressSec > 0 ? "resume" : "watch"}
-                  initial={{ opacity: 0, y: 3 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -3 }}
-                  transition={{ duration: 0.18 }}
-                >
-                  {watchProgress && watchProgress.progressSec > 0 ? "Reprendre" : "Regarder"}
-                </motion.span>
-              </AnimatePresence>
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
+              <span>
+                {watchProgress && watchProgress.progressSec > 0 ? "Reprendre" : "Regarder"}
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={() => onInfo(featured.id)}
-              className="flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-full font-semibold text-xs sm:text-sm text-emerald-100 bg-emerald-400/15 hover:bg-emerald-400/25 transition-colors backdrop-blur-xl border border-emerald-300/35 hover:border-emerald-300/50 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] cursor-pointer"
+              className="flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-full font-semibold text-xs sm:text-sm text-emerald-100 bg-emerald-400/15 hover:bg-emerald-400/25 transition-all backdrop-blur-xl border border-emerald-300/35 hover:border-emerald-300/50 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] cursor-pointer active:scale-95"
             >
               <Info size={17} className="text-emerald-300" />
               Plus d'infos
-            </motion.button>
+            </button>
             {onOpenAI && (
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
+              <button
+                type="button"
                 onClick={onOpenAI}
-                className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full font-semibold text-emerald-200 bg-emerald-400/15 hover:bg-emerald-400/25 border border-emerald-300/35 transition-colors backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] cursor-pointer"
+                className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full font-semibold text-emerald-200 bg-emerald-400/15 hover:bg-emerald-400/25 border border-emerald-300/35 transition-all backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] cursor-pointer active:scale-95"
                 title="Poser une question à Noor IA"
               >
                 <Sparkles size={15} className="text-emerald-300" />
                 <span className="text-xs sm:text-sm">Noor IA</span>
-              </motion.button>
+              </button>
             )}
           </div>
 

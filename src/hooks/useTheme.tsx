@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useCallback, ReactNode } from "react";
 
-export type ThemeMode = "system" | "dark" | "light";
-export type ResolvedTheme = "dark" | "light";
+export type ThemeMode = "dark";
+export type ResolvedTheme = "dark";
 
 interface ThemeContextType {
   theme: ThemeMode;
@@ -12,73 +12,68 @@ interface ThemeContextType {
   toggleTheme: () => void;
 }
 
-const STORAGE_KEY = "nexstream_theme_preference";
+const LEGACY_STORAGE_KEY = "siratstream_theme_preference";
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-function getSystemTheme(): ResolvedTheme {
-  if (typeof window === "undefined") return "dark";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
+function applyDarkThemeToDOM() {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const body = document.body;
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Always enforced in Dark Mode per user instruction
-  const [theme, setThemeState] = useState<ThemeMode>("dark");
-  const systemTheme: ResolvedTheme = "dark";
-  const resolvedTheme: ResolvedTheme = "dark";
+  root.classList.remove("light");
+  root.classList.add("dark");
+  root.setAttribute("data-theme", "dark");
+  root.style.colorScheme = "dark";
 
-  // Enforce dark mode on HTML root and body
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    const body = document.body;
-
-    root.classList.remove("light");
-    root.classList.add("dark");
-    root.setAttribute("data-theme", "dark");
-    root.style.colorScheme = "dark";
-
+  if (body) {
     body.classList.remove("light");
     body.classList.add("dark");
     body.setAttribute("data-theme", "dark");
+  }
 
+  try {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", "#09090b");
+    }
+    const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+    if (metaColorScheme) {
+      metaColorScheme.setAttribute("content", "dark");
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, "dark");
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch {
       // ignore
     }
+    applyDarkThemeToDOM();
   }, []);
 
-  const setTheme = (_newTheme: ThemeMode) => {
-    // Permanent dark mode
-    setThemeState("dark");
-    try {
-      localStorage.setItem(STORAGE_KEY, "dark");
-    } catch {
-      // ignore
-    }
-  };
+  const setTheme = useCallback((_newTheme: ThemeMode) => {
+    applyDarkThemeToDOM();
+  }, []);
 
-  const toggleTheme = () => {
-    // Kept in permanent dark mode
-    setThemeState("dark");
-    try {
-      localStorage.setItem(STORAGE_KEY, "dark");
-    } catch {
-      // ignore
-    }
-  };
+  const toggleTheme = useCallback(() => {
+    applyDarkThemeToDOM();
+  }, []);
 
-  const value = useMemo(
+  const value = useMemo<ThemeContextType>(
     () => ({
-      theme: "dark" as ThemeMode,
-      resolvedTheme: "dark" as ResolvedTheme,
-      systemTheme: "dark" as ResolvedTheme,
+      theme: "dark",
+      resolvedTheme: "dark",
+      systemTheme: "dark",
       isSystem: false,
       setTheme,
       toggleTheme,
     }),
-    []
+    [setTheme, toggleTheme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

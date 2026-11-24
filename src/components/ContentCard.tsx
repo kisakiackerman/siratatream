@@ -4,6 +4,7 @@ import { ContentItem } from "@/data/catalog";
 import { useMyList } from "@/lib/useMyList";
 import YouTubeHoverPreview from "@/components/YouTubeHoverPreview";
 import { getReciterForItem } from "@/lib/reciterData";
+import Card3D from "@/components/3d/Card3D";
 
 type ContentCardProps = {
   key?: string;
@@ -14,32 +15,45 @@ type ContentCardProps = {
 
 export default function ContentCard({ item, onPlay, onInfo }: ContentCardProps) {
   const [liked, setLiked] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const { inList, toggle } = useMyList();
   const saved = inList(item.id);
   const isTarawih = item.channel === "Récitations Haramain" || item.categories.includes("Coran");
   const reciter = isTarawih ? getReciterForItem(item.title, item.description, item.channel) : null;
 
   return (
-    <div
+    <Card3D
       tabIndex={0}
       role="button"
       aria-label={`Ouvrir les détails de ${item.title}`}
+      maxTilt={8.5}
+      depth={16}
+      scale={1.035}
+      glare={true}
+      glareColor="emerald"
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onInfo(item.id);
         }
       }}
-      className="group relative flex-shrink-0 w-36 sm:w-44 lg:w-48 cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-2xl"
+      className="group relative flex-shrink-0 w-36 sm:w-44 lg:w-48 cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-2xl p-1"
     >
       {/* Card thumbnail with Liquid Glass frame and smooth micro-interaction */}
-      <div className="video-thumb-interactive relative overflow-hidden rounded-2xl aspect-[2/3] liquid-glass-card border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+      <div
+        className="video-thumb-interactive relative overflow-hidden rounded-2xl aspect-[2/3] liquid-glass-card border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]"
+        style={{ transform: "translateZ(10px)" }}
+      >
         <YouTubeHoverPreview
           youtubeId={item.youtubeId}
           image={item.image}
           alt={item.title}
           imageClassName="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           fallbackImage={reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg"}
+          isHovered={isHovered}
+          videoUrl={item.videoUrl}
         />
 
         {/* Hover overlay with smooth gradient */}
@@ -171,6 +185,6 @@ export default function ContentCard({ item, onPlay, onInfo }: ContentCardProps) 
           </div>
         </div>
       </div>
-    </div>
+    </Card3D>
   );
 }

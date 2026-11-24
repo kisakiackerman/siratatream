@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isValidUuid, toSupabaseUuid } from "@/lib/supabase";
 
 export const LOCAL_BOOKMARKS_PREFIX = "sirat_bookmarks_";
 export const BOOKMARKS_UPDATE_EVENT = "sirat_bookmarks_updated";
@@ -90,12 +90,12 @@ export function addBookmark(
     }
 
     // Sync to Supabase user_preferences or table if available
-    if (!profileId.startsWith("guest-") && !profileId.startsWith("profile-") && supabase) {
+    if (isValidUuid(profileId) && supabase) {
       Promise.resolve(
         supabase
           .from("user_bookmarks")
           .insert({
-            id: newEntry.id,
+            id: toSupabaseUuid(newEntry.id),
             viewer_profile_id: profileId,
             content_id: newEntry.contentId,
             timestamp_seconds: newEntry.timestampSeconds,
@@ -128,9 +128,9 @@ export function removeBookmark(profileId: string, bookmarkId: string): void {
       );
     }
 
-    if (!profileId.startsWith("guest-") && !profileId.startsWith("profile-") && supabase) {
+    if (isValidUuid(profileId) && supabase) {
       Promise.resolve(
-        supabase.from("user_bookmarks").delete().eq("id", bookmarkId)
+        supabase.from("user_bookmarks").delete().eq("id", toSupabaseUuid(bookmarkId))
       ).catch(() => {});
     }
   } catch (err) {

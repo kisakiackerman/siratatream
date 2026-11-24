@@ -46,6 +46,15 @@ export interface UserSpiritualNote {
   updatedAt?: string;
 }
 
+export interface VideoFolder {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  createdAt: number;
+  videoIds: string[];
+}
+
 export interface UserPersonalSpace {
   userId: string;
   email: string;
@@ -56,6 +65,7 @@ export interface UserPersonalSpace {
   myList: string[]; // Content IDs
   history: Array<{ contentId: string; watchedAt: number; progress?: number }>;
   notes: UserSpiritualNote[];
+  folders?: VideoFolder[];
   preferences: {
     theme?: string;
     city?: string;
@@ -157,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       myList: [],
       history: [],
       notes: [],
+      folders: [],
       preferences: { theme: "dark", autoNext: true, notifications: true },
     };
 
@@ -201,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           myList: rawData.myList ? (typeof rawData.myList === "string" ? JSON.parse(rawData.myList) : rawData.myList) : [],
           history: rawData.history ? (typeof rawData.history === "string" ? JSON.parse(rawData.history) : rawData.history) : [],
           notes: rawData.notes ? (typeof rawData.notes === "string" ? JSON.parse(rawData.notes) : rawData.notes) : [],
+          folders: rawData.folders ? (typeof rawData.folders === "string" ? JSON.parse(rawData.folders) : rawData.folders) : [],
           preferences: rawData.preferences ? (typeof rawData.preferences === "string" ? JSON.parse(rawData.preferences) : rawData.preferences) : { theme: "dark", autoNext: true },
         };
         setUserSpace(space);
@@ -221,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           myList: [],
           history: [],
           notes: [],
+          folders: [],
           preferences: { theme: "dark", autoNext: true, notifications: true },
         };
         // Fire and forget or timeout protected
@@ -235,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             myList: JSON.stringify([]),
             history: JSON.stringify([]),
             notes: JSON.stringify([]),
+            folders: JSON.stringify([]),
             preferences: JSON.stringify(initialSpace.preferences),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -267,31 +281,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Listen to Firebase Auth state & handle redirect logins
+  // Listen to Firebase Auth state & handle redirect logins safely
   useEffect(() => {
-    // Process redirect result if page was reloaded after signInWithRedirect
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (result?.user) {
-          const googleUserObj = {
-            uid: result.user.uid,
-            email: result.user.email,
-            displayName: result.user.displayName || result.user.email?.split("@")[0] || "Compte Google",
-            photoURL: result.user.photoURL || null,
-            provider: "google" as const,
-          };
-          localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify(googleUserObj));
-          localStorage.removeItem(GUEST_STORAGE_KEY);
-          localStorage.removeItem(APPLE_USER_STORAGE_KEY);
-          setFirebaseUser(result.user);
-          setUser(result.user);
-          setIsGuest(false);
-          await syncUserSpace(result.user, "google");
+    // Clean stale OAuth redirect error parameters from URL without reloading
+    if (typeof window !== "undefined") {
+      try {
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.has("error") || currentUrl.searchParams.has("updated")) {
+          currentUrl.searchParams.delete("error");
+          currentUrl.searchParams.delete("error_description");
+          currentUrl.searchParams.delete("updated");
+          window.history.replaceState({}, document.title, currentUrl.toString());
         }
-      })
-      .catch((err) => {
-        console.warn("Redirect result notice:", err);
-      });
+      } catch {
+        // ignore URL parse issues
+      }
+    }
+
+    // Only check redirect result when not trapped in a cross-origin iframe
+    const isInIframe = typeof window !== "undefined" && window.self !== window.top;
+    if (!isInIframe) {
+      getRedirectResult(auth)
+        .then(async (result) => {
+          if (result?.user) {
+            const googleUserObj = {
+              uid: result.user.uid,
+              email: result.user.email,
+              displayName: result.user.displayName || result.user.email?.split("@")[0] || "Compte Google",
+              photoURL: result.user.photoURL || null,
+              provider: "google" as const,
+            };
+            localStorage.setItem(GOOGLE_USER_STORAGE_KEY, JSON.stringify(googleUserObj));
+            localStorage.removeItem(GUEST_STORAGE_KEY);
+            localStorage.removeItem(APPLE_USER_STORAGE_KEY);
+            setFirebaseUser(result.user);
+            setUser(result.user);
+            setIsGuest(false);
+            await syncUserSpace(result.user, "google");
+          }
+        })
+        .catch(() => {
+          // Ignore harmless redirect state mismatch/storage errors
+        });
+    }
 
     const unsubscribe = onAuthStateChanged(auth, async (currentFbUser) => {
       try {
@@ -426,8 +458,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Compte Google non reconnu.");
       } catch (err: any) {
         console.warn("Google sign-in notice:", err);
-        if (err?.code === "auth/popup-closed-by-user") {
+        const code = err?.code || "";
+        if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
           setAuthError("Connexion Google annulée.");
+        } else if (code === "auth/popup-blocked") {
+          setAuthError("La fenêtre de connexion Google a été bloquée par votre navigateur. Veuillez autoriser les fenêtres contextuelles.");
+        } else if (code === "auth/unauthorized-domain") {
+          setAuthError("Ce domaine n'est pas encore autorisé dans Firebase Console → Authentication → Domaines autorisés.");
         } else {
           setAuthError("Le compte n'a pas été reconnu ou accepté par Google.");
         }
@@ -447,18 +484,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithGoogle();
   };
 
-  // Google Login via Full-page Redirect (100% immune to popup blockers & 3rd-party cookie isolation)
+  // Prefer popup inside iframes to prevent Google OAuth X-Frame-Options redirect errors
   const signInWithGoogleRedirect = useCallback(async () => {
+    const isInIframe = typeof window !== "undefined" && window.self !== window.top;
+    if (isInIframe) {
+      return signInWithGoogle();
+    }
     setLoading(true);
     setAuthError(null);
     try {
       await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
       console.error("Google redirect sign-in error:", err);
-      setAuthError("Le compte n'a pas été reconnu ou accepté par Google.");
+      setAuthError("Erreur de redirection Google. Veuillez utiliser la connexion par fenêtre contextuelle.");
       setLoading(false);
     }
-  }, []);
+  }, [signInWithGoogle]);
 
   // Apple Login via Firebase Apple OAuth (strictly authenticated)
   const signInWithApple = useCallback(
@@ -488,8 +529,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Compte Apple non reconnu.");
       } catch (err: any) {
         console.warn("Firebase Apple OAuth notice:", err);
-        if (err?.code === "auth/popup-closed-by-user") {
+        const code = err?.code || "";
+        if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
           setAuthError("Connexion Apple annulée.");
+        } else if (code === "auth/popup-blocked") {
+          setAuthError("La fenêtre de connexion Apple a été bloquée par votre navigateur.");
+        } else if (code === "auth/unauthorized-domain") {
+          setAuthError("Ce domaine n'est pas encore autorisé dans Firebase Console.");
         } else {
           setAuthError("Le compte n'a pas été reconnu ou accepté par Apple.");
         }
@@ -765,6 +811,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (updates.myList !== undefined) dataToPersist.myList = JSON.stringify(updates.myList);
           if (updates.history !== undefined) dataToPersist.history = JSON.stringify(updates.history);
           if (updates.notes !== undefined) dataToPersist.notes = JSON.stringify(updates.notes);
+          if (updates.folders !== undefined) dataToPersist.folders = JSON.stringify(updates.folders);
           if (updates.preferences !== undefined) dataToPersist.preferences = JSON.stringify(updates.preferences);
 
           setDoc(docRef, dataToPersist, { merge: true }).catch((e) =>

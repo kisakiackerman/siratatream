@@ -29,7 +29,7 @@ import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/lib/supabase";
+import { supabase, isValidUuid } from "@/lib/supabase";
 import type { SettingsTab } from "@/components/AccountSettingsModal";
 
 type NavbarProps = {
@@ -217,10 +217,10 @@ export default function Navbar({
   // Fermeture des menus au clic extérieur
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-search-area]")) setSearchOpen(false);
-      if (!target.closest("[data-notif-area]")) setNotifOpen(false);
-      if (!target.closest("[data-cat-dropdown]")) setCatDropdownOpen(false);
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target || !target.closest("[data-search-area]")) setSearchOpen(false);
+      if (!target || !target.closest("[data-notif-area]")) setNotifOpen(false);
+      if (!target || !target.closest("[data-cat-dropdown]")) setCatDropdownOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -264,19 +264,23 @@ export default function Navbar({
     let cancelled = false;
 
     async function loadNotificationReads() {
-      if (!activeProfile || latestAddedVideos.length === 0) return;
+      if (!activeProfile || !isValidUuid(activeProfile.id) || latestAddedVideos.length === 0) return;
 
       const newIds = latestAddedVideos.map((item) => item.id);
-      const { data } = await supabase
-        .from("user_notification_reads")
-        .select("content_id")
-        .eq("viewer_profile_id", activeProfile.id)
-        .in("content_id", newIds);
+      try {
+        const { data } = await supabase
+          .from("user_notification_reads")
+          .select("content_id")
+          .eq("viewer_profile_id", activeProfile.id)
+          .in("content_id", newIds);
 
-      if (cancelled) return;
-      if (data && data.length > 0) {
-        const remoteReadIds = data.map((entry) => entry.content_id);
-        setReadNotifIds((prev) => Array.from(new Set([...prev, ...remoteReadIds])));
+        if (cancelled) return;
+        if (data && data.length > 0) {
+          const remoteReadIds = data.map((entry) => entry.content_id);
+          setReadNotifIds((prev) => Array.from(new Set([...prev, ...remoteReadIds])));
+        }
+      } catch {
+        // ignore network/UUID fallback
       }
     }
 
@@ -316,15 +320,17 @@ export default function Navbar({
       localStorage.setItem("read_notification_ids", JSON.stringify(updated));
     } catch {}
 
-    if (activeProfile) {
+    if (activeProfile && isValidUuid(activeProfile.id)) {
       const records = allIds.map((id) => ({
         viewer_profile_id: activeProfile.id,
         content_id: id,
         read_at: new Date().toISOString(),
       }));
-      await supabase.from("user_notification_reads").upsert(records, {
-        onConflict: "viewer_profile_id,content_id",
-      });
+      try {
+        await supabase.from("user_notification_reads").upsert(records, {
+          onConflict: "viewer_profile_id,content_id",
+        });
+      } catch {}
     }
   };
 
@@ -336,15 +342,17 @@ export default function Navbar({
         localStorage.setItem("read_notification_ids", JSON.stringify(updated));
       } catch {}
 
-      if (activeProfile) {
-        await supabase.from("user_notification_reads").upsert(
-          {
-            viewer_profile_id: activeProfile.id,
-            content_id: id,
-            read_at: new Date().toISOString(),
-          },
-          { onConflict: "viewer_profile_id,content_id" }
-        );
+      if (activeProfile && isValidUuid(activeProfile.id)) {
+        try {
+          await supabase.from("user_notification_reads").upsert(
+            {
+              viewer_profile_id: activeProfile.id,
+              content_id: id,
+              read_at: new Date().toISOString(),
+            },
+            { onConflict: "viewer_profile_id,content_id" }
+          );
+        } catch {}
       }
     }
   };
@@ -395,15 +403,17 @@ export default function Navbar({
         localStorage.setItem("read_notification_ids", JSON.stringify(updated));
       } catch {}
 
-      if (activeProfile) {
-        await supabase.from("user_notification_reads").upsert(
-          {
-            viewer_profile_id: activeProfile.id,
-            content_id: item.id,
-            read_at: new Date().toISOString(),
-          },
-          { onConflict: "viewer_profile_id,content_id" }
-        );
+      if (activeProfile && isValidUuid(activeProfile.id)) {
+        try {
+          await supabase.from("user_notification_reads").upsert(
+            {
+              viewer_profile_id: activeProfile.id,
+              content_id: item.id,
+              read_at: new Date().toISOString(),
+            },
+            { onConflict: "viewer_profile_id,content_id" }
+          );
+        } catch {}
       }
     }
     handleSelect(item.id);
@@ -441,8 +451,8 @@ export default function Navbar({
     <nav
       className={`sticky top-0 z-40 rounded-t-3xl transition-all duration-500 ${
         scrolled
-          ? "bg-zinc-950/90 backdrop-blur-xl shadow-2xl border-b border-emerald-300/20"
-          : "bg-gradient-to-b from-zinc-950/90 via-zinc-950/40 to-transparent"
+          ? "bg-zinc-950/92 backdrop-blur-2xl border-b border-emerald-300/30 shadow-[0_16px_36px_-6px_rgba(0,0,0,0.7),inset_0_1px_1px_rgba(255,255,255,0.22)]"
+          : "bg-gradient-to-b from-zinc-950/95 via-zinc-950/50 to-transparent"
       }`}
     >
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-12 h-16 flex items-center justify-between gap-3">
@@ -454,7 +464,7 @@ export default function Navbar({
               onSelectCategoryTab?.("all");
               scrollAppToTop();
             }}
-            aria-label="SiratStream (sirat-stream) - https://sirat-stream.ai.studio"
+            aria-label="SiratStream"
           >
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-6 bg-emerald-400 rounded-sm group-hover/logo:scale-y-110 transition-transform shadow-[0_0_12px_rgba(52,211,153,0.5)]" />
@@ -462,10 +472,10 @@ export default function Navbar({
               <div className="w-1.5 h-7 bg-white rounded-sm group-hover/logo:scale-y-110 transition-transform" />
             </div>
             <span className="text-white font-black text-lg sm:text-xl tracking-tight ml-1 whitespace-nowrap">
-              SiratStream<span className="text-emerald-400 text-xs sm:text-sm font-semibold">.ai</span>
+              SiratStream
             </span>
           </div>
-          <NavTooltip label="SiratStream (sirat-stream)" sublabel="sirat-stream.ai.studio" align="left" />
+          <NavTooltip label="SiratStream" sublabel="Plateforme de streaming musulman" align="left" />
         </div>
 
         {/* Bouton Quick Plays Mobile Rapide - Liquid Glass */}
@@ -538,8 +548,12 @@ export default function Navbar({
 
               {catDropdownOpen && (
                 <div
-                  className="absolute top-full mt-2.5 left-1/2 -translate-x-1/2 w-72 sm:w-80 bg-zinc-950/95 border border-emerald-300/30 backdrop-blur-2xl rounded-2xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25),0_20px_40px_rgba(0,0,0,0.6)] overflow-hidden py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
-                  style={{ zIndex: 100 }}
+                  className="absolute top-full mt-2.5 left-1/2 -translate-x-1/2 w-72 sm:w-80 bg-zinc-950/95 border border-emerald-300/40 backdrop-blur-2xl rounded-2xl shadow-[0_24px_50px_rgba(0,0,0,0.85),0_0_30px_rgba(16,185,129,0.18),inset_0_1.5px_1px_rgba(255,255,255,0.3),inset_0_-2px_4px_rgba(0,0,0,0.4)] overflow-hidden py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                  style={{
+                    zIndex: 100,
+                    transformOrigin: "top center",
+                    transformStyle: "preserve-3d",
+                  }}
                 >
                   <div className="px-3.5 py-2 border-b border-emerald-300/20 mb-1 flex items-center justify-between">
                     <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider">
@@ -665,9 +679,12 @@ export default function Navbar({
         {/* Right controls */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
           {/* Recherche & Recherche Vocale */}
-          <div className="relative" data-search-area>
+          <div className="relative" data-search-area style={{ transformStyle: "preserve-3d" }}>
             {searchOpen ? (
-              <div className="flex items-center bg-zinc-900/95 border border-zinc-700/80 focus-within:border-emerald-500/50 rounded-full overflow-hidden shadow-2xl transition-all">
+              <div
+                className="flex items-center bg-zinc-900/95 border border-emerald-400/40 focus-within:border-emerald-300/80 rounded-full overflow-hidden shadow-[0_10px_28px_rgba(0,0,0,0.6),inset_0_1.5px_1px_rgba(255,255,255,0.25)] transition-all"
+                style={{ transform: "translateZ(8px)" }}
+              >
                 <Search size={16} className="ml-3 flex-shrink-0 text-emerald-400" />
                 <input
                   autoFocus
@@ -757,7 +774,10 @@ export default function Navbar({
             )}
 
             {searchOpen && (
-              <div className="absolute top-full mt-2 right-0 w-80 sm:w-[420px] max-w-[calc(100vw-1.5rem)] bg-zinc-950/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[72vh] overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div
+                className="absolute top-full mt-2.5 right-0 w-80 sm:w-[420px] max-w-[calc(100vw-1.5rem)] bg-zinc-950/95 backdrop-blur-2xl border border-emerald-300/30 rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(16,185,129,0.18),inset_0_1.5px_1px_rgba(255,255,255,0.25)] overflow-hidden max-h-[72vh] overflow-y-auto z-50 animate-in fade-in zoom-in-95 duration-150"
+                style={{ transformOrigin: "top right", transformStyle: "preserve-3d" }}
+              >
                 {/* Active listening banner */}
                 {listening && (
                   <div className="px-3.5 py-2 bg-rose-950/80 border-b border-rose-500/30 text-xs text-rose-200 flex items-center justify-between gap-2 animate-in fade-in">
@@ -879,13 +899,17 @@ export default function Navbar({
                       </span>
                     </div>
 
-                    <div className="divide-y divide-zinc-800/50">
-                      {searchResults.map((item: ContentItem) => (
+                    <div className="divide-y divide-zinc-800/50" style={{ perspective: "800px" }}>
+                      {searchResults.map((item: ContentItem, idx: number) => (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => handleSelect(item.id, searchQuery)}
-                          className="group flex items-center gap-3 w-full px-3.5 py-2.5 hover:bg-zinc-900/90 transition-all text-left"
+                          className="group flex items-center gap-3 w-full px-3.5 py-2.5 hover:bg-zinc-900/90 transition-all text-left hover:translate-x-1"
+                          style={{
+                            animationDelay: `${idx * 40}ms`,
+                            transform: "translateZ(0)",
+                          }}
                         >
                           <div className="relative w-16 sm:w-20 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-900 border border-zinc-800 group-hover:border-emerald-500/50 transition-colors">
                             <img

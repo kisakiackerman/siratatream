@@ -1,6 +1,6 @@
 {
   "name": "SiratStream",
-  "description": "Sirat Stream (Sirat Streaming) - https://sirat-stream.ai.studio/ - Plateforme 100% gratuite de streaming musulman et islamique avec lecteur interactif, Le Noble Coran, prières et récits prophétiques.",
+  "description": "SiratStream - Plateforme 100% gratuite de streaming musulman avec lecteur interactif, Le Noble Coran, prières et enseignements.",
   "requestFramePermissions": ["geolocation", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

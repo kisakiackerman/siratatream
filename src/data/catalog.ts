@@ -55,7 +55,7 @@ export type SkipSegment = {
   type?: "sponsor" | "intro" | "promo";
 };
 
-export type VideoSourceType = "youtube" | "direct" | "vimeo" | "dailymotion" | "hls";
+export type VideoSourceType = "youtube" | "direct" | "vimeo" | "dailymotion" | "hls" | "embed";
 
 export type AudioTrackItem = {
   code: string;
@@ -786,12 +786,13 @@ function buildItem(
       totalEpisodes = 3;
       const match = title.match(/(?:EP\.|Ép\.|Ep\.)\s*(\d+)/i);
       if (match) episodeNumber = parseInt(match[1], 10);
-    } else if (title.includes("Mères du Paradis")) {
+    } else if (title.includes("Mères du Paradis") || title.includes("Mère du Paradis") || youtubeId === "sW1m8S1plOw") {
       seriesId = "meres-du-paradis";
       seriesTitle = "Mères du Paradis";
       totalEpisodes = 8;
       const match = title.match(/(?:Ép\.|Ep\.|Épisode)\s*(\d+)/i);
       if (match) episodeNumber = parseInt(match[1], 10);
+      else if (youtubeId === "sW1m8S1plOw") episodeNumber = 6;
     }
   }
 
@@ -937,7 +938,36 @@ const dourousNetItems: ContentItem[] = dourousNetRaw.map(([ytId, title, desc], i
   return buildItem(`dn${i + 1}`, ytId, title, desc, "Dourous.net", meta);
 });
 
+const externalEmbeddedItems: ContentItem[] = [
+  {
+    id: "abumuslim-croisades-aljazeera",
+    youtubeId: "embed_documentaire-croisades-al-jazeera-arabe",
+    videoUrl: "https://www.abumuslim.fr/series/documentaire-croisades-al-jazeera-arabe/embed",
+    videoSourceType: "embed",
+    title: "Les Croisades : L'histoire vue par les Arabes — Documentaire Al Jazeera",
+    description:
+      "Série documentaire historique en 4 parties produite par Al Jazeera retraçant deux siècles de Croisades (du concile de Clermont en 1095 à la chute d'Acre en 1291) à travers le regard des chroniqueurs et historiens du monde arabo-musulman : le choc de la chute de Jérusalem, l'éveil sous les Zengides, l'unification par Salah ad-Din (Saladin) et la libération finale.",
+    channel: "Averroès Histoire",
+    categories: ["Histoire & Mystère", "Héros & Personnages"],
+    year: 2016,
+    rating: "TV-PG",
+    duration: "3:12:00",
+    score: 98,
+    thumbnail: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=85",
+    image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=85",
+    heroImage: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1920&q=85",
+    featured: true,
+    isNew: true,
+    isTrending: true,
+    seriesId: "croisades-al-jazeera",
+    seriesTitle: "Les Croisades — L'histoire vue par les Arabes",
+    episodeNumber: 1,
+    totalEpisodes: 4,
+  },
+];
+
 export const rawCatalog: ContentItem[] = [
+  ...externalEmbeddedItems,
   ...dinulQayyimaItems,
   ...surLeCheminItems,
   ...averroesHistoireItems,

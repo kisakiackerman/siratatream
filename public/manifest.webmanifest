@@ -1,7 +1,7 @@
 {
-  "name": "Sirat Stream - Streaming Musulman & Islamique",
-  "short_name": "Sirat Streaming",
-  "description": "Plateforme gratuite de streaming musulman et islamique : Le Noble Coran, enseignements, spiritualité et horaires de prière.",
+  "name": "SiratStream",
+  "short_name": "SiratStream",
+  "description": "Plateforme gratuite de streaming musulman : Le Noble Coran, enseignements, spiritualité et horaires de prière.",
   "start_url": "https://sirat-stream.ai.studio/",
   "id": "https://sirat-stream.ai.studio/",
   "scope": "/",

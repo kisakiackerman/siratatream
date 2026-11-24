@@ -90,6 +90,8 @@ import {
 import { savantsSunnahRaw, savantsSunnahMeta } from "@/data/savantsSunnahVideos";
 import { exportYouTubeStatsToCSV, exportYouTubeStatsToJSON, fetchYouTubeVideosBatch } from "@/lib/youtubeApi";
 import SponsorSegmentManager from "@/components/SponsorSegmentManager";
+import LiveAppPreview from "@/components/LiveAppPreview";
+import StudioMediaPreview from "@/components/StudioMediaPreview";
 import { saveLocalVideoFile, extractVideoMetadata } from "@/lib/videoStorage";
 
 interface CreatorStudioModalProps {
@@ -191,7 +193,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
   const [aiGeneratedItem, setAiGeneratedItem] = useState<Partial<ContentItem> | null>(null);
   const [aiRawText, setAiRawText] = useState<string | null>(null);
   const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
-  const [aiActivePreviewTab, setAiActivePreviewTab] = useState<"player" | "hero" | "card" | "json">("player");
+  const [aiActivePreviewTab, setAiActivePreviewTab] = useState<"app" | "player" | "hero" | "card" | "json">("app");
   const [previewPlaying, setPreviewPlaying] = useState(false);
 
   // Dedicated Video Preview Modal for testing
@@ -402,10 +404,14 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
     window.dispatchEvent(new Event("shorts_enabled_changed"));
   };
 
-  // Extract video ID or direct link helper
-  const extractVideoInfo = (urlOrId: string): { videoId: string; videoUrl?: string; type: "youtube" | "direct" | "vimeo" | "dailymotion" } => {
+  // Extract video ID or direct link or iframe embed helper
+  const extractVideoInfo = (urlOrId: string): { videoId: string; videoUrl?: string; type: "youtube" | "direct" | "vimeo" | "dailymotion" | "embed" } => {
     if (!urlOrId) return { videoId: "", type: "youtube" };
-    const clean = urlOrId.trim();
+    const trimmed = urlOrId.trim();
+
+    // Support pasting full <iframe src="...">...</iframe> HTML code
+    const iframeSrcMatch = trimmed.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+    const clean = iframeSrcMatch ? iframeSrcMatch[1].trim() : trimmed;
 
     if (clean.includes("vimeo.com")) {
       const parts = clean.split("vimeo.com/");
@@ -414,6 +420,15 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
     if (clean.includes("dailymotion.com") || clean.includes("dai.ly")) {
       const parts = clean.includes("dai.ly/") ? clean.split("dai.ly/") : clean.split("video/");
       return { videoId: parts[1]?.split("?")[0] || clean, videoUrl: clean, type: "dailymotion" };
+    }
+    if (
+      iframeSrcMatch ||
+      clean.includes("/embed") ||
+      clean.includes("abumuslim.fr") ||
+      clean.includes("cinefuse.")
+    ) {
+      const slug = clean.split("/").filter(Boolean).pop() || `${Date.now()}`;
+      return { videoId: `embed_${slug}`, videoUrl: clean, type: "embed" };
     }
     if (
       clean.endsWith(".mp4") ||
@@ -919,12 +934,12 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
             onClick={() => setActiveTab("live-preview")}
             className={`flex items-center gap-2 py-1.5 px-3.5 text-xs font-semibold rounded-full transition-all whitespace-nowrap ${
               activeTab === "live-preview"
-                ? "liquid-glass text-cyan-300 border border-cyan-400/40 font-bold shadow-md"
+                ? "liquid-glass text-emerald-300 border border-emerald-400/40 font-bold shadow-md"
                 : "liquid-glass text-zinc-400 hover:text-white hover:bg-white/10 border border-white/10"
             }`}
           >
-            <Eye size={15} className={activeTab === "live-preview" ? "text-cyan-300" : "text-zinc-400"} />
-            <span>Prévisualisation aistudio.google</span>
+            <Eye size={15} className={activeTab === "live-preview" ? "text-emerald-300" : "text-zinc-400"} />
+            <span>Aperçu de l'application</span>
           </button>
 
           <button
@@ -1404,32 +1419,10 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                     </div>
 
                     {/* LIVE INTERACTIVE VIDEO PLAYER */}
-                    <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border border-zinc-800 shadow-inner group">
-                      {aiGeneratedItem.videoSourceType === "direct" && aiGeneratedItem.videoUrl ? (
-                        <video
-                          src={aiGeneratedItem.videoUrl}
-                          controls
-                          playsInline
-                          className="w-full h-full object-contain"
-                          poster={aiGeneratedItem.thumbnail || aiGeneratedItem.image}
-                        />
-                      ) : aiGeneratedItem.videoSourceType === "vimeo" && aiGeneratedItem.youtubeId ? (
-                        <iframe
-                          src={`https://player.vimeo.com/video/${aiGeneratedItem.youtubeId}?autoplay=0`}
-                          className="w-full h-full border-0"
-                          allow="autoplay; fullscreen; picture-in-picture"
-                          allowFullScreen
-                        />
-                      ) : (
-                        <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${aiGeneratedItem.youtubeId || "Xs26kdKEwlg"}?autoplay=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${aiGeneratedItem.youtubeId || "Xs26kdKEwlg"}&enablejsapi=1`}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
-                          title={aiGeneratedItem.title}
-                        />
-                      )}
-                    </div>
+                    <StudioMediaPreview
+                      item={aiGeneratedItem}
+                      onOpenInMainPlayer={(it) => onPlayVideo?.(it)}
+                    />
 
                     {/* Video Metadata Inspector */}
                     <div className="space-y-2 pt-1">
@@ -1884,113 +1877,145 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
             </div>
           )}
 
-          {/* TAB 4: PRÉVISUALISATION AISTUDIO.GOOGLE */}
+          {/* TAB 4: APERÇU EN DIRECT DE L'APPLICATION */}
           {activeTab === "live-preview" && (
-            <div className="space-y-6 max-w-6xl mx-auto font-mono text-xs">
-              {/* Header Google AI Studio Banner */}
-              <div className="bg-gradient-to-r from-blue-950/60 via-zinc-900 to-zinc-900 border border-blue-500/30 rounded-3xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
+            <div className="space-y-5 max-w-6xl mx-auto text-xs">
+              {/* En-tête de prévisualisation */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping" />
-                    <h3 className="text-base font-bold text-white">
-                      Google AI Studio Workspace — Mode Sandbox Live
-                    </h3>
-                  </div>
+                  <h3 className="text-base font-bold text-white">
+                    Aperçu en direct de SiratStream
+                  </h3>
                   <p className="text-xs text-zinc-300 max-w-2xl">
-                    Environnement de simulation interactif haute fidélité. Testez le rendu vidéo, les bannières d'accueil et le manifeste JSON en temps réel avant déploiement.
+                    Visualisez l'application telle qu'elle apparaît aux utilisateurs (bannière héro, catégories et cartes) avec vos dernières modifications du catalogue.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
                   <button
                     onClick={() => {
-                      setLivePublishNotice("✅ Catalogue synchronisé avec succès sur tous les appareils connectés !");
-                      setTimeout(() => setLivePublishNotice(null), 4000);
+                      setLivePublishNotice("Catalogue enregistré et actif dans l'application.");
+                      setTimeout(() => setLivePublishNotice(null), 3500);
                     }}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-xl shadow-blue-950/60 transition-all active:scale-95"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
-                    <CheckCircle2 size={16} />
-                    <span>Déployer en Production</span>
+                    <CheckCircle2 size={15} />
+                    <span>Synchroniser l'aperçu</span>
                   </button>
                 </div>
               </div>
 
               {livePublishNotice && (
-                <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 font-sans">
-                  <Check size={16} />
+                <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-xs font-medium flex items-center gap-2 font-sans">
+                  <Check size={15} />
                   <span>{livePublishNotice}</span>
                 </div>
               )}
 
-              {/* Google AI Studio Tabs for Preview */}
-              <div className="border-b border-zinc-800 flex items-center gap-4 text-xs font-semibold font-sans">
+              {/* Sélecteur de vue */}
+              <div className="border-b border-zinc-800 flex items-center gap-2 overflow-x-auto pb-2 text-xs font-medium font-sans">
                 <button
-                  onClick={() => setAiActivePreviewTab("player")}
-                  className={`py-2.5 border-b-2 transition-all ${
-                    aiActivePreviewTab === "player"
-                      ? "border-blue-400 text-blue-400"
-                      : "border-transparent text-zinc-400 hover:text-white"
+                  onClick={() => setAiActivePreviewTab("app")}
+                  className={`px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    aiActivePreviewTab === "app"
+                      ? "bg-emerald-500 text-zinc-950 font-semibold"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  📺 Lecteur Vidéo Live Test
+                  Application en direct
+                </button>
+                <button
+                  onClick={() => setAiActivePreviewTab("player")}
+                  className={`px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    aiActivePreviewTab === "player"
+                      ? "bg-emerald-500 text-zinc-950 font-semibold"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  Test vidéo unitaire
                 </button>
                 <button
                   onClick={() => setAiActivePreviewTab("hero")}
-                  className={`py-2.5 border-b-2 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     aiActivePreviewTab === "hero"
-                      ? "border-blue-400 text-blue-400"
-                      : "border-transparent text-zinc-400 hover:text-white"
+                      ? "bg-emerald-500 text-zinc-950 font-semibold"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  🌟 Bannière Hero (Page d'accueil)
+                  Bannière Hero
                 </button>
                 <button
                   onClick={() => setAiActivePreviewTab("card")}
-                  className={`py-2.5 border-b-2 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     aiActivePreviewTab === "card"
-                      ? "border-blue-400 text-blue-400"
-                      : "border-transparent text-zinc-400 hover:text-white"
+                      ? "bg-emerald-500 text-zinc-950 font-semibold"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  🗂️ Carte Grille Catalogue
+                  Carte catalogue
                 </button>
                 <button
                   onClick={() => setAiActivePreviewTab("json")}
-                  className={`py-2.5 border-b-2 transition-all ${
+                  className={`px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     aiActivePreviewTab === "json"
-                      ? "border-blue-400 text-blue-400"
-                      : "border-transparent text-zinc-400 hover:text-white"
+                      ? "bg-emerald-500 text-zinc-950 font-semibold"
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  📋 Manifeste JSON & Config
+                  Données JSON
                 </button>
               </div>
 
-              {/* View 1: Live Video Player */}
-              {aiActivePreviewTab === "player" && (
+              {/* View 0: Application SiratStream complète en direct */}
+              {aiActivePreviewTab === "app" && (
+                <LiveAppPreview
+                  onPlayVideo={(item) => {
+                    onClose();
+                    onPlayVideo?.(item);
+                  }}
+                  onInspectItem={(item) => {
+                    setPreviewItemId(item.id);
+                    setAiActivePreviewTab("player");
+                  }}
+                  onExitToApp={onClose}
+                />
+              )}
+
+              {/* Sélecteur d'élément pour les vues unitaires */}
+              {aiActivePreviewTab !== "app" && currentPreviewItem && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/70 border border-zinc-800 rounded-xl px-4 py-2.5 font-sans">
+                  <span className="text-xs text-zinc-400">
+                    Élément inspecté :
+                  </span>
+                  <select
+                    value={currentPreviewItem.id}
+                    onChange={(e) => setPreviewItemId(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white max-w-md w-full focus:outline-none focus:border-emerald-500"
+                  >
+                    {catalog.slice(0, 80).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} ({c.channel})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* View 1: Live Video Player (avec couverture & repli anti-écran noir) */}
+              {aiActivePreviewTab === "player" && currentPreviewItem && (
                 <div className="space-y-4 font-sans">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    <div className="lg:col-span-8 bg-black rounded-3xl overflow-hidden border border-zinc-800 aspect-video shadow-2xl">
-                      {currentPreviewItem.videoSourceType === "direct" && currentPreviewItem.videoUrl ? (
-                        <video
-                          src={currentPreviewItem.videoUrl}
-                          controls
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${currentPreviewItem.youtubeId || "Xs26kdKEwlg"}?autoplay=0&rel=0&modestbranding=1&iv_load_policy=3&loop=1&playlist=${currentPreviewItem.youtubeId || "Xs26kdKEwlg"}`}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      )}
+                    <div className="lg:col-span-8">
+                      <StudioMediaPreview
+                        item={currentPreviewItem}
+                        onOpenInMainPlayer={(it) => {
+                          onClose();
+                          onPlayVideo?.(it);
+                        }}
+                      />
                     </div>
 
-                    <div className="lg:col-span-4 bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold uppercase">
-                        Active Item In Sandbox
-                      </span>
+                    <div className="lg:col-span-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
                       <h3 className="font-bold text-white text-base leading-snug">
                         {currentPreviewItem.title}
                       </h3>
@@ -2008,7 +2033,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                         </div>
                         <div className="flex justify-between">
                           <span>Durée :</span>
-                          <strong className="text-white">{currentPreviewItem.duration}</strong>
+                          <strong className="text-white tabular-nums">{currentPreviewItem.duration}</strong>
                         </div>
                       </div>
                     </div>
@@ -2017,18 +2042,18 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
               )}
 
               {/* View 2: Hero Preview */}
-              {aiActivePreviewTab === "hero" && (
-                <div className="relative rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-950 aspect-[21/9] flex items-end p-6 sm:p-10 font-sans">
+              {aiActivePreviewTab === "hero" && currentPreviewItem && (
+                <div className="relative rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-950 aspect-[21/9] flex items-end p-6 sm:p-10 font-sans">
                   <img
-                    src={currentPreviewItem.heroImage || currentPreviewItem.image}
+                    src={currentPreviewItem.heroImage || currentPreviewItem.image || getThematicFallbackBanner(currentPreviewItem)}
                     alt={currentPreviewItem.title}
                     className="absolute inset-0 w-full h-full object-cover brightness-50"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
                   <div className="relative z-10 space-y-2 max-w-2xl">
-                    <span className="px-2.5 py-0.5 bg-amber-500 text-black text-[10px] font-black uppercase rounded-full">
-                      HERO SPOTLIGHT
-                    </span>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">
+                      {currentPreviewItem.channel} · À la une
+                    </p>
                     <h2 className="text-2xl sm:text-3xl font-black text-white">{currentPreviewItem.title}</h2>
                     <p className="text-xs text-zinc-300 line-clamp-2">{currentPreviewItem.description}</p>
                   </div>
@@ -2036,16 +2061,20 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
               )}
 
               {/* View 3: Card Grid Preview */}
-              {aiActivePreviewTab === "card" && (
+              {aiActivePreviewTab === "card" && currentPreviewItem && (
                 <div className="max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden p-3 space-y-3 font-sans">
-                  <img src={currentPreviewItem.image} alt="Preview" className="w-full aspect-video object-cover rounded-xl" />
+                  <img
+                    src={currentPreviewItem.image || currentPreviewItem.thumbnail || getThematicFallbackBanner(currentPreviewItem)}
+                    alt={currentPreviewItem.title}
+                    className="w-full aspect-video object-cover rounded-xl"
+                  />
                   <h4 className="font-bold text-sm text-white truncate">{currentPreviewItem.title}</h4>
                   <p className="text-xs text-zinc-400 line-clamp-2">{currentPreviewItem.description}</p>
                 </div>
               )}
 
               {/* View 4: JSON Manifest Inspector */}
-              {aiActivePreviewTab === "json" && (
+              {aiActivePreviewTab === "json" && currentPreviewItem && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 overflow-x-auto text-xs font-mono text-emerald-400">
                   <pre>{JSON.stringify(currentPreviewItem, null, 2)}</pre>
                 </div>
@@ -3357,7 +3386,7 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                         <div className="relative">
                           <input
                             type="text"
-                            placeholder="https://votre-cdn.com/video.mp4 ou https://.../stream.m3u8"
+                            placeholder="https://votre-cdn.com/video.mp4, URL embed ou <iframe src=&quot;...&quot;>"
                             value={editingItem.videoUrl || ""}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -3366,15 +3395,15 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                                 ...editingItem,
                                 youtubeId: parsed.videoId,
                                 videoUrl: parsed.videoUrl || val,
-                                videoSourceType: "direct",
+                                videoSourceType: parsed.type === "embed" ? "embed" : "direct",
                               });
                             }}
                             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 font-mono"
                           />
-                          {editingItem.videoSourceType === "direct" && (
+                          {(editingItem.videoSourceType === "direct" || editingItem.videoSourceType === "embed") && (
                             <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
                               <Check size={11} />
-                              <span>Direct MP4</span>
+                              <span>{editingItem.videoSourceType === "embed" ? "Iframe Embed" : "Direct MP4"}</span>
                             </div>
                           )}
                         </div>
@@ -3785,18 +3814,15 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
                 </button>
               </div>
 
-              <div className="rounded-2xl overflow-hidden aspect-video bg-black border border-zinc-800">
-                {testVideoItem.videoSourceType === "direct" && testVideoItem.videoUrl ? (
-                  <video src={testVideoItem.videoUrl} controls autoPlay className="w-full h-full object-contain" />
-                ) : (
-                  <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${testVideoItem.youtubeId || "Xs26kdKEwlg"}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${testVideoItem.youtubeId || "Xs26kdKEwlg"}`}
-                    className="w-full h-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                )}
-              </div>
+              <StudioMediaPreview
+                item={testVideoItem}
+                autoPlay={true}
+                onOpenInMainPlayer={(it) => {
+                  setTestVideoItem(null);
+                  onClose();
+                  onPlayVideo?.(it);
+                }}
+              />
 
               <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span>Catégorie : <strong className="text-amber-300">{testVideoItem.categories?.[0]}</strong></span>

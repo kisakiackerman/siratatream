@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isValidUuid, toSupabaseUuid } from "@/lib/supabase";
 
 export type DeviceType = "desktop" | "mobile" | "tv" | "tablet";
 
@@ -173,12 +173,13 @@ export async function fetchSupabaseConnectedDevices(
   const currentInfo = detectCurrentDevice();
   const nowIso = new Date().toISOString();
 
+  const sbAccountId = toSupabaseUuid(accountId);
   try {
     // 1. Try querying Supabase
     const { data, error } = await supabase
       .from("user_devices")
       .select("*")
-      .eq("account_id", accountId)
+      .eq("account_id", sbAccountId)
       .eq("status", "active")
       .order("last_active_at", { ascending: false });
 
@@ -214,7 +215,7 @@ export async function fetchSupabaseConnectedDevices(
           const { data: newRow } = await supabase
             .from("user_devices")
             .insert({
-              account_id: accountId,
+              account_id: sbAccountId,
               device_id: currentDeviceId,
               device_name: `${currentInfo.name} (Cet appareil)`,
               device_type: currentInfo.type,
@@ -251,7 +252,7 @@ export async function fetchSupabaseConnectedDevices(
         supabase
           .from("user_devices")
           .update({ last_active_at: nowIso })
-          .eq("account_id", accountId)
+          .eq("account_id", sbAccountId)
           .eq("device_id", currentDeviceId)
           .then(() => {});
       }
@@ -265,7 +266,7 @@ export async function fetchSupabaseConnectedDevices(
     try {
       await supabase.from("user_devices").insert(
         seeds.map((s) => ({
-          account_id: s.account_id,
+          account_id: sbAccountId,
           device_id: s.device_id,
           device_name: s.device_name,
           device_type: s.device_type,
@@ -297,13 +298,17 @@ export async function revokeSupabaseDeviceSession(
   sessionId: string,
   deviceId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const sbAccountId = toSupabaseUuid(accountId);
   try {
     // 1. Revoke on Supabase
-    const { error } = await supabase
+    const baseQuery = supabase
       .from("user_devices")
       .delete()
-      .eq("account_id", accountId)
-      .or(`id.eq.${sessionId},device_id.eq.${deviceId}`);
+      .eq("account_id", sbAccountId);
+
+    const { error } = isValidUuid(sessionId)
+      ? await baseQuery.or(`id.eq.${sessionId},device_id.eq.${deviceId}`)
+      : await baseQuery.eq("device_id", deviceId);
 
     if (error) {
       console.warn("Supabase session revocation error, performing local update:", error.message);
@@ -334,12 +339,13 @@ export async function revokeAllOtherSupabaseSessions(
   accountId: string
 ): Promise<{ success: boolean; error?: string }> {
   const currentDeviceId = getCurrentDeviceId();
+  const sbAccountId = toSupabaseUuid(accountId);
   try {
     // 1. Delete on Supabase
     const { error } = await supabase
       .from("user_devices")
       .delete()
-      .eq("account_id", accountId)
+      .eq("account_id", sbAccountId)
       .neq("device_id", currentDeviceId);
 
     if (error) {

@@ -710,14 +710,16 @@ export default function VideoSuggestionModal({
                 ) : (
                   <iframe
                     src={(() => {
-                      const ytId = previewVideoUrl.includes("watch?v=")
-                        ? previewVideoUrl.split("v=")[1]?.split("&")[0]
-                        : previewVideoUrl.includes("youtu.be/")
-                        ? previewVideoUrl.split("youtu.be/")[1]?.split("?")[0]
+                      const iframeMatch = previewVideoUrl.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                      const cleanUrl = iframeMatch ? iframeMatch[1].trim() : previewVideoUrl.trim();
+                      const ytId = cleanUrl.includes("watch?v=")
+                        ? cleanUrl.split("v=")[1]?.split("&")[0]
+                        : cleanUrl.includes("youtu.be/")
+                        ? cleanUrl.split("youtu.be/")[1]?.split("?")[0]
                         : "";
                       return ytId
                         ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${ytId}`
-                        : previewVideoUrl;
+                        : cleanUrl;
                     })()}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

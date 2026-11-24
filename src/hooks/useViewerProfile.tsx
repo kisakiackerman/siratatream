@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
-import { supabase, type ViewerProfile } from "@/lib/supabase";
+import { supabase, isValidUuid, toSupabaseUuid, type ViewerProfile } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 
 const STORAGE_KEY = "nexstream_active_profile";
@@ -109,6 +109,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    setLoading(true);
     const uId = (user as any).uid || (user as any).id || "guest-user";
     const userDisplayName = user.displayName || user.email?.split("@")[0] || "Principal";
 
@@ -134,18 +135,18 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
     };
 
     // Try fetching from Supabase with timeout guard
+    const sbAccountId = toSupabaseUuid(uId);
     try {
       const { data, error: sbError } = await withTimeout(
         supabase
           .from("viewer_profiles")
           .select("*")
-          .eq("account_id", uId)
+          .eq("account_id", sbAccountId)
           .order("created_at", { ascending: true }),
         2500
       );
 
       if (sbError || !data) {
-        console.warn("Supabase profiles query failed or unavailable, fallback to local profiles:", sbError?.message);
         const local = getLocalProfiles(uId);
         setProfiles(local);
         const storedId = localStorage.getItem(STORAGE_KEY);
@@ -160,7 +161,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
             supabase
               .from("viewer_profiles")
               .insert({
-                account_id: uId,
+                account_id: sbAccountId,
                 name: newProf.name,
                 avatar_color: newProf.avatar_color,
                 is_kid: false,
@@ -259,11 +260,12 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         return { error: null };
       }
 
+      const sbAccountId = toSupabaseUuid(uId);
       try {
         const { data, error } = await supabase
           .from("viewer_profiles")
           .insert({
-            account_id: uId,
+            account_id: sbAccountId,
             name,
             avatar_color: color,
             is_kid: isKid,
@@ -281,7 +283,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
           return { error: null };
         }
 
-        if (data && pinCode) {
+        if (data && pinCode && isValidUuid(data.id)) {
           await supabase.rpc("set_viewer_profile_pin", {
             profile_id: data.id,
             pin: pinCode,
@@ -342,7 +344,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      if (isGuest || uId.startsWith("guest-")) {
+      if (isGuest || uId.startsWith("guest-") || !isValidUuid(id)) {
         applyLocal();
         return { error: null };
       }
@@ -424,7 +426,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         setActiveProfile(updated[0] || null);
       }
 
-      if (!isGuest && !uId.startsWith("guest-")) {
+      if (!isGuest && !uId.startsWith("guest-") && isValidUuid(id)) {
         try {
           await supabase.from("viewer_profiles").delete().eq("id", id);
         } catch {

@@ -65,7 +65,7 @@ export const towardsEternityRaw: [string, string, string][] = [
   ["50ExPJin0Ho", "Les Miracles du Coran Que Vous Découvrirez pour la Première Fois", "Une exploration fascinante de miracles du Coran encore méconnus, qui renforcent la foi et émerveillent l'esprit."],
   ["xsQmE7GAGyA", "Eve (AS) — La Première Femme sur Terre — Mères du Paradis (Ép.8)", "Eve (Hawwa), la première femme de l'humanité. Son histoire, son rôle dans la création et les leçons éternelles de sa vie."],
   ["QwN7qtPeOBg", "Fatima (RA) : La Fille du Prophète Muhammad ﷺ — Mères du Paradis (Ép.7)", "Fatima, la fille bien-aimée du Prophète ﷺ, l'une des quatre femmes parfaites de l'histoire. Sa vie, sa foi et son héritage spirituel."],
-  ["sW1m8S1plOw", "Hajar (AS) : Seule dans le Désert avec Ismaïl (AS) — Le Miracle de Zamzam (Ép.6)", "Hajar, seule dans le désert avec son bébé Ismaïl, et le miracle de Zamzam. Un récit de patience et de confiance en Allah."],
+  ["sW1m8S1plOw", "Hajar (AS) : Seule dans le Désert avec Ismaïl (AS) — Le Miracle de Zamzam — Mères du Paradis (Ép.6)", "Hajar, seule dans le désert avec son bébé Ismaïl, et le miracle de Zamzam. Un récit de patience et de confiance en Allah."],
   ["5oX0au4Jc5E", "ÂSIYA (RA) : L’Épouse du Pharaon, la Croyante Secrète — Visualisée par IA | Mères du Paradis | Ép. 5", "Découvrez cet épisode exclusif de Towards Eternity Français : « ÂSIYA (RA) : L’Épouse du Pharaon, la Croyante Secrète — Visualisée par IA | Mères du Paradis | Ép. 5 ». Une réflexion spirituelle approfondie et documentée."],
   ["RGeFKMemigA", "L’Histoire de Aïcha (RA) — Visualisée par IA | Mères du Paradis | Ép. 4", "Découvrez cet épisode exclusif de Towards Eternity Français : « L’Histoire de Aïcha (RA) — Visualisée par IA | Mères du Paradis | Ép. 4 ». Une réflexion spirituelle approfondie et documentée."],
   ["bQMx-7u9tTw", "La Mère de Jésus — L’Histoire de Maryam (AS) en IA | Mères du Paradis — Ép. 3", "Découvrez cet épisode exclusif de Towards Eternity Français : « La Mère de Jésus — L’Histoire de Maryam (AS) en IA | Mères du Paradis — Ép. 3 ». Une réflexion spirituelle approfondie et documentée."],
@@ -426,9 +426,13 @@ export const towardsEternityMeta: Record<string, TowardsEternityMetaItem> = {
     duration: "41:56",
   },
   "sW1m8S1plOw": {
-    cats: ["Miracles du Coran"],
+    cats: ["Prophètes", "Miracles du Coran"],
     year: 2024,
     duration: "30:23",
+    seriesId: "meres-du-paradis",
+    seriesTitle: "Mères du Paradis",
+    episodeNumber: 6,
+    totalEpisodes: 8,
   },
   "5oX0au4Jc5E": {
     cats: ["Eschatologie"],

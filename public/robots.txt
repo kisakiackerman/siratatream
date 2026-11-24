@@ -1,4 +1,4 @@
-# Robots.txt for Sirat Stream / Sirat Streaming (https://sirat-stream.ai.studio)
+# Robots.txt for SiratStream (https://sirat-stream.ai.studio)
 User-agent: *
 Allow: /
 

@@ -33,6 +33,10 @@
           "type": "string",
           "description": "JSON array of personal spiritual notes and reflections"
         },
+        "folders": {
+          "type": "string",
+          "description": "JSON array of custom video folders organizing favorite videos"
+        },
         "preferences": {
           "type": "string",
           "description": "JSON serialized user preferences (location, notifications, theme, adhan preference)"

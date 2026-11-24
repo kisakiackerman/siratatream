@@ -1,7 +1,8 @@
-import { useEffect } from "react";
-import { X, Play, Trash2, Bookmark } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Play, Trash2, Bookmark, Layers, LayoutGrid } from "lucide-react";
 import { motion } from "motion/react";
 import { useMyList } from "@/lib/useMyList";
+import Coverflow3D from "@/components/3d/Coverflow3D";
 
 type MyListModalProps = {
   onClose: () => void;
@@ -10,6 +11,7 @@ type MyListModalProps = {
 
 export default function MyListModal({ onClose, onPlay }: MyListModalProps) {
   const { items, remove, loading } = useMyList();
+  const [viewMode, setViewMode] = useState<"coverflow" | "grid">("coverflow");
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -29,7 +31,10 @@ export default function MyListModal({ onClose, onPlay }: MyListModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4"
+      style={{ perspective: "1200px" }}
+    >
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -40,17 +45,50 @@ export default function MyListModal({ onClose, onPlay }: MyListModalProps) {
       />
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 14 }}
-        transition={{ type: "spring", damping: 28, stiffness: 350 }}
-        className="relative z-10 w-full sm:max-w-3xl max-h-[90vh] bg-zinc-950/85 backdrop-blur-2xl sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl mt-16 sm:mt-0 border border-white/15"
+        initial={{ opacity: 0, scale: 0.92, z: -80, rotateX: 6 }}
+        animate={{ opacity: 1, scale: 1, z: 0, rotateX: 0 }}
+        exit={{ opacity: 0, scale: 0.94, z: -40, rotateX: 3 }}
+        transition={{ type: "spring", damping: 28, stiffness: 320 }}
+        style={{ transformStyle: "preserve-3d" }}
+        className="relative z-10 w-full sm:max-w-3xl max-h-[90vh] bg-zinc-950/90 backdrop-blur-2xl sm:rounded-3xl overflow-hidden flex flex-col shadow-[0_25px_60px_rgba(0,0,0,0.85),0_0_35px_rgba(245,158,11,0.2)] mt-16 sm:mt-0 border border-amber-400/30"
       >
-        {/* Header */}
+        {/* Header with Mode Toggle */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-white/10 bg-white/5 flex-shrink-0">
-          <Bookmark size={20} className="text-white fill-white/20" />
+          <Bookmark size={20} className="text-amber-400 fill-amber-400/30" />
           <h2 className="text-white font-bold text-lg flex-1">Ma Liste</h2>
-          <span className="text-zinc-400 text-sm">{items.length} vidéo{items.length > 1 ? "s" : ""}</span>
+
+          {items.length > 0 && (
+            <div className="flex items-center bg-zinc-900 border border-white/10 rounded-xl p-0.5 mr-2">
+              <button
+                onClick={() => setViewMode("coverflow")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  viewMode === "coverflow"
+                    ? "bg-amber-400 text-zinc-950 shadow-sm"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                title="Affichage Coverflow 3D"
+              >
+                <Layers size={13} />
+                <span>3D</span>
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  viewMode === "grid"
+                    ? "bg-amber-400 text-zinc-950 shadow-sm"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                title="Affichage Grille"
+              >
+                <LayoutGrid size={13} />
+                <span>Grille</span>
+              </button>
+            </div>
+          )}
+
+          <span className="text-zinc-400 text-xs hidden sm:inline">
+            {items.length} vidéo{items.length > 1 ? "s" : ""}
+          </span>
           <button
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
@@ -76,17 +114,19 @@ export default function MyListModal({ onClose, onPlay }: MyListModalProps) {
                 une vidéo pour la regarder plus tard.
               </p>
             </div>
+          ) : viewMode === "coverflow" ? (
+            <Coverflow3D items={items} onPlay={handlePlay} onRemove={remove} />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="group flex gap-3 bg-zinc-800/50 hover:bg-zinc-800 rounded-xl overflow-hidden transition-colors border border-zinc-800/60 p-2"
+                  className="group flex gap-3 bg-zinc-900/60 hover:bg-zinc-800/80 rounded-2xl overflow-hidden transition-all border border-emerald-300/20 p-2.5 shadow-md"
                 >
                   {/* Thumbnail */}
                   <button
                     onClick={() => handlePlay(item.id)}
-                    className="video-thumb-interactive relative flex-shrink-0 w-36 aspect-video rounded-lg overflow-hidden cursor-pointer"
+                    className="video-thumb-interactive relative flex-shrink-0 w-36 aspect-video rounded-xl overflow-hidden cursor-pointer bg-zinc-950"
                   >
                     <img
                       src={item.image}
@@ -110,7 +150,7 @@ export default function MyListModal({ onClose, onPlay }: MyListModalProps) {
                       onClick={() => handlePlay(item.id)}
                       className="text-left"
                     >
-                      <p className="text-white text-xs sm:text-sm font-semibold leading-tight line-clamp-2 mb-1 hover:text-emerald-300 transition-colors">
+                      <p className="text-white text-xs sm:text-sm font-semibold leading-tight line-clamp-2 mb-1 hover:text-amber-300 transition-colors">
                         {item.title}
                       </p>
                     </button>
@@ -119,7 +159,7 @@ export default function MyListModal({ onClose, onPlay }: MyListModalProps) {
                     </p>
                     <button
                       onClick={() => remove(item.id)}
-                      className="mt-auto flex items-center gap-1 text-zinc-500 hover:text-red-400 text-xs transition-colors pt-2"
+                      className="mt-auto flex items-center gap-1 text-zinc-500 hover:text-rose-400 text-xs transition-colors pt-2"
                     >
                       <Trash2 size={12} />
                       Retirer de la liste

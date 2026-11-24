@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { RotateCcw, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, isValidUuid } from "@/lib/supabase";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 
 type TasbihCounterProps = {
@@ -27,14 +27,19 @@ export default function TasbihCounter({ onClose }: TasbihCounterProps) {
   const [saving, setSaving] = useState(false);
 
   async function saveLog() {
-    if (!activeProfile || count === 0 || saving) return;
+    if (!activeProfile || !isValidUuid(activeProfile.id) || count === 0 || saving) return;
     setSaving(true);
-    await supabase.from("dhikr_logs").insert({
-      viewer_profile_id: activeProfile.id,
-      dhikr_type: dhikr,
-      count,
-    });
-    setSaving(false);
+    try {
+      await supabase.from("dhikr_logs").insert({
+        viewer_profile_id: activeProfile.id,
+        dhikr_type: dhikr,
+        count,
+      });
+    } catch {
+      // ignore fallback
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function reset() {

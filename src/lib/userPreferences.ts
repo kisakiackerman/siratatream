@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, toSupabaseUuid } from "@/lib/supabase";
 
 export interface PrayerReminderPreferences {
   enabled: boolean;
@@ -129,11 +129,12 @@ export function saveLocalPreferences(accountId: string, preferences: UserPrefere
 export async function fetchSupabaseUserPreferences(
   accountId: string
 ): Promise<{ data: UserPreferences; source: "supabase" | "local"; error?: string }> {
+  const sbAccountId = toSupabaseUuid(accountId);
   try {
     const { data, error } = await supabase
       .from("user_preferences")
       .select("*")
-      .eq("account_id", accountId)
+      .eq("account_id", sbAccountId)
       .maybeSingle();
 
     if (error) {
@@ -180,7 +181,7 @@ export async function fetchSupabaseUserPreferences(
     supabase
       .from("user_preferences")
       .upsert({
-        account_id: accountId,
+        account_id: sbAccountId,
         prayer_reminders: local.prayer_reminders,
         channel_notifications: local.channel_notifications,
         browser_notifications_enabled: local.browser_notifications_enabled,
@@ -217,9 +218,10 @@ export async function persistSupabaseUserPreferences(
   }
 
   // 3. Upsert to Supabase
+  const sbAccountId = toSupabaseUuid(accountId);
   try {
     const payload = {
-      account_id: accountId,
+      account_id: sbAccountId,
       prayer_reminders: preferences.prayer_reminders,
       prayer_reminders_enabled: preferences.prayer_reminders.enabled,
       channel_notifications: preferences.channel_notifications,

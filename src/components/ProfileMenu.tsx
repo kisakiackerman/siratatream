@@ -9,9 +9,6 @@ import {
   Sparkles,
   Layers,
   BarChart3,
-  Moon,
-  Sun,
-  Monitor,
   User,
   ShieldCheck,
   Wand2,
@@ -23,7 +20,6 @@ import {
 } from "lucide-react";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useAuth } from "@/hooks/useAuth";
-import { useTheme } from "@/hooks/useTheme";
 import { getAvatarIcon } from "@/data/avatarIcons";
 import { gregorianToHijri } from "@/lib/hijri";
 import type { SettingsTab } from "@/components/AccountSettingsModal";
@@ -58,7 +54,6 @@ export default function ProfileMenu({
 }: ProfileMenuProps) {
   const { activeProfile } = useViewerProfile();
   const { firebaseUser, userSpace, isCreator, signOut, signInWithGoogle, signInWithApple } = useAuth();
-  const { theme, resolvedTheme, systemTheme, toggleTheme } = useTheme();
   const hijriToday = useMemo(() => gregorianToHijri(), []);
   const [open, setOpen] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
@@ -302,14 +297,8 @@ export default function ProfileMenu({
             />
           </div>
 
-          {/* Section: Theme, Profile Switching & Settings */}
+          {/* Section: Profile Switching & Settings */}
           <div className="p-1">
-            <MenuItem
-              icon={<Moon size={16} className="text-emerald-400" />}
-              label="Thème : Sombre"
-              badge="Permanent"
-              onClick={() => toggleTheme()}
-            />
             <MenuItem
               icon={<Layers size={16} className="text-zinc-400" />}
               label="Changer de profil"

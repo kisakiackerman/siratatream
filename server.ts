@@ -8,6 +8,12 @@ import { requireAuth, type AuthRequest } from "./src/middleware/auth.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
 import { getSavedLocations, addSavedLocation, deleteSavedLocation } from "./src/db/locations.ts";
 import {
+  connectToMongoDB,
+  disconnectFromMongoDB,
+  isMongoConfigured,
+  pingMongoDB,
+} from "./src/db/mongodb.ts";
+import {
   securityHeadersMiddleware,
   standardApiLimiter,
   aiEndpointLimiter,
@@ -37,28 +43,87 @@ app.disable("x-powered-by");
 // Apply comprehensive HTTP security headers (CSP, HSTS, X-Content-Type-Options, Permissions-Policy)
 app.use(securityHeadersMiddleware);
 
-// Firebase Auth Reverse Proxy to circumvent 3rd-party cookie blocking and cross-domain iframe handshake failures
+// Load Firebase authDomain dynamically from firebase-applet-config.json (fallback to khaki-obelisk-6f6jr.firebaseapp.com)
+let firebaseAuthDomain = "khaki-obelisk-6f6jr.firebaseapp.com";
+try {
+  const fbConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(fbConfigPath)) {
+    const parsedFbConfig = JSON.parse(fs.readFileSync(fbConfigPath, "utf-8"));
+    if (parsedFbConfig?.authDomain) {
+      firebaseAuthDomain = String(parsedFbConfig.authDomain).trim();
+    }
+  }
+} catch {
+  // keep default authDomain
+}
+
+// Firebase Auth Reverse Proxy to handle /__/auth/* requests, redirects, POST bodies, and cookies cleanly
 app.use("/__/auth", async (req, res) => {
   try {
-    const targetUrl = `https://khaki-obelisk-6f6jr.firebaseapp.com/__/auth${req.url}`;
+    const targetUrl = `https://${firebaseAuthDomain}/__/auth${req.url}`;
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(req.headers)) {
-      if (key.toLowerCase() !== "host" && typeof value === "string") {
+      const lower = key.toLowerCase();
+      if (lower !== "host" && lower !== "connection" && lower !== "content-length" && typeof value === "string") {
         headers[key] = value;
       }
     }
+
+    let requestBody: Buffer | undefined;
+    if (!["GET", "HEAD"].includes(req.method.toUpperCase())) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      if (chunks.length > 0) {
+        requestBody = Buffer.concat(chunks);
+      }
+    }
+
     const response = await fetch(targetUrl, {
       method: req.method,
       headers,
+      body: requestBody,
+      redirect: "manual",
     });
 
     res.status(response.status);
+
+    const reqProto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() || req.protocol || "https";
+    const reqHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() || req.headers.host || "";
+
     response.headers.forEach((val, key) => {
       const lower = key.toLowerCase();
-      if (lower !== "content-encoding" && lower !== "content-length" && lower !== "transfer-encoding") {
-        res.setHeader(key, val);
+      if (
+        lower === "content-encoding" ||
+        lower === "content-length" ||
+        lower === "transfer-encoding" ||
+        lower === "set-cookie"
+      ) {
+        return;
       }
+      if (lower === "location" && reqHost) {
+        const upstreamPrefix = `https://${firebaseAuthDomain}/__/auth`;
+        const rewritten = val.startsWith(upstreamPrefix)
+          ? `${reqProto}://${reqHost}/__/auth${val.slice(upstreamPrefix.length)}`
+          : val;
+        res.setHeader("Location", rewritten);
+        return;
+      }
+      res.setHeader(key, val);
     });
+
+    const rawSetCookies = typeof (response.headers as any).getSetCookie === "function"
+      ? ((response.headers as any).getSetCookie() as string[])
+      : response.headers.get("set-cookie")
+      ? [response.headers.get("set-cookie") as string]
+      : [];
+
+    if (rawSetCookies.length > 0) {
+      const cleanedCookies = rawSetCookies.map((c) => c.replace(/;\s*Domain=[^;]+/gi, ""));
+      res.setHeader("Set-Cookie", cleanedCookies);
+    }
+
     const buffer = Buffer.from(await response.arrayBuffer());
     res.send(buffer);
   } catch (err) {
@@ -94,11 +159,20 @@ function getGenAI(): GoogleGenAI | null {
 }
 
 // Health check endpoint
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (_req, res) => {
+  const mongoStatus = await pingMongoDB();
   res.json({
     status: "ok",
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"),
+    mongoConfigured: mongoStatus.configured,
+    mongoConnected: mongoStatus.connected,
   });
+});
+
+// Authenticated MongoDB Atlas connectivity check
+app.get("/api/mongodb/status", requireAuth, async (_req: AuthRequest, res) => {
+  const status = await pingMongoDB();
+  res.json(status);
 });
 
 // Build & App version check endpoint for auto-updating clients with the latest link
@@ -1582,6 +1656,11 @@ app.get("/api/adhan/download", async (req, res) => {
 });
 
 async function startServer() {
+  // Ensure unknown /api/* routes return JSON 404 instead of redirecting to SPA index.html
+  app.all("/api/*", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
   // Vite middleware setup
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -1598,11 +1677,32 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`SiratStream Server running on http://0.0.0.0:${PORT}`);
     // Démarrage du planificateur de l'agent quotidien silencieux
     dailyChannelSyncAgent.startScheduler();
+    // Connexion MongoDB Atlas non bloquante si configurée
+    if (isMongoConfigured()) {
+      connectToMongoDB().catch(() => {
+        // Already handled gracefully inside connectToMongoDB
+      });
+    }
+  });
+
+  const gracefulShutdown = async () => {
+    try {
+      await disconnectFromMongoDB();
+    } finally {
+      server.close(() => process.exit(0));
+    }
+  };
+
+  process.once("SIGINT", () => {
+    void gracefulShutdown();
+  });
+  process.once("SIGTERM", () => {
+    void gracefulShutdown();
   });
 }
 

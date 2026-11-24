@@ -14,7 +14,7 @@ export default function ExitAppModal({
   onClose,
   onConfirmExit,
   title = "Quitter l'application ?",
-  description = "Vos favoris, votre historique de visionnage et votre profil sont sauvegardés en toute sécurité. Souhaitez-vous vraiment vous déconnecter et quitter Sirat Stream ?",
+  description = "Vos favoris, votre historique de visionnage et votre profil sont sauvegardés en toute sécurité. Souhaitez-vous vraiment vous déconnecter et quitter SiratStream ?",
 }: ExitAppModalProps) {
   // Close on Escape key
   const handleKeyDown = useCallback(

@@ -1,50 +1,181 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LIQUID GLASS (Verre Liquide Teinté Émeraude)
    Translucent emerald-tinted surfaces, refractive specular reflections in emerald-200
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTÈME DE PROFONDEUR ET EFFETS 3D (LIQUID GLASS 3D & PERSPECTIVE)
+   Surfaces physiques 3D, biseaux spéculaires, biseau inférieur et ombres d'occlusion ambiante
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 .liquid-glass {
   background-color: rgba(18, 30, 24, 0.92);
-  border: 1px solid rgba(110, 231, 183, 0.30);
-  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.25), 0 4px 16px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2.5px 4px 0 rgba(0, 0, 0, 0.45),
+    0 4px 8px -1px rgba(0, 0, 0, 0.35),
+    0 12px 28px -4px rgba(0, 0, 0, 0.5),
+    0 22px 44px -8px rgba(0, 0, 0, 0.35);
+  transform: translateZ(0);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease, border-color 220ms ease;
+  transform-style: preserve-3d;
+}
+
+.liquid-glass:hover {
+  transform: translateY(-3px) translateZ(8px);
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -2.5px 4px 0 rgba(0, 0, 0, 0.5),
+    0 8px 16px -2px rgba(0, 0, 0, 0.4),
+    0 20px 42px -4px rgba(0, 0, 0, 0.62),
+    0 0 24px -2px rgba(16, 185, 129, 0.28);
 }
 
 .liquid-glass-subtle {
   background-color: rgba(16, 26, 20, 0.88);
-  border: 1px solid rgba(110, 231, 183, 0.22);
-  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.20);
+  border: 1px solid rgba(110, 231, 183, 0.25);
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1.5px 3px rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.3),
+    0 8px 20px -2px rgba(0, 0, 0, 0.35);
+  transform: translateZ(0);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.liquid-glass-subtle:hover {
+  transform: translateY(-2px) translateZ(4px);
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1.5px 3px rgba(0, 0, 0, 0.4),
+    0 6px 14px rgba(0, 0, 0, 0.35),
+    0 12px 24px -2px rgba(0, 0, 0, 0.4);
 }
 
 .liquid-glass-card {
   background-color: rgba(18, 28, 22, 0.90);
-  border: 1px solid rgba(110, 231, 183, 0.25);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -2.5px 5px 0 rgba(0, 0, 0, 0.5),
+    0 4px 10px -2px rgba(0, 0, 0, 0.4),
+    0 14px 30px -4px rgba(0, 0, 0, 0.55);
+  transform: translateZ(0);
+  transform-style: preserve-3d;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 240ms ease, border-color 240ms ease;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MICRO-INTERACTION FLUIDE DES VIGNETTES VIDÉOS (Hover Scale & Elevated Shadow)
+   VIGNETTES VIDÉOS ET CARTES EN RELIEF 3D (TILT GYROSCOPIQUE & LUEUR SPÉCULAIRE)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .video-thumb-interactive {
-  transition: transform 150ms ease, border-color 150ms ease;
+  position: relative;
+  transform: perspective(900px) translateZ(0);
+  transform-style: preserve-3d;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease, border-color 220ms ease;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -2.5px 5px 0 rgba(0, 0, 0, 0.55),
+    0 6px 14px -2px rgba(0, 0, 0, 0.45),
+    0 16px 32px -6px rgba(0, 0, 0, 0.6);
+  will-change: transform, box-shadow;
 }
 
-/* Micro-interaction au survol : direct et léger */
-.video-thumb-interactive:hover,
-.group:hover .video-thumb-interactive,
-.group\/card:hover .video-thumb-interactive {
-  transform: scale(1.02);
-  border-color: rgba(110, 231, 183, 0.60) !important;
-  z-index: 20;
+/* Élévation 3D avec perspective au survol */
+.video-thumb-interactive:hover:not(.is-tilted-3d),
+.group:hover .video-thumb-interactive:not(.is-tilted-3d),
+.group\/card:hover .video-thumb-interactive:not(.is-tilted-3d) {
+  transform: perspective(900px) translateY(-7px) translateZ(16px) rotateX(2.5deg) scale(1.025);
+  border-color: rgba(110, 231, 183, 0.65) !important;
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -3px 6px 0 rgba(0, 0, 0, 0.65),
+    0 16px 32px -4px rgba(0, 0, 0, 0.65),
+    0 30px 60px -10px rgba(0, 0, 0, 0.75),
+    0 0 28px 2px rgba(16, 185, 129, 0.35) !important;
+  z-index: 25;
 }
 
-/* En thème clair : bordure nette */
-[data-theme="light"] .video-thumb-interactive:hover,
-[data-theme="light"] .group:hover .video-thumb-interactive,
-[data-theme="light"] .group\/card:hover .video-thumb-interactive {
-  border-color: rgba(16, 185, 129, 0.5) !important;
+/* Tilt 3D dynamique en temps réel suivant le curseur souris */
+.video-thumb-interactive.is-tilted-3d {
+  transform: perspective(900px) rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg)) translateY(-7px) translateZ(20px) scale3d(1.03, 1.03, 1.03);
+  border-color: rgba(110, 231, 183, 0.75) !important;
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -3px 6px 0 rgba(0, 0, 0, 0.65),
+    0 18px 36px -4px rgba(0, 0, 0, 0.7),
+    0 32px 64px -10px rgba(0, 0, 0, 0.8),
+    0 0 32px 3px rgba(16, 185, 129, 0.4) !important;
+  z-index: 30;
+}
+
+/* Couche de reflet spéculaire 3D (Glint/Glare) orientée par la lumière de la souris */
+.video-thumb-interactive::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  background: radial-gradient(
+    circle at var(--glare-x, 50%) var(--glare-y, 50%),
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(167, 243, 208, 0.12) 35%,
+    transparent 70%
+  );
+  z-index: 15;
+}
+
+.video-thumb-interactive:hover::after,
+.video-thumb-interactive.is-tilted-3d::after {
+  opacity: 1;
+}
+
+/* Enfoncement physique 3D lors du clic */
+.video-thumb-interactive:active,
+.group:active .video-thumb-interactive,
+.group\/card:active .video-thumb-interactive {
+  transform: perspective(900px) translateY(1px) translateZ(4px) scale3d(0.99, 0.99, 0.99) !important;
+  box-shadow: 
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1.5px 3px 0 rgba(0, 0, 0, 0.5),
+    0 4px 8px -2px rgba(0, 0, 0, 0.4),
+    0 10px 20px -4px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* En thème clair : biseau 3D net et lueur adaptée */
+[data-theme="light"] .video-thumb-interactive {
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.05),
+    0 6px 14px -2px rgba(0, 0, 0, 0.08),
+    0 16px 32px -4px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-theme="light"] .video-thumb-interactive:hover:not(.is-tilted-3d),
+[data-theme="light"] .group:hover .video-thumb-interactive:not(.is-tilted-3d),
+[data-theme="light"] .group\/card:hover .video-thumb-interactive:not(.is-tilted-3d) {
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.08),
+    0 16px 34px -4px rgba(0, 0, 0, 0.14),
+    0 30px 60px -8px rgba(16, 185, 129, 0.22) !important;
+}
+
+[data-theme="light"] .video-thumb-interactive.is-tilted-3d {
+  border-color: rgba(16, 185, 129, 0.7) !important;
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.08),
+    0 18px 38px -4px rgba(0, 0, 0, 0.15),
+    0 34px 64px -8px rgba(16, 185, 129, 0.25) !important;
 }
 
 .video-thumb-interactive img {
@@ -87,94 +218,196 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   BANDES CINÉMA ESTHÉTIQUES ET OCCULTANTES (PLAYER OVERLAY HAUTE FIDÉLITÉ)
+   BANDES CINÉMA ÉLÉGANTES ET TRANSPARENTES (EFFET VERRE DÉPOLI & DÉGRADÉ SOYEUX)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Bande supérieure cinéma : dégradé velours plus transparent et aéré avec flou satiné progressif */
+/* Bande supérieure cinéma : compacte, fond noir profond occultant au niveau des boutons */
 .cinema-band-top {
   background: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0.84) 0%,
-    rgba(0, 0, 0, 0.76) 35%,
-    rgba(0, 0, 0, 0.52) 65%,
-    rgba(0, 0, 0, 0.18) 86%,
+    rgba(0, 0, 0, 0.98) 0%,
+    rgba(0, 0, 0, 0.92) 50%,
+    rgba(0, 0, 0, 0.45) 80%,
     rgba(0, 0, 0, 0) 100%
   );
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  mask-image: linear-gradient(180deg, black 0%, black 58%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, black 0%, black 58%, transparent 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* Bande inférieure cinéma : dégradé velours semi-transparent pour socle élégant du contrôleur */
+/* Bande inférieure cinéma : compacte, fond noir ultra sombre masquant les écritures sous les boutons */
 .cinema-band-bottom {
   background: linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.85) 0%,
-    rgba(0, 0, 0, 0.77) 38%,
-    rgba(0, 0, 0, 0.50) 68%,
-    rgba(0, 0, 0, 0.16) 88%,
+    rgba(0, 0, 0, 0.98) 0%,
+    rgba(0, 0, 0, 0.92) 50%,
+    rgba(0, 0, 0, 0.45) 80%,
     rgba(0, 0, 0, 0) 100%
   );
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  mask-image: linear-gradient(0deg, black 0%, black 62%, transparent 100%);
-  -webkit-mask-image: linear-gradient(0deg, black 0%, black 62%, transparent 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* Modal and heavy panels with high contrast backing */
+/* Modal and heavy panels with deep 3D floating perspective */
 .liquid-glass-modal {
   background-color: rgba(14, 22, 18, 0.96);
-  border: 1px solid rgba(110, 231, 183, 0.32);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  box-shadow: 
+    inset 0 2.5px 2px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -3px 7px 0 rgba(0, 0, 0, 0.65),
+    0 20px 45px -10px rgba(0, 0, 0, 0.8),
+    0 40px 90px -15px rgba(0, 0, 0, 0.92);
+  transform: translateZ(0);
+  transform-style: preserve-3d;
 }
 
 .liquid-glass-dropdown {
   background-color: rgba(14, 24, 20, 0.96);
-  border: 1px solid rgba(110, 231, 183, 0.30);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(110, 231, 183, 0.32);
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -2px 4px 0 rgba(0, 0, 0, 0.5),
+    0 12px 30px -4px rgba(0, 0, 0, 0.7),
+    0 24px 50px -10px rgba(0, 0, 0, 0.85);
+  transform: translateZ(0);
 }
 
 /* Emerald accent liquid glass */
 .liquid-glass-emerald {
   background-color: rgba(16, 48, 36, 0.92) !important;
-  border: 1px solid rgba(110, 231, 183, 0.35) !important;
-  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.25) !important;
+  border: 1px solid rgba(110, 231, 183, 0.4) !important;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(167, 243, 208, 0.35),
+    inset 0 -2px 4px 0 rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(16, 185, 129, 0.25),
+    0 10px 24px -2px rgba(0, 0, 0, 0.5) !important;
   color: #a7f3d0 !important;
+  transform: translateZ(0);
 }
 
-/* Form Inputs */
+/* Form Inputs with carved 3D inset depth */
 .liquid-glass-input {
   background-color: rgba(20, 32, 26, 0.90);
   border: 1px solid rgba(110, 231, 183, 0.28);
-  box-shadow: inset 0 1px 1px rgba(167, 243, 208, 0.15);
+  box-shadow: 
+    inset 0 2.5px 5px -1px rgba(0, 0, 0, 0.65),
+    inset 0 1px 2px 0 rgba(0, 0, 0, 0.45),
+    0 1px 0 0 rgba(255, 255, 255, 0.1);
   color: #ffffff;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .liquid-glass-input:focus {
   background-color: rgba(24, 38, 30, 0.95);
   border-color: rgba(110, 231, 183, 0.6);
+  box-shadow: 
+    inset 0 2px 4px 0 rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(110, 231, 183, 0.35),
+    0 4px 12px rgba(16, 185, 129, 0.2);
   outline: none;
 }
 
-/* Badges & Pills */
+/* 3D Embossed Badges & Pills */
 .liquid-glass-badge {
   background-color: rgba(20, 42, 32, 0.88);
   border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: 
+    inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1.5px 1.5px 0 rgba(0, 0, 0, 0.3),
+    0 2.5px 5px -1px rgba(0, 0, 0, 0.35);
   color: #a7f3d0;
 }
 
 .liquid-glass-badge-emerald {
   background-color: rgba(20, 42, 32, 0.88);
   border: 1px solid rgba(110, 231, 183, 0.30);
+  box-shadow: 
+    inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1.5px 1.5px 0 rgba(0, 0, 0, 0.3),
+    0 2.5px 5px -1px rgba(0, 0, 0, 0.35);
   color: #a7f3d0;
 }
 
 .liquid-glass-badge-amber {
   background-color: rgba(45, 35, 12, 0.88);
   border: 1px solid rgba(252, 211, 77, 0.30);
+  box-shadow: 
+    inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1.5px 1.5px 0 rgba(0, 0, 0, 0.3),
+    0 2.5px 5px -1px rgba(0, 0, 0, 0.35);
   color: #fde68a;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOUTONS ET CONTRÔLES PHYSIQUES TACTILES 3D
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Boutons principaux émeraude en relief 3D (Play, actions prioritaires) */
+.btn-3d-emerald,
+button.bg-emerald-400,
+button.bg-emerald-500 {
+  box-shadow: 
+    0 4px 0 #059669,
+    0 8px 18px rgba(16, 185, 129, 0.38),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.65) !important;
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 140ms ease !important;
+}
+
+.btn-3d-emerald:hover,
+button.bg-emerald-400:hover,
+button.bg-emerald-500:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 0 #059669,
+    0 12px 24px rgba(16, 185, 129, 0.48),
+    inset 0 2px 1.5px rgba(255, 255, 255, 0.8) !important;
+}
+
+.btn-3d-emerald:active,
+button.bg-emerald-400:active,
+button.bg-emerald-500:active {
+  transform: translateY(3px) !important;
+  box-shadow: 
+    0 1px 0 #059669,
+    0 2px 6px rgba(16, 185, 129, 0.3),
+    inset 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Boutons secondaires en verre 3D (Plus d'infos, Noor IA, chevrons, ronds d'action) */
+.btn-3d-secondary,
+button.bg-emerald-400\/15,
+button.bg-emerald-400\/10,
+button.bg-emerald-400\/25 {
+  box-shadow: 
+    0 3px 0 rgba(0, 0, 0, 0.4),
+    0 6px 14px rgba(0, 0, 0, 0.35),
+    inset 0 1.5px 1px rgba(167, 243, 208, 0.35),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.3) !important;
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 140ms ease !important;
+}
+
+.btn-3d-secondary:hover,
+button.bg-emerald-400\/15:hover,
+button.bg-emerald-400\/10:hover,
+button.bg-emerald-400\/25:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 4.5px 0 rgba(0, 0, 0, 0.45),
+    0 8px 18px rgba(0, 0, 0, 0.4),
+    inset 0 2px 1px rgba(167, 243, 208, 0.45),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.btn-3d-secondary:active,
+button.bg-emerald-400\/15:active,
+button.bg-emerald-400\/10:active,
+button.bg-emerald-400\/25:active {
+  transform: translateY(2px) !important;
+  box-shadow: 
+    0 0.5px 0 rgba(0, 0, 0, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px rgba(0, 0, 0, 0.25) !important;
 }
 
 /* ── Hide scrollbars globally across all elements while keeping scroll active ── */
@@ -203,7 +436,7 @@ body::-webkit-scrollbar {
   height: 0px;
 }
 
-/* ── Light Mode Color Overrides & Adaptations ── */
+/* ── Light Mode Color Overrides & Total Visual Correlation ── */
 [data-theme="light"] {
   color-scheme: light;
 }
@@ -212,15 +445,33 @@ body::-webkit-scrollbar {
   color-scheme: dark;
 }
 
-/* Light Theme Styling for Containers, Headers and Typography */
+/* Light Theme Styling for Main Background, Containers & Typography */
+[data-theme="light"] body,
+[data-theme="light"] #root,
 [data-theme="light"] [data-scroll-container] {
   background-color: #f8fafc !important;
   color: #0f172a !important;
 }
 
+/* Navigation Bar en suspension 3D */
+nav {
+  box-shadow: 
+    0 14px 35px -5px rgba(0, 0, 0, 0.8),
+    0 4px 10px -2px rgba(0, 0, 0, 0.55),
+    inset 0 1.5px 0 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1.5px 0 0 rgba(0, 0, 0, 0.65);
+}
+
+/* Navigation Bar in Light Theme */
 [data-theme="light"] nav {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.90) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 
+    inset 0 1.5px 0 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 0 #e2e8f0,
+    0 8px 24px -3px rgba(0, 0, 0, 0.08),
+    0 3px 6px -1px rgba(0, 0, 0, 0.04) !important;
 }
 
 [data-theme="light"] nav a,
@@ -229,6 +480,357 @@ body::-webkit-scrollbar {
   color: #1e293b;
 }
 
+/* Hero Section: Toujours en thème noir (sombre cinéma), même lorsque l'application est en mode clair */
+.hero-section,
+[data-theme="light"] .hero-section {
+  background-color: #09090b !important;
+  color: #ffffff !important;
+  color-scheme: dark;
+}
+
+.hero-gradient-x,
+[data-theme="light"] .hero-gradient-x {
+  background: linear-gradient(
+    90deg,
+    #09090b 0%,
+    rgba(9, 9, 11, 0.90) 40%,
+    rgba(9, 9, 11, 0.55) 70%,
+    transparent 100%
+  ) !important;
+}
+
+.hero-gradient-y,
+[data-theme="light"] .hero-gradient-y {
+  background: linear-gradient(
+    0deg,
+    #09090b 0%,
+    rgba(9, 9, 11, 0.70) 30%,
+    transparent 70%
+  ) !important;
+}
+
+.hero-gradient-top,
+[data-theme="light"] .hero-gradient-top {
+  background: linear-gradient(
+    180deg,
+    rgba(9, 9, 11, 0.80) 0%,
+    transparent 100%
+  ) !important;
+}
+
+[data-theme="light"] .hero-title {
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .hero-desc {
+  color: #d4d4d8 !important;
+}
+
+/* Typography Headings in Light Theme */
+[data-theme="light"] h1:not(.player-cinema-modal *):not(.keep-white),
+[data-theme="light"] h2:not(.player-cinema-modal *):not(.keep-white),
+[data-theme="light"] h3:not(.player-cinema-modal *):not(.keep-white),
+[data-theme="light"] h4:not(.player-cinema-modal *):not(.keep-white),
+[data-theme="light"] h5:not(.player-cinema-modal *):not(.keep-white),
+[data-theme="light"] h6:not(.player-cinema-modal *):not(.keep-white) {
+  color: #0f172a !important;
+}
+
+/* Text Legibility Across All Components in Light Theme */
+[data-theme="light"] .vignette-title,
+[data-theme="light"] .text-white:not(.player-cinema-modal *):not(.bg-emerald-500 *):not(.bg-emerald-600 *):not(.bg-amber-500 *):not(.bg-rose-500 *):not(.bg-rose-600 *):not(.keep-white) {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .text-zinc-100:not(.player-cinema-modal *),
+[data-theme="light"] .text-zinc-200:not(.player-cinema-modal *) {
+  color: #1e293b !important;
+}
+
+[data-theme="light"] .text-zinc-300:not(.player-cinema-modal *) {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .text-zinc-400:not(.player-cinema-modal *) {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .text-zinc-500:not(.player-cinema-modal *) {
+  color: #64748b !important;
+}
+
+/* High-Contrast Emerald & Accent Text in Light Mode (WCAG AA >= 4.5:1) */
+[data-theme="light"] .text-emerald-100:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-200:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-200\/90:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-200\/80:not(.player-cinema-modal *) {
+  color: #064e3b !important; /* emerald-900 */
+}
+
+[data-theme="light"] .text-emerald-300:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-300\/90:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-300\/80:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-300\/70:not(.player-cinema-modal *) {
+  color: #065f46 !important; /* emerald-800 */
+}
+
+[data-theme="light"] .text-emerald-400:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-400\/90:not(.player-cinema-modal *),
+[data-theme="light"] .text-emerald-400\/80:not(.player-cinema-modal *) {
+  color: #047857 !important; /* emerald-700 */
+}
+
+[data-theme="light"] .text-amber-200:not(.player-cinema-modal *),
+[data-theme="light"] .text-amber-300:not(.player-cinema-modal *),
+[data-theme="light"] .text-amber-300\/90:not(.player-cinema-modal *),
+[data-theme="light"] .text-amber-400:not(.player-cinema-modal *) {
+  color: #92400e !important; /* amber-800 */
+}
+
+/* Emerald Translucent Badges & Secondary Buttons in Light Mode -> Opaque emerald-50/100 & visible emerald-300 border */
+[data-theme="light"] .bg-emerald-400\/10:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-400\/15:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-400\/20:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-400\/25:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-500\/10:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-500\/15:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-500\/20:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-950:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-950\/20:not(.player-cinema-modal *),
+[data-theme="light"] .bg-emerald-950\/40:not(.player-cinema-modal *) {
+  background-color: #d1fae5 !important; /* emerald-100 */
+}
+
+[data-theme="light"] .hover\:bg-emerald-400\/25:hover:not(.player-cinema-modal *),
+[data-theme="light"] .hover\:bg-emerald-500\/25:hover:not(.player-cinema-modal *) {
+  background-color: #a7f3d0 !important; /* emerald-200 */
+}
+
+[data-theme="light"] .border-emerald-300\/15:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-300\/20:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-300\/25:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-300\/30:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-300\/35:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-300\/40:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-300\/50:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-400\/25:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-400\/30:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-400\/40:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-500\/20:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-500\/30:not(.player-cinema-modal *),
+[data-theme="light"] .border-emerald-800:not(.player-cinema-modal *) {
+  border-color: #6ee7b7 !important; /* emerald-300 */
+}
+
+/* Surfaces, Panels and Cards in Light Theme */
+[data-theme="light"] .bg-zinc-950:not(.player-cinema-modal):not(.player-cinema-modal *):not(video):not(iframe),
+[data-theme="light"] .bg-zinc-950\/95:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/90:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/85:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/80:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/70:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/60:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/50:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-950\/40:not(.player-cinema-modal *) {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .bg-zinc-900:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/95:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/90:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/80:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/70:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/60:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/50:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/40:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-900\/30:not(.player-cinema-modal *) {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a;
+}
+
+[data-theme="light"] .bg-zinc-800:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-800\/90:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-800\/80:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-800\/60:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-800\/50:not(.player-cinema-modal *),
+[data-theme="light"] .bg-zinc-800\/40:not(.player-cinema-modal *) {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a;
+}
+
+/* Glass & Elevated Elements in Light Theme avec relief 3D */
+[data-theme="light"] .liquid-glass:not(.player-cinema-modal *) {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.05),
+    0 4px 10px -2px rgba(0, 0, 0, 0.06),
+    0 12px 28px -4px rgba(0, 0, 0, 0.1),
+    0 20px 40px -8px rgba(16, 185, 129, 0.08) !important;
+  color: #0f172a;
+}
+
+[data-theme="light"] .liquid-glass:hover:not(.player-cinema-modal *) {
+  transform: translateY(-3px) translateZ(8px);
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.06),
+    0 8px 16px -2px rgba(0, 0, 0, 0.08),
+    0 18px 36px -4px rgba(0, 0, 0, 0.12),
+    0 0 20px -2px rgba(16, 185, 129, 0.18) !important;
+}
+
+[data-theme="light"] .liquid-glass-subtle:not(.player-cinema-modal *) {
+  background-color: #ecfdf5 !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1.5px 0 0 rgba(0, 0, 0, 0.04),
+    0 3px 8px rgba(0, 0, 0, 0.05) !important;
+  color: #064e3b;
+}
+
+[data-theme="light"] .liquid-glass-card:not(.player-cinema-modal *) {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.05),
+    0 4px 10px -2px rgba(0, 0, 0, 0.06),
+    0 12px 26px -4px rgba(0, 0, 0, 0.11) !important;
+  color: #0f172a;
+}
+
+[data-theme="light"] .liquid-glass-modal:not(.player-cinema-modal *) {
+  background-color: #ffffff !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 2px 1.5px 0 rgba(255, 255, 255, 1),
+    inset 0 -3px 0 0 rgba(0, 0, 0, 0.06),
+    0 20px 45px -10px rgba(0, 0, 0, 0.14),
+    0 35px 80px -15px rgba(0, 0, 0, 0.18) !important;
+  color: #0f172a;
+}
+
+[data-theme="light"] .liquid-glass-dropdown:not(.player-cinema-modal *) {
+  background-color: #ffffff !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 0 0 rgba(0, 0, 0, 0.05),
+    0 12px 30px -4px rgba(0, 0, 0, 0.12),
+    0 20px 45px -8px rgba(0, 0, 0, 0.15) !important;
+  color: #0f172a;
+}
+
+[data-theme="light"] .liquid-glass-emerald:not(.player-cinema-modal *) {
+  background-color: #d1fae5 !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 0 0 rgba(5, 150, 105, 0.25),
+    0 3px 8px rgba(16, 185, 129, 0.15),
+    0 8px 18px -2px rgba(16, 185, 129, 0.2) !important;
+  color: #064e3b !important;
+}
+
+[data-theme="light"] .liquid-glass-input:not(.player-cinema-modal *) {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 
+    inset 0 2px 4px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 0 rgba(255, 255, 255, 0.8) !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .liquid-glass-badge:not(.player-cinema-modal *),
+[data-theme="light"] .liquid-glass-badge-emerald:not(.player-cinema-modal *) {
+  background-color: #d1fae5 !important;
+  border-color: #6ee7b7 !important;
+  box-shadow: 
+    inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1.5px 0 0 rgba(5, 150, 105, 0.2),
+    0 2px 5px rgba(0, 0, 0, 0.06) !important;
+  color: #064e3b !important;
+}
+
+[data-theme="light"] .liquid-glass-badge-amber:not(.player-cinema-modal *) {
+  background-color: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  box-shadow: 
+    inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1.5px 0 0 rgba(217, 119, 6, 0.2),
+    0 2px 5px rgba(0, 0, 0, 0.06) !important;
+  color: #92400e !important;
+}
+
+/* Boutons tactiles 3D en thème clair */
+[data-theme="light"] button.bg-emerald-100 {
+  box-shadow: 
+    0 3px 0 #6ee7b7,
+    0 6px 14px rgba(16, 185, 129, 0.16),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95) !important;
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 140ms ease !important;
+}
+
+[data-theme="light"] button.bg-emerald-100:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 4.5px 0 #6ee7b7,
+    0 10px 20px rgba(16, 185, 129, 0.24),
+    inset 0 2px 1.5px rgba(255, 255, 255, 1) !important;
+}
+
+[data-theme="light"] button.bg-emerald-100:active {
+  transform: translateY(2px) !important;
+  box-shadow: 
+    0 0.5px 0 #6ee7b7,
+    0 2px 6px rgba(16, 185, 129, 0.15),
+    inset 0 1px 1px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Borders & Dividers in Light Theme */
+[data-theme="light"] .border-zinc-800:not(.player-cinema-modal *),
+[data-theme="light"] .border-zinc-800\/80:not(.player-cinema-modal *),
+[data-theme="light"] .border-zinc-900:not(.player-cinema-modal *),
+[data-theme="light"] .border-white\/10:not(.player-cinema-modal *),
+[data-theme="light"] .border-white\/15:not(.player-cinema-modal *),
+[data-theme="light"] .border-white\/20:not(.player-cinema-modal *) {
+  border-color: #e2e8f0 !important;
+}
+
+/* Subtle Transparent Backgrounds in Light Theme */
+[data-theme="light"] .bg-white\/5:not(.player-cinema-modal *),
+[data-theme="light"] .bg-white\/10:not(.player-cinema-modal *),
+[data-theme="light"] .bg-white\/15:not(.player-cinema-modal *) {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+[data-theme="light"] .hover\:bg-white\/10:hover:not(.player-cinema-modal *),
+[data-theme="light"] .hover\:bg-white\/15:hover:not(.player-cinema-modal *),
+[data-theme="light"] .hover\:bg-white\/20:hover:not(.player-cinema-modal *) {
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Form Inputs, Textareas and Dropdowns in Light Theme */
+[data-theme="light"] input:not([type="range"]):not(.player-cinema-modal *),
+[data-theme="light"] textarea:not(.player-cinema-modal *),
+[data-theme="light"] select:not(.player-cinema-modal *) {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Footer in Light Theme */
 [data-theme="light"] footer {
   background-color: #f1f5f9 !important;
   border-top: 1px solid #e2e8f0 !important;
@@ -247,42 +849,26 @@ body::-webkit-scrollbar {
   color: #0f172a !important;
 }
 
-[data-theme="light"] h1,
-[data-theme="light"] h2,
-[data-theme="light"] h3,
-[data-theme="light"] h4 {
-  color: #0f172a;
+/* Video Player Immunity: Remains in Deep Cinema Black */
+.player-cinema-modal,
+.player-cinema-modal * {
+  color-scheme: dark;
 }
 
-/* Modal and surface elevation in light theme */
-[data-theme="light"] .bg-zinc-950\/85,
-[data-theme="light"] .bg-zinc-950\/80,
-[data-theme="light"] .bg-zinc-900\/95,
-[data-theme="light"] .bg-zinc-900\/90,
-[data-theme="light"] .bg-zinc-900\/60,
-[data-theme="light"] .bg-zinc-900 {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  color: #0f172a;
+.player-cinema-modal iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
 }
 
-[data-theme="light"] .text-zinc-400 {
-  color: #64748b !important;
+[data-theme="light"] .player-cinema-modal:not(.hero-section) {
+  background-color: #000000 !important;
+  color: #ffffff !important;
 }
 
-[data-theme="light"] .text-zinc-500 {
-  color: #94a3b8 !important;
-}
-
-[data-theme="light"] .border-zinc-800,
-[data-theme="light"] .border-zinc-800\/80,
-[data-theme="light"] .border-zinc-900 {
-  border-color: #e2e8f0 !important;
-}
-
-/* Smooth theme transition */
-html, body, [data-scroll-container], nav, footer {
-  transition: background-color 0.1s ease, color 0.1s ease;
+/* Smooth Theme Transition Across All Core Elements */
+html, body, [data-scroll-container], nav, footer, section {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 /* ── Désactivation des animations continues qui ralentissent l'appareil ── */

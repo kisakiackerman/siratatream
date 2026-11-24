@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -151,10 +151,34 @@ export default function MiniPlayer({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const customEmbedUrl = useMemo(() => {
+    const raw = (item.videoUrl || "").trim();
+    if (!raw) return null;
+    const iframeMatch = raw.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+    const extracted = iframeMatch ? iframeMatch[1].trim() : raw;
+    if (
+      item.videoSourceType === "embed" ||
+      item.videoSourceType === "vimeo" ||
+      item.videoSourceType === "dailymotion" ||
+      extracted.includes("/embed") ||
+      extracted.includes("abumuslim.fr") ||
+      extracted.includes("cinefuse.") ||
+      extracted.includes("player.vimeo.com") ||
+      extracted.includes("dailymotion.com/embed")
+    ) {
+      return extracted;
+    }
+    return null;
+  }, [item.videoUrl, item.videoSourceType]);
+
   // Attempt to fetch direct stream source if available
   useEffect(() => {
     let active = true;
     setDirectStreamUrl(null);
+    if (customEmbedUrl) {
+      setIsBuffering(false);
+      return;
+    }
 
     fetchVideoPlaybackSource(item.youtubeId)
       .then((res) => {
@@ -167,11 +191,11 @@ export default function MiniPlayer({
     return () => {
       active = false;
     };
-  }, [item.youtubeId]);
+  }, [item.youtubeId, customEmbedUrl]);
 
   // Initialize YouTube API player if no direct video stream
   useEffect(() => {
-    if (directStreamUrl) return;
+    if (directStreamUrl || customEmbedUrl) return;
 
     let cancelled = false;
 
@@ -471,8 +495,19 @@ export default function MiniPlayer({
     >
       {/* Video / Audio Viewport */}
       <div className="relative w-full aspect-video bg-black overflow-hidden">
-        {/* 1. Direct HTML5 Video Player */}
-        {directStreamUrl ? (
+        {/* 1. Custom External Embed Iframe or Direct HTML5 Video Player */}
+        {customEmbedUrl ? (
+          <iframe
+            src={customEmbedUrl}
+            title={item.title}
+            width="100%"
+            height="100%"
+            frameBorder="0"
+            className={`w-full h-full border-0 ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+            allowFullScreen
+          />
+        ) : directStreamUrl ? (
           <video
             ref={videoRef}
             src={directStreamUrl}
@@ -561,8 +596,8 @@ export default function MiniPlayer({
               showControls || !playing ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
             }`}
           >
-            {/* Dégradé velours progressif semi-transparent & flou satiné */}
-            <div className="absolute inset-x-0 top-0 h-16 sm:h-20 cinema-band-top pointer-events-none shadow-[0_8px_24px_rgba(0,0,0,0.35)]" />
+            {/* Dégradé velours progressif compact & flou satiné */}
+            <div className="absolute inset-x-0 top-0 h-10 sm:h-12 cinema-band-top pointer-events-none shadow-[0_4px_16px_rgba(0,0,0,0.3)]" />
             <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent pointer-events-none" />
 
             <div className="relative z-10 flex items-center justify-between px-2.5 py-2">
@@ -610,8 +645,8 @@ export default function MiniPlayer({
               showControls || !playing ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
             }`}
           >
-            {/* Dégradé velours progressif semi-transparent & flou satiné */}
-            <div className="absolute inset-x-0 bottom-0 h-28 sm:h-32 cinema-band-bottom pointer-events-none shadow-[0_-8px_24px_rgba(0,0,0,0.35)]" />
+            {/* Dégradé velours progressif compact & flou satiné */}
+            <div className="absolute inset-x-0 bottom-0 h-16 sm:h-20 cinema-band-bottom pointer-events-none shadow-[0_-4px_16px_rgba(0,0,0,0.3)]" />
             <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/20 to-transparent pointer-events-none" />
 
             <div className="relative z-10 px-3 pb-2.5 pt-1">

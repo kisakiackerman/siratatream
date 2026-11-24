@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { Play, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ContentItem } from "@/data/catalog";
 import VideoTitleTooltip from "@/components/VideoTitleTooltip";
+import Card3D from "@/components/3d/Card3D";
 
 interface ContentRowProps {
   label: string;
@@ -49,7 +50,8 @@ export default function ContentRow({ label, items, onPlay, onInfo, limit }: Cont
 
         <div
           ref={scrollerRef}
-          className="flex gap-3 sm:gap-4 overflow-x-auto px-4 sm:px-6 lg:px-12 pt-2 pb-5 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex gap-3 sm:gap-4 overflow-x-auto px-4 sm:px-6 lg:px-12 pt-2 pb-6 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ perspective: "1200px", transformStyle: "preserve-3d" }}
         >
           {visibleItems.map((item) => (
             <PosterCard key={item.id} item={item} onPlay={onPlay} onInfo={onInfo} />
@@ -108,12 +110,21 @@ function PosterCard({
     : item.categories[0] || null;
 
   return (
-    <button
+    <Card3D
+      as="button"
+      maxTilt={8.5}
+      depth={16}
+      scale={1.035}
+      glare={true}
+      glareColor="emerald"
       onClick={() => onInfo(item.id)}
-      className="flex-shrink-0 w-36 sm:w-44 md:w-48 lg:w-52 text-left group/card focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded-2xl cursor-pointer"
+      className="flex-shrink-0 w-36 sm:w-44 md:w-48 lg:w-52 text-left group/card focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded-2xl cursor-pointer p-1"
     >
       {/* Vignette au format portrait vertical aspect-[2/3] avec verre liquide et micro-interaction fluide */}
-      <div className="video-thumb-interactive relative w-full aspect-[2/3] rounded-2xl overflow-hidden mb-2.5 bg-zinc-950 liquid-glass-card border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+      <div
+        className="video-thumb-interactive relative w-full aspect-[2/3] rounded-2xl overflow-hidden mb-2.5 bg-zinc-950 liquid-glass-card border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]"
+        style={{ transform: "translateZ(10px)" }}
+      >
         {showTitleFallback ? (
           <div
             className="absolute inset-0 flex items-center justify-center p-3 text-center"
@@ -141,14 +152,20 @@ function PosterCard({
 
         {/* Badge catégorie / Nouveau / Tendance en verre liquide vert */}
         {badgeLabel && (
-          <span className="absolute top-2.5 left-2.5 z-10 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-200 backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] max-w-[85%] truncate">
+          <span
+            className="absolute top-2.5 left-2.5 z-10 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/20 border border-emerald-300/40 text-emerald-100 backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] max-w-[85%] truncate"
+            style={{ transform: "translateZ(20px)" }}
+          >
             {badgeLabel}
           </span>
         )}
 
         {/* Score ou année en bas */}
         {item.score && (
-          <div className="absolute bottom-2.5 left-2.5 z-10 text-[9px] font-bold text-emerald-300 bg-zinc-950/70 border border-emerald-400/25 px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+          <div
+            className="absolute bottom-2.5 left-2.5 z-10 text-[9px] font-bold text-emerald-300 bg-zinc-950/80 border border-emerald-400/30 px-1.5 py-0.5 rounded-md backdrop-blur-sm"
+            style={{ transform: "translateZ(18px)" }}
+          >
             {item.score}% match
           </div>
         )}
@@ -161,28 +178,30 @@ function PosterCard({
             onPlay(item.id);
           }}
         >
-          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-emerald-400/25 hover:bg-emerald-400/40 text-emerald-200 border border-emerald-300/40 backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] transform group-hover/card:scale-105 active:scale-95 transition-all">
-            <Play size={20} fill="currentColor" className="ml-0.5 text-emerald-300" />
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-emerald-400/30 hover:bg-emerald-400/50 text-emerald-200 border border-emerald-300/50 backdrop-blur-xl shadow-[0_4px_16px_rgba(16,185,129,0.4),inset_0_1px_1px_rgba(167,243,208,0.4)] transform group-hover/card:scale-110 active:scale-95 transition-all">
+            <Play size={20} fill="currentColor" className="ml-0.5 text-emerald-200" />
           </div>
         </div>
       </div>
 
-      {/* Titre et détails sous la carte portrait avec tool-tip de description et transitions fluides */}
-      <VideoTitleTooltip
-        item={item}
-        as="p"
-        titleClassName="text-xs sm:text-sm font-semibold text-white group-hover/card:text-emerald-200 transition-colors vignette-title leading-snug"
-        lineClamp={2}
-      />
-      <p className="text-[11px] text-zinc-400 truncate mt-1 flex items-center gap-1.5 vignette-meta">
-        <span className="text-emerald-400/80 font-medium truncate vignette-meta">{item.channel}</span>
-        {item.year && (
-          <>
-            <span className="text-zinc-600">·</span>
-            <span className="text-zinc-500 font-mono text-[10px] vignette-meta">{item.year}</span>
-          </>
-        )}
-      </p>
-    </button>
+      {/* Titre et détails sous la carte portrait en couche flottante */}
+      <div style={{ transform: "translateZ(16px)" }}>
+        <VideoTitleTooltip
+          item={item}
+          as="p"
+          titleClassName="text-xs sm:text-sm font-semibold text-white group-hover/card:text-emerald-200 transition-colors vignette-title leading-snug"
+          lineClamp={2}
+        />
+        <p className="text-[11px] text-zinc-400 truncate mt-1 flex items-center gap-1.5 vignette-meta">
+          <span className="text-emerald-400/90 font-medium truncate vignette-meta">{item.channel}</span>
+          {item.year && (
+            <>
+              <span className="text-zinc-600">·</span>
+              <span className="text-zinc-500 font-mono text-[10px] vignette-meta">{item.year}</span>
+            </>
+          )}
+        </p>
+      </div>
+    </Card3D>
   );
 }

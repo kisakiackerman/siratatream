@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, User, Loader2, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, User, Loader2, LogOut, Sparkles } from "lucide-react";
+import { motion } from "motion/react";
+import Card3D from "@/components/3d/Card3D";
 import { useViewerProfile, AVATAR_COLORS } from "@/hooks/useViewerProfile";
 import { useAuth } from "@/hooks/useAuth";
 import type { ViewerProfile } from "@/lib/supabase";
@@ -252,9 +254,23 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
       )}
 
       {/* Profile grid */}
-      <div className="flex flex-wrap justify-center gap-6 sm:gap-8 max-w-3xl mb-10">
-        {profiles.map((p) => (
-          <div key={p.id} className="flex flex-col items-center gap-3 group">
+      <div
+        className="flex flex-wrap justify-center gap-6 sm:gap-8 max-w-3xl mb-10"
+        style={{ perspective: "1000px" }}
+      >
+        {profiles.map((p, idx) => (
+          <motion.div
+            key={p.id}
+            initial={{ opacity: 0, y: 35, scale: 0.85, rotateX: 15 }}
+            animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
+            transition={{
+              duration: 0.45,
+              delay: idx * 0.08,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            className="flex flex-col items-center gap-3 group"
+            style={{ transformStyle: "preserve-3d" }}
+          >
             {editingId === p.id ? (
               <div className="w-28 sm:w-36 flex flex-col items-center gap-3">
                 <div
@@ -332,12 +348,15 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
               </div>
             ) : (
               <>
-                <button
+                <Card3D
+                  maxTilt={9.5}
+                  depth={20}
+                  glareColor="gold"
                   onClick={() => (manageMode ? startEdit(p) : handleSelect(p))}
-                  className="relative transition-transform hover:scale-105 active:scale-95"
+                  className="cursor-pointer"
                 >
                   <ProfileAvatar profile={p} editing={manageMode} />
-                </button>
+                </Card3D>
                 {manageMode && (
                   <button
                     onClick={() => handleDelete(p.id)}
@@ -348,7 +367,10 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                     Supprimer
                   </button>
                 )}
-                <p className="text-zinc-400 group-hover:text-white text-sm font-medium transition-colors text-center max-w-[8rem] truncate">
+                <p
+                  className="text-zinc-400 group-hover:text-white text-sm font-medium transition-colors text-center max-w-[8rem] truncate"
+                  style={{ transform: "translateZ(8px)" }}
+                >
                   {p.name}
                 </p>
                 {p.is_kid && (
@@ -358,7 +380,7 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                 )}
               </>
             )}
-          </div>
+          </motion.div>
         ))}
 
         {/* Add new profile */}

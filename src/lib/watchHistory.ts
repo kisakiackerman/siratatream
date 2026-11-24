@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, isValidUuid } from "@/lib/supabase";
 
 export const LOCAL_HISTORY_PREFIX = "nexstream_history_";
 export const HISTORY_UPDATE_EVENT = "nexstream_history_updated";
@@ -102,12 +102,8 @@ export function saveWatchProgress(
       );
     }
 
-    // Sync to Supabase in the background if logged-in user profile
-    if (
-      !profileId.startsWith("guest-") &&
-      !profileId.startsWith("profile-") &&
-      supabase
-    ) {
+    // Sync to Supabase in the background if logged-in user profile has valid UUID
+    if (isValidUuid(profileId) && supabase) {
       Promise.resolve(
         supabase
           .from("watch_history")

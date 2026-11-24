@@ -80,7 +80,7 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
               key={item.id}
               type="button"
               onClick={() => onOpenShorts(item.id)}
-              className="group/card flex-shrink-0 w-36 sm:w-44 aspect-[9/16] rounded-2xl overflow-hidden relative bg-zinc-900 border border-zinc-800 hover:border-emerald-400/60 shadow-md hover:shadow-[0_0_20px_rgba(52,211,153,0.2)] transition-all duration-300 transform hover:-translate-y-1 text-left"
+              className="video-thumb-interactive group/card flex-shrink-0 w-36 sm:w-44 aspect-[9/16] rounded-2xl overflow-hidden relative bg-zinc-900 border border-zinc-800 hover:border-emerald-400/60 shadow-md hover:shadow-[0_0_20px_rgba(52,211,153,0.2)] transition-all duration-300 text-left"
             >
               {/* Thumbnail */}
               <img

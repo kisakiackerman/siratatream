@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Play,
@@ -19,11 +20,14 @@ import {
   Music,
   Tv,
   RotateCcw,
+  RotateCw,
   PictureInPicture2,
   Clock,
   Settings,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
+  Film,
   MoreHorizontal,
   Shuffle,
   Repeat,
@@ -43,7 +47,9 @@ import {
   EyeOff,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { ContentItem, catalog } from "@/data/catalog";
+import { ContentItem, catalog, getSeriesEpisodes } from "@/data/catalog";
+import Card3D from "@/components/3d/Card3D";
+import VideoNotesSection from "@/components/VideoNotesSection";
 import { loadYouTubeAPI } from "@/lib/youtube";
 import {
   fetchVideoPlaybackSource,
@@ -259,9 +265,58 @@ export default function PlayerModal({
   const [showMobileOptions, setShowMobileOptions] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLandscapeFullscreen, setIsLandscapeFullscreen] = useState(false);
-  const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const [isWindowPortrait, setIsWindowPortrait] = useState(true);
-  const [viewportDims, setViewportDims] = useState({ w: 0, h: 0 });
+  const [isMobileDevice, setIsMobileDevice] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      ("maxTouchPoints" in navigator && navigator.maxTouchPoints > 0 && window.innerWidth < 1024) ||
+      window.innerWidth < 768
+    );
+  });
+  const [isWindowPortrait, setIsWindowPortrait] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight > window.innerWidth;
+  });
+  const [viewportDims, setViewportDims] = useState(() => {
+    if (typeof window === "undefined") return { w: 0, h: 0 };
+    return { w: window.innerWidth, h: window.innerHeight };
+  });
+
+  // Contrôleur et barre de progression du lecteur de l'application
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const [hoverTimeSec, setHoverTimeSec] = useState<number | null>(null);
+  const [hoverPercent, setHoverPercent] = useState<number>(0);
+  const [clickFeedback, setClickFeedback] = useState<"play" | "pause" | null>(null);
+
+  // Mode de recadrage intelligent de la vidéo (Ajusté sans bandes / Zoom cinéma / Standard 16:9)
+  const [videoFitMode, setVideoFitMode] = useState<"cover" | "contain" | "zoom">(() => {
+    if (typeof window === "undefined") return "cover";
+    try {
+      const saved = localStorage.getItem("sirat_video_fit_mode");
+      return (saved as "cover" | "contain" | "zoom") || "cover";
+    } catch {
+      return "cover";
+    }
+  });
+
+  const cycleVideoFitMode = useCallback(() => {
+    setVideoFitMode((prev) => {
+      const modes: ("cover" | "contain" | "zoom")[] = ["cover", "zoom", "contain"];
+      const curIdx = modes.indexOf(prev);
+      const next = modes[(curIdx + 1) % modes.length];
+      try {
+        localStorage.setItem("sirat_video_fit_mode", next);
+      } catch {}
+
+      const labels = {
+        cover: "Plein écran (Rempli sans bandes)",
+        zoom: "Zoom Cinéma (Immersion)",
+        contain: "Standard 16:9 (Image complète)",
+      };
+      showCaptionNotification(`Format vidéo : ${labels[next]}`, true);
+      return next;
+    });
+  }, []);
 
   // Plein écran effectif (natif ou mode paysage forcé pour smartphones)
   const effectiveFullscreen = isFullscreen || isLandscapeFullscreen;
@@ -382,7 +437,7 @@ export default function PlayerModal({
 
   const { activeProfile } = useViewerProfile();
   const { inList, toggle } = useMyList();
-  const { userVote, vote, rate, averageRating, ratingCount, userRating, logView } = useContentStats(item.id);
+  const { likes, userVote, vote, rate, averageRating, ratingCount, userRating, logView } = useContentStats(item.id);
 
   // Compute resume time from props or history
   const resumeTime = useMemo(() => {
@@ -397,6 +452,8 @@ export default function PlayerModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRootRef = useRef<HTMLDivElement>(null);
+  const detailsSectionRef = useRef<HTMLDivElement>(null);
   const playerDivRef = useRef<HTMLDivElement>(null);
   const controlsTimer = useRef<any>(null);
   const playingRef = useRef<boolean>(playing);
@@ -419,21 +476,116 @@ export default function PlayerModal({
   const availableAudioTracks = useMemo(() => item.audioTracks || [], [item.audioTracks]);
   const hasDubbing = Boolean(directStreamUrl) && availableAudioTracks.length > 0;
 
-  // Related videos for "Up Next"
-  const related = useMemo(
-    () =>
-      catalog
-        .filter((c) => c.id !== item.id)
-        .filter(
-          (c) =>
-            c.channel === item.channel ||
-            c.categories.some((g) => item.categories.includes(g))
-        )
-        .slice(0, 8),
-    [item.id, item.channel, item.categories]
-  );
+  // --- Lecture Automatique Continue ---
+  const [continuousAutoplay, setContinuousAutoplay] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem("siratstream_continuous_autoplay");
+      if (v !== null) return v !== "false";
+      return localStorage.getItem("nexstream_auto_next") !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const continuousAutoplayRef = useRef(continuousAutoplay);
+  useEffect(() => {
+    continuousAutoplayRef.current = continuousAutoplay;
+  }, [continuousAutoplay]);
 
-  const upNext = related.length > 0 ? related[0] : null;
+  // Synchronisation dynamique avec les modifications de paramètres
+  useEffect(() => {
+    const handleAutoplayChange = () => {
+      try {
+        const v = localStorage.getItem("siratstream_continuous_autoplay");
+        if (v !== null) setContinuousAutoplay(v !== "false");
+        else setContinuousAutoplay(localStorage.getItem("nexstream_auto_next") !== "false");
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("continuous_autoplay_changed", handleAutoplayChange);
+    window.addEventListener("storage", handleAutoplayChange);
+    return () => {
+      window.removeEventListener("continuous_autoplay_changed", handleAutoplayChange);
+      window.removeEventListener("storage", handleAutoplayChange);
+    };
+  }, []);
+
+  // Détermination intelligente de l'épisode ou de la vidéo suivante :
+  // Priorité 1 : Épisode suivant de la même série
+  // Priorité 2 : Vidéo suivante de la même catégorie
+  const upNext = useMemo((): ContentItem | null => {
+    // 1. Si la vidéo actuelle fait partie d'une SÉRIE : enchaîner sur l'épisode suivant de la même série
+    if (item.seriesId) {
+      const seriesEps = getSeriesEpisodes(item.seriesId);
+      if (seriesEps.length > 1) {
+        const curEpNum = item.episodeNumber ?? 0;
+        // Trouver l'épisode avec le numéro strictement supérieur le plus proche
+        const nextInSeries = seriesEps.find((ep) => (ep.episodeNumber ?? 0) > curEpNum);
+        if (nextInSeries) return nextInSeries;
+        // Si on est au dernier épisode, reprendre un autre épisode de la série ou continuer
+        const otherInSeries = seriesEps.find((ep) => ep.id !== item.id);
+        if (otherInSeries) return otherInSeries;
+      }
+    }
+
+    // 2. Si pas de série (ou fin de série) : enchaîner sur la MÊME CATÉGORIE
+    const primaryCat = item.categories[0];
+    if (primaryCat) {
+      // Priorité 2a : Vidéos de la même chaîne dans la même catégorie
+      const sameChannelSameCat = catalog.filter(
+        (c) => c.id !== item.id && c.channel === item.channel && c.categories.includes(primaryCat)
+      );
+      if (sameChannelSameCat.length > 0) return sameChannelSameCat[0];
+
+      // Priorité 2b : Toute vidéo de la même catégorie
+      const sameCat = catalog.filter(
+        (c) => c.id !== item.id && c.categories.includes(primaryCat)
+      );
+      if (sameCat.length > 0) return sameCat[0];
+    }
+
+    // 3. Repli : Vidéos associées
+    const fallback = catalog.find(
+      (c) =>
+        c.id !== item.id &&
+        (c.channel === item.channel || c.categories.some((g) => item.categories.includes(g)))
+    );
+    return fallback || null;
+  }, [item.id, item.seriesId, item.episodeNumber, item.channel, item.categories]);
+
+  // Liste des vidéos associées pour la file d'attente et recommandations
+  const related = useMemo(() => {
+    const list: ContentItem[] = [];
+    if (upNext) list.push(upNext);
+
+    if (item.seriesId) {
+      const seriesEps = getSeriesEpisodes(item.seriesId);
+      for (const ep of seriesEps) {
+        if (ep.id !== item.id && !list.some((x) => x.id === ep.id)) {
+          list.push(ep);
+        }
+      }
+    }
+
+    const primaryCat = item.categories[0];
+    if (primaryCat) {
+      const sameCat = catalog.filter(
+        (c) => c.id !== item.id && c.categories.includes(primaryCat) && !list.some((x) => x.id === c.id)
+      );
+      list.push(...sameCat.slice(0, 8));
+    }
+
+    const sameChannel = catalog.filter(
+      (c) => c.id !== item.id && c.channel === item.channel && !list.some((x) => x.id === c.id)
+    );
+    list.push(...sameChannel.slice(0, 6));
+
+    return list.slice(0, 10);
+  }, [item.id, item.seriesId, item.channel, item.categories, upNext]);
+
+  const seriesEpisodes = useMemo(() => {
+    return item.seriesId ? getSeriesEpisodes(item.seriesId) : [];
+  }, [item.seriesId]);
 
   const fmt = (sec: number) => {
     if (!sec || isNaN(sec)) return "0:00";
@@ -520,10 +672,11 @@ export default function PlayerModal({
     onClose();
   }, [saveCurrentProgress, onClose, unlockScreenOrientation]);
 
-  // Safe item switch that immediately persists exact second
+  // Safe item switch that immediately persists exact second and scrolls smoothly to top
   const handleChangeItem = useCallback(
     (newId: string) => {
       saveCurrentProgress();
+      scrollRootRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       onChangeItem(newId);
     },
     [saveCurrentProgress, onChangeItem]
@@ -538,8 +691,9 @@ export default function PlayerModal({
     }
   }, [resumeTime, item.id]);
 
-  // Reset state on new item
+  // Reset state and scroll back to full-screen video on new item
   useEffect(() => {
+    scrollRootRef.current?.scrollTo({ top: 0 });
     setUseIframeFallback(false);
     setHasPlaybackError(false);
     setPlaybackError(null);
@@ -572,10 +726,44 @@ export default function PlayerModal({
     setInitRetryCount((c) => c + 1);
   }, [item.youtubeId]);
 
+  // Detect if item uses an external iframe embed URL (e.g. cinefuse.icu/embed/..., vimeo, dailymotion, or <iframe src="...">)
+  const customEmbedUrl = useMemo(() => {
+    const raw = (item.videoUrl || "").trim();
+    if (!raw) return null;
+    const iframeMatch = raw.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+    const extracted = iframeMatch ? iframeMatch[1].trim() : raw;
+    if (
+      item.videoSourceType === "embed" ||
+      item.videoSourceType === "vimeo" ||
+      item.videoSourceType === "dailymotion" ||
+      extracted.includes("/embed") ||
+      extracted.includes("abumuslim.fr") ||
+      extracted.includes("cinefuse.") ||
+      extracted.includes("player.vimeo.com") ||
+      extracted.includes("dailymotion.com/embed")
+    ) {
+      return extracted;
+    }
+    return null;
+  }, [item.videoUrl, item.videoSourceType]);
+
   // Attempt to fetch direct stream from custom videoUrl or YouTube edge function
   useEffect(() => {
     let active = true;
-    if (item.videoUrl && (item.videoSourceType === "direct" || item.videoUrl.endsWith(".mp4") || item.videoUrl.endsWith(".webm") || item.videoUrl.startsWith("blob:") || (item.videoUrl.startsWith("http") && !item.videoUrl.includes("youtu")))) {
+    if (customEmbedUrl) {
+      setDirectStreamUrl(null);
+      setBuffering(false);
+      return;
+    }
+    if (
+      item.videoUrl &&
+      (item.videoSourceType === "direct" ||
+        item.videoUrl.endsWith(".mp4") ||
+        item.videoUrl.endsWith(".webm") ||
+        item.videoUrl.endsWith(".m3u8") ||
+        item.videoUrl.startsWith("blob:") ||
+        (item.videoUrl.startsWith("http") && !item.videoUrl.includes("youtu") && !customEmbedUrl))
+    ) {
       setDirectStreamUrl(item.videoUrl);
       return;
     }
@@ -840,6 +1028,113 @@ export default function PlayerModal({
     handleNextTrackRef.current = handleNextTrack;
   }, [handleNextTrack]);
 
+  // --- Gestion de la Lecture Automatique Continue ---
+  const [autoNextCountdown, setAutoNextCountdown] = useState<number | null>(null);
+  const [nextItemToPlay, setNextItemToPlay] = useState<ContentItem | null>(null);
+  const autoNextTimerRef = useRef<any>(null);
+
+  const cancelAutoNext = useCallback(() => {
+    if (autoNextTimerRef.current) {
+      clearInterval(autoNextTimerRef.current);
+      autoNextTimerRef.current = null;
+    }
+    setAutoNextCountdown(null);
+    setNextItemToPlay(null);
+  }, []);
+
+  // Annuler le compte à rebours si la vidéo change
+  useEffect(() => {
+    cancelAutoNext();
+  }, [item.id, cancelAutoNext]);
+
+  // Déclencheur intelligent d'enchaînement automatique (même série ou même catégorie)
+  const triggerContinuousAutoplay = useCallback(() => {
+    // Si minuteur de sommeil actif à fin de vidéo
+    if (sleepTimerValRef.current === -1) {
+      setPlaying(false);
+      setSleepTimer(null);
+      setSleepTimeRemaining(null);
+      showCaptionNotification("Minuteur de sommeil : fin de la vidéo atteinte, lecture arrêtée.", false);
+      return;
+    }
+
+    // Si mode répétition actif
+    if (repeatOnRef.current) {
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+        videoRef.current.play().catch(() => {});
+      } else {
+        try {
+          playerRef.current?.seekTo?.(0, true);
+          playerRef.current?.playVideo?.();
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    // Vérifier si la lecture automatique continue est activée dans les paramètres
+    if (!continuousAutoplayRef.current) {
+      setPlaying(false);
+      return;
+    }
+
+    const nextId = getNextTrackIdRef.current();
+    if (!nextId) {
+      setPlaying(false);
+      return;
+    }
+
+    const nextObj = catalog.find((c) => c.id === nextId) || null;
+    if (!nextObj) {
+      handleNextTrackRef.current();
+      return;
+    }
+
+    setNextItemToPlay(nextObj);
+    setAutoNextCountdown(4);
+
+    if (autoNextTimerRef.current) clearInterval(autoNextTimerRef.current);
+
+    let count = 4;
+    autoNextTimerRef.current = setInterval(() => {
+      count -= 1;
+      if (count <= 0) {
+        clearInterval(autoNextTimerRef.current);
+        autoNextTimerRef.current = null;
+        setAutoNextCountdown(null);
+        setNextItemToPlay(null);
+        handleChangeItem(nextId);
+      } else {
+        setAutoNextCountdown(count);
+      }
+    }, 1000);
+  }, [handleChangeItem, showCaptionNotification]);
+
+  const triggerContinuousAutoplayRef = useRef(triggerContinuousAutoplay);
+  useEffect(() => {
+    triggerContinuousAutoplayRef.current = triggerContinuousAutoplay;
+  }, [triggerContinuousAutoplay]);
+
+  const toggleContinuousAutoplay = useCallback(() => {
+    const nextVal = !continuousAutoplay;
+    setContinuousAutoplay(nextVal);
+    try {
+      localStorage.setItem("siratstream_continuous_autoplay", String(nextVal));
+      localStorage.setItem("nexstream_auto_next", String(nextVal));
+      window.dispatchEvent(new Event("continuous_autoplay_changed"));
+    } catch {
+      // ignore
+    }
+    showCaptionNotification(
+      nextVal
+        ? "Lecture continue activée : les épisodes s'enchaîneront sans intervention."
+        : "Lecture continue désactivée.",
+      nextVal
+    );
+  }, [continuousAutoplay, showCaptionNotification]);
+
   // Restart current track from the beginning
   const handlePreviousTrack = useCallback(() => {
     if (videoRef.current) {
@@ -864,8 +1159,8 @@ export default function PlayerModal({
     setPlaybackRate(getStoredPlaybackSpeed());
     setShowSpeedMenu(false);
 
-    // If direct video stream is playing or fallback is active, skip YT API player
-    if (directStreamUrl) {
+    // If direct video stream or custom external embed is playing or fallback is active, skip YT API player
+    if (directStreamUrl || customEmbedUrl) {
       setBuffering(false);
       return;
     }
@@ -903,7 +1198,7 @@ export default function PlayerModal({
             iv_load_policy: 3,
             disablekb: 1,
             fs: 0,
-            cc_load_policy: 0,
+            cc_load_policy: 1,
             cc_lang_pref: "fr",
             vq: "hd1080",
             hd: 1,
@@ -912,6 +1207,8 @@ export default function PlayerModal({
           };
 
           playerRef.current = new (window as any).YT.Player(playerDivRef.current, {
+            width: "100%",
+            height: "100%",
             videoId: item.youtubeId,
             playerVars: playerVarsConfig,
             events: {
@@ -980,41 +1277,7 @@ export default function PlayerModal({
 
                 if (state === "ended") {
                   saveCurrentProgressRef.current();
-                  if (sleepTimerValRef.current === -1) {
-                    try {
-                      playerRef.current?.seekTo?.(0, true);
-                      playerRef.current?.pauseVideo?.();
-                    } catch {
-                      // ignore
-                    }
-                    postIframeCommand("pauseVideo");
-                    setPlaying(false);
-                    setSleepTimer(null);
-                    setSleepTimeRemaining(null);
-                    showCaptionNotification("Minuteur de sommeil : fin de la vidéo atteinte, lecture arrêtée.", false);
-                    return;
-                  }
-                  if (repeatOnRef.current) {
-                    try {
-                      playerRef.current?.seekTo?.(0, true);
-                      playerRef.current?.playVideo?.();
-                    } catch {
-                      // ignore
-                    }
-                  } else {
-                    const nextId = getNextTrackIdRef.current();
-                    if (nextId) {
-                      handleNextTrackRef.current();
-                    } else {
-                      // Reset to 0 and pause to prevent YouTube end-screen video suggestions grid
-                      try {
-                        playerRef.current?.seekTo?.(0, true);
-                        playerRef.current?.pauseVideo?.();
-                      } catch {
-                        // ignore
-                      }
-                    }
-                  }
+                  triggerContinuousAutoplayRef.current();
                 }
               },
             },
@@ -1166,6 +1429,34 @@ export default function PlayerModal({
         e.preventDefault();
         toggleCaptions();
       }
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        toggleMute();
+      }
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        cycleVideoFitMode();
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setVolume((v) => {
+          const next = Math.min(100, v + 5);
+          handleVolume(next);
+          return next;
+        });
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setVolume((v) => {
+          const next = Math.max(0, v - 5);
+          handleVolume(next);
+          return next;
+        });
+      }
     };
     window.addEventListener("keydown", handleKey);
     return () => {
@@ -1181,7 +1472,8 @@ export default function PlayerModal({
   const resetControlsTimer = useCallback((customDuration?: number | React.SyntheticEvent) => {
     clearTimeout(controlsTimer.current);
     setShowControls(true);
-    const duration = typeof customDuration === "number" ? customDuration : 6000;
+    // Les bandes et commandes restent affichées pendant 5 secondes avant de s'estomper
+    const duration = typeof customDuration === "number" ? customDuration : 5000;
     controlsTimer.current = setTimeout(() => {
       if (playingRef.current) setShowControls(false);
     }, duration);
@@ -1189,8 +1481,7 @@ export default function PlayerModal({
 
   // Gestion tactile intelligente :
   // Les commandes et bandes restent visibles tant que le doigt est sur l'écran,
-  // puis restent affichées pendant au moins 6 secondes après que l'utilisateur
-  // cesse de toucher l'écran en pleine lecture avant de s'estomper.
+  // puis restent affichées pendant 5 secondes complètes après relâchement.
   const handleTouchStart = useCallback(() => {
     clearTimeout(controlsTimer.current);
     setShowControls(true);
@@ -1201,13 +1492,13 @@ export default function PlayerModal({
     setShowControls(true);
     controlsTimer.current = setTimeout(() => {
       if (playingRef.current) setShowControls(false);
-    }, 6000); // Au moins 6 secondes après avoir cessé de toucher l'écran en pleine lecture
+    }, 5000); // 5 secondes après avoir cessé de toucher l'écran
   }, []);
 
   useEffect(() => {
-    // Au démarrage ou dès que la lecture commence, afficher la bande et les contrôleurs pendant au moins 6 secondes
+    // Au démarrage ou dès que la lecture commence, afficher la bande et les contrôleurs pendant 5 secondes
     if (playing) {
-      resetControlsTimer(6000);
+      resetControlsTimer(5000);
     } else {
       clearTimeout(controlsTimer.current);
       setShowControls(true);
@@ -1397,6 +1688,47 @@ export default function PlayerModal({
       setCurrentTimeSec(targetTime);
     }
   }
+
+  const handleSeekFromEvent = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || duration <= 0) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clickX = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const pct = (clickX / rect.width) * 100;
+    seekToPct(pct);
+  };
+
+  const handleMouseMoveProgressBar = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || duration <= 0) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const pct = (clickX / rect.width) * 100;
+    setHoverPercent(pct);
+    setHoverTimeSec((pct / 100) * duration);
+  };
+
+  const handleMouseLeaveProgressBar = () => {
+    setHoverTimeSec(null);
+  };
+
+  const cyclePlaybackRate = () => {
+    const rates = [0.75, 1, 1.25, 1.5, 2];
+    const curIdx = rates.indexOf(playbackRate);
+    const nextRate = rates[(curIdx + 1) % rates.length];
+    changePlaybackRate(nextRate);
+  };
+
+  const handleSurfaceClick = () => {
+    // Si les commandes étaient masquées, les révéler pendant 5 secondes
+    if (!showControls) {
+      resetControlsTimer(5000);
+      return;
+    }
+    resetControlsTimer(5000);
+    setClickFeedback(playing ? "pause" : "play");
+    setTimeout(() => setClickFeedback(null), 500);
+    togglePlay();
+  };
 
   function handleVolume(v: number) {
     setVolume(v);
@@ -1683,20 +2015,64 @@ export default function PlayerModal({
     { key: "hd720", label: "Haute Définition (720p)" },
   ];
 
-  return (
+  const isCustomOrDirect = Boolean(customEmbedUrl || directStreamUrl);
+  const videoCoverStyle: React.CSSProperties = (() => {
+    if (isCustomOrDirect || videoFitMode === "contain") {
+      return {
+        width: "100%",
+        height: "100%",
+        flexShrink: 0,
+        transform: !isCustomOrDirect && cinemaCleanMode ? "scale(1.02)" : "scale(1.001)",
+        transformOrigin: "center center",
+      };
+    }
+
+    const effW = forceRotate90 ? viewportDims.h : viewportDims.w;
+    const effH = forceRotate90 ? viewportDims.w : viewportDims.h;
+    const scaleFactor =
+      videoFitMode === "zoom" ? 1.22 : cinemaCleanMode ? 1.04 : 1.01;
+
+    if (effW <= 0 || effH <= 0) {
+      return {
+        width: "100%",
+        height: "100%",
+        flexShrink: 0,
+        transform: `scale(${scaleFactor})`,
+        transformOrigin: "center center",
+      };
+    }
+
+    const videoRatio = 16 / 9;
+    const containerRatio = effW / effH;
+    const coverW = containerRatio < videoRatio ? Math.ceil(effH * videoRatio) : effW;
+    const coverH = containerRatio < videoRatio ? effH : Math.ceil(effW / videoRatio);
+
+    return {
+      width: `${coverW}px`,
+      height: `${coverH}px`,
+      flexShrink: 0,
+      transform: `scale(${scaleFactor})`,
+      transformOrigin: "center center",
+    };
+  })();
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[100] bg-black flex flex-col font-sans"
+      ref={scrollRootRef}
+      className={`fixed inset-0 z-[100] w-screen h-[100dvh] bg-black overflow-x-hidden font-sans player-cinema-modal scroll-smooth ${
+        isAudioMode || effectiveFullscreen ? "overflow-hidden" : "overflow-y-auto"
+      }`}
     >
       {/* Élément audio caché pour le doublage — ne rend rien visuellement */}
       <audio ref={dubAudioRef} className="hidden" preload="auto" />
 
       <div
         ref={containerRef}
-        className={`relative overflow-hidden bg-black select-none ${
-          isAudioMode || effectiveFullscreen
-            ? "flex-1 w-full h-full"
-            : "w-full aspect-video md:aspect-auto md:flex-1 flex-shrink-0"
-        } ${forceRotate90 ? "fixed inset-0" : ""}`}
+        className={`relative overflow-hidden bg-black select-none w-full ${
+          forceRotate90
+            ? "fixed inset-0 z-50"
+            : "h-[100dvh] min-h-[100dvh] flex-shrink-0 flex items-center justify-center"
+        }`}
         style={rotatedStyle}
         onMouseMove={resetControlsTimer}
         onTouchStart={handleTouchStart}
@@ -1704,96 +2080,107 @@ export default function PlayerModal({
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
       >
-        {/* Conteneur vidéo avec rognage optique Cinema Clean (pousse la barre de titre YouTube hors champ) */}
+        {/* Conteneur vidéo plein écran bord à bord */}
         <div
-          className={`absolute inset-0 w-full h-full overflow-hidden transition-transform duration-300 ${
-            cinemaCleanMode && !directStreamUrl && !isAudioMode ? "scale-[1.07] origin-center" : "scale-100"
+          className={`absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden ${
+            customEmbedUrl ? "pointer-events-auto" : "pointer-events-none"
           }`}
         >
-          {/* Direct MP4/WebM stream or YouTube player or Fallback iframe */}
-          {directStreamUrl ? (
-            <video
-              ref={videoRef}
-              src={directStreamUrl}
-              autoPlay
-              playsInline
-              className={`absolute inset-0 w-full h-full object-contain ${
-                isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
-              }`}
-              onLoadedMetadata={() => {
-                if (videoRef.current) {
-                  videoRef.current.playbackRate = playbackRateRef.current;
-                }
-                if (captionsOnRef.current) {
-                  applyCaptionsToTarget(true);
-                }
-              }}
-              onWaiting={() => setBuffering(true)}
-              onPlaying={() => {
-                setBuffering(false);
-                setPlaying(true);
-              }}
-              onPause={() => setPlaying(false)}
-              onEnded={() => {
-                saveCurrentProgress();
-                if (dubAudioRef.current) dubAudioRef.current.pause();
-                if (sleepTimerValRef.current === -1) {
-                  setPlaying(false);
-                  setSleepTimer(null);
-                  setSleepTimeRemaining(null);
-                  showCaptionNotification("Minuteur de sommeil : fin de la vidéo atteinte, lecture arrêtée.", false);
-                  return;
-                }
-                if (repeatOn && videoRef.current) {
-                  videoRef.current.currentTime = 0;
-                  videoRef.current.play();
-                  if (activeAudioLangRef.current !== ORIGINAL_AUDIO_CODE && dubAudioRef.current) {
-                    dubAudioRef.current.currentTime = 0;
-                    dubAudioRef.current.play().catch(() => {});
+          <div
+            className="flex items-center justify-center transition-transform duration-300 ease-out origin-center"
+            style={videoCoverStyle}
+          >
+            {/* Direct MP4/WebM stream or Custom External Embed Iframe or YouTube player or Fallback iframe */}
+            {customEmbedUrl ? (
+              <div
+                className={`w-full h-full bg-black flex items-center justify-center relative z-25 ${
+                  isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
+                }`}
+              >
+                <iframe
+                  key={customEmbedUrl}
+                  src={customEmbedUrl}
+                  title={item.title}
+                  width="100%"
+                  height="100%"
+                  frameBorder="0"
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                  allowFullScreen
+                />
+              </div>
+            ) : directStreamUrl ? (
+              <video
+                ref={videoRef}
+                src={directStreamUrl}
+                autoPlay
+                playsInline
+                className={`w-full h-full ${
+                  videoFitMode === "contain"
+                    ? "object-contain"
+                    : videoFitMode === "zoom"
+                    ? "object-cover scale-125"
+                    : "object-cover"
+                } ${isAudioMode ? "opacity-0 pointer-events-none invisible" : ""}`}
+                onLoadedMetadata={() => {
+                  if (videoRef.current) {
+                    videoRef.current.playbackRate = playbackRateRef.current;
                   }
-                } else {
-                  handleNextTrack();
-                }
-              }}
-            />
-          ) : useIframeFallback ? (
-            <div
-              className={`absolute inset-0 w-full h-full bg-black ${
-                isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
-              }`}
-            >
-              <iframe
-                ref={iframeRef}
-                key={item.youtubeId}
-                src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=1&disablekb=0&fs=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
-                  typeof window !== "undefined" ? window.location.origin : ""
-                )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
-                title={item.title}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-                onLoad={() => {
                   if (captionsOnRef.current) {
-                    setTimeout(() => applyCaptionsToTarget(true), 800);
-                  }
-                  if (playbackRateRef.current !== 1) {
-                    setTimeout(
-                      () => postIframeCommand("setPlaybackRate", [playbackRateRef.current]),
-                      800
-                    );
+                    applyCaptionsToTarget(true);
                   }
                 }}
+                onWaiting={() => setBuffering(true)}
+                onPlaying={() => {
+                  setBuffering(false);
+                  setPlaying(true);
+                }}
+                onPause={() => setPlaying(false)}
+                onEnded={() => {
+                  saveCurrentProgress();
+                  if (dubAudioRef.current) dubAudioRef.current.pause();
+                  triggerContinuousAutoplay();
+                }}
               />
-            </div>
-          ) : (
-            <div
-              ref={playerDivRef}
-              className={`absolute inset-0 w-full h-full ${
-                isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
-              }`}
-            />
-          )}
+            ) : useIframeFallback ? (
+              <div
+                className={`w-full h-full bg-black flex items-center justify-center ${
+                  isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
+                }`}
+              >
+                <iframe
+                  ref={iframeRef}
+                  key={item.youtubeId}
+                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+                    typeof window !== "undefined" ? window.location.origin : ""
+                  )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
+                  title={item.title}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  onLoad={() => {
+                    if (captionsOnRef.current) {
+                      setTimeout(() => applyCaptionsToTarget(true), 800);
+                    }
+                    if (playbackRateRef.current !== 1) {
+                      setTimeout(
+                        () => postIframeCommand("setPlaybackRate", [playbackRateRef.current]),
+                        800
+                      );
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                ref={playerDivRef}
+                className={`w-full h-full ${
+                  isAudioMode ? "opacity-0 pointer-events-none invisible" : ""
+                }`}
+              />
+            )}
+          </div>
         </div>
 
         {/* ───────────────────────────────────────────────────────── */}
@@ -2254,25 +2641,36 @@ export default function PlayerModal({
           </div>
         )}
 
-        {/* Click-to-Play Overlay (Only when in video mode and not iframe fallback) */}
-        {!useIframeFallback && !isAudioMode && (
+        {/* Surface interactive plein écran pour clic lecture/pause et double-clic plein écran */}
+        {!isAudioMode && !screenLocked && !customEmbedUrl && (
           <div
-            className="absolute inset-0"
-            onClick={screenLocked ? undefined : togglePlay}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            style={{ cursor: showControls && !screenLocked ? "pointer" : "default" }}
+            className={`absolute inset-0 z-20 select-none ${
+              showControls ? "cursor-pointer" : "cursor-none"
+            }`}
+            onClick={handleSurfaceClick}
+            onDoubleClick={toggleFullscreen}
+            onMouseMove={resetControlsTimer}
           />
         )}
 
-        {/* Screen Locked Overlay */}
+        {/* Animation visuelle de feedback lecture/pause au centre de l'écran */}
+        {clickFeedback && !screenLocked && (
+          <div className="absolute inset-0 z-25 flex items-center justify-center pointer-events-none">
+            <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-black/75 backdrop-blur-md border border-white/20 flex items-center justify-center text-emerald-400 shadow-2xl animate-out fade-out zoom-out-90 duration-500">
+              {clickFeedback === "play" ? (
+                <Play size={36} fill="currentColor" className="ml-1" />
+              ) : (
+                <Pause size={36} fill="currentColor" />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Screen Locked Overlay (Verrouillage écran actif) */}
         {screenLocked && (
           <div
-            className={`absolute inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ${
-              showControls ? "opacity-100" : "opacity-0 pointer-events-none"
-            }`}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm pointer-events-auto"
             onClick={(e) => {
-              // Prevent clicks from propagating to the video
               e.stopPropagation();
             }}
           >
@@ -2282,134 +2680,307 @@ export default function PlayerModal({
                 setScreenLocked(false);
                 showCaptionNotification("Écran déverrouillé", false);
               }}
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-white font-bold hover:bg-black/90 transition-all shadow-2xl scale-100 active:scale-95 pointer-events-auto"
+              className="flex items-center gap-2.5 px-6 py-3 rounded-full bg-black/85 backdrop-blur-md border border-white/20 text-white font-bold hover:bg-black transition-all shadow-2xl scale-100 active:scale-95 pointer-events-auto"
             >
-              <Unlock size={20} />
-              <span>Déverrouiller</span>
+              <Unlock size={20} className="text-emerald-400" />
+              <span>Déverrouiller l'écran</span>
             </button>
           </div>
         )}
 
-        {/* Top Header Bar avec bande cinéma esthétique et occultante */}
-        {!isAudioMode && !screenLocked && (
+        {/* Bande supérieure cinéma (fond noir profond occultant compact) */}
+        {!isAudioMode && (
           <div
-            className={`absolute top-0 left-0 right-0 z-20 transition-all duration-300 ease-out ${
-              showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"
+            className={`absolute top-0 left-0 right-0 h-16 sm:h-20 cinema-band-top pointer-events-none z-20 transition-opacity duration-300 ${
+              showControls && !screenLocked ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
+
+        {/* Bande inférieure cinéma (fond noir profond occultant compact) */}
+        {!isAudioMode && (
+          <div
+            className={`absolute bottom-0 left-0 right-0 h-20 sm:h-24 cinema-band-bottom pointer-events-none z-20 transition-opacity duration-300 ${
+              showControls && !screenLocked ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
+
+        {/* Barre d'actions supérieure flottante de l'application */}
+        {!isAudioMode && (
+          <div
+            className={`absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3 sm:p-5 pointer-events-auto transition-opacity duration-300 ${
+              showControls && !screenLocked ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           >
-            {/* Bande noire cinéma esthétique : dégradé velours progressif avec flou satiné et estompage doux */}
-            <div className="absolute inset-x-0 top-0 h-28 sm:h-32 cinema-band-top pointer-events-none shadow-[0_12px_32px_rgba(0,0,0,0.35)]" />
+            {/* Côté gauche : Fermer, Miniature */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                onClick={handleClose}
+                className="flex items-center gap-1.5 text-zinc-200 hover:text-rose-400 transition-all liquid-glass hover:bg-white/15 p-2 sm:px-3.5 sm:py-1.5 rounded-full border border-white/15 shadow-md active:scale-95"
+                title="Fermer la vidéo (Échap)"
+              >
+                <X size={16} />
+                <span className="text-xs font-semibold hidden sm:inline">Fermer</span>
+              </button>
+              <button
+                onClick={handleMinimize}
+                className="flex items-center gap-1.5 text-zinc-200 hover:text-white transition-all liquid-glass hover:bg-white/15 p-2 sm:px-3 sm:py-1.5 rounded-full border border-white/15 shadow-md active:scale-95"
+                title="Réduire en miniature / Image dans l'image"
+              >
+                <Minimize2 size={15} className="text-emerald-400" />
+                <span className="text-xs font-semibold hidden sm:inline">Miniature</span>
+              </button>
+            </div>
 
-            {/* Liseré lumineux supérieur ultra-fin */}
-            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent pointer-events-none" />
+            {/* Côté droit : Audio HD, Verrouillage */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAudioMode(true)}
+                className="flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-bold transition-all border border-emerald-400/30 liquid-glass-emerald text-emerald-200 shadow-md active:scale-95 hover:border-emerald-300"
+                title="Basculer en Mode Audio HD (écoute pure)"
+              >
+                <Music size={14} className="text-emerald-400" />
+                <span className="text-xs hidden sm:inline">Audio HD</span>
+              </button>
 
-            {/* Lueur d'ambiance discrète */}
-            <div className="absolute top-0 left-1/4 w-1/2 h-20 bg-emerald-500/[0.04] blur-2xl pointer-events-none" />
-
-            <div className="relative z-10 flex items-center justify-between gap-2.5 px-3 sm:px-6 py-2.5 sm:py-4">
-              <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
-                <button
-                  onClick={handleMinimize}
-                  className="flex items-center gap-1.5 text-zinc-200 hover:text-white transition-all flex-shrink-0 liquid-glass hover:bg-white/15 p-2 sm:px-3.5 sm:py-1.5 rounded-full border border-white/15 shadow-sm active:scale-95"
-                  title="Réduire en miniature / Image dans l'image"
-                >
-                  <Minimize2 size={16} />
-                  <span className="text-xs font-semibold hidden sm:inline">Miniature</span>
-                </button>
-                <button
-                  onClick={handleClose}
-                  className="flex items-center gap-1.5 text-zinc-300 hover:text-rose-400 transition-all flex-shrink-0 liquid-glass hover:bg-white/15 p-2 sm:px-3 sm:py-1.5 rounded-full border border-white/15 shadow-sm active:scale-95"
-                  title="Fermer la vidéo"
-                >
-                  <X size={17} />
-                  <span className="text-xs font-semibold hidden sm:block">Fermer</span>
-                </button>
-                <div
-                  className="min-w-0 ml-1 transition-opacity duration-300 hover:!opacity-100 cursor-pointer group/headerTitle"
-                  style={{ opacity: textOpacity }}
-                  title="Opacité du titre : cliquer pour alterner (65%, 35%, 10%, 100%)"
-                  onClick={() => {
-                    const next = textOpacity === 0.65 ? 0.35 : textOpacity === 0.35 ? 0.1 : textOpacity === 0.1 ? 1.0 : 0.65;
-                    handleSetTextOpacity(next);
-                  }}
-                >
-                  <p className="text-zinc-400 text-[10px] sm:text-[11px] uppercase tracking-wider font-medium truncate max-w-[38vw] sm:max-w-none vignette-meta">
-                    {item.channel}
-                  </p>
-                  <h3 className="text-white font-bold text-xs sm:text-base md:text-lg leading-tight truncate max-w-[42vw] sm:max-w-[40vw] vignette-title">
-                    {item.title}
-                  </h3>
-                </div>
-              </div>
-
-              {/* Header Controls */}
-              <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-                {/* Audio/Video Mode Switcher */}
-                <button
-                  onClick={() => setIsAudioMode(!isAudioMode)}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border active:scale-95 ${
-                    isAudioMode
-                      ? "liquid-glass-emerald border border-emerald-300/40 text-emerald-200 shadow-md shadow-emerald-950/40"
-                      : "liquid-glass text-zinc-200 hover:text-white border-white/15 hover:bg-white/15 shadow-sm"
-                  }`}
-                  title={isAudioMode ? "Basculer en Mode Vidéo" : "Basculer en Mode Audio HD"}
-                >
-                  {isAudioMode ? <Tv size={14} className="text-emerald-400" /> : <Music size={14} className="text-emerald-400" />}
-                  <span className="text-[11px] sm:text-xs">
-                    {isAudioMode ? "Vidéo" : "Audio HD"}
-                  </span>
-                </button>
-
-                {/* Reciter pill in top bar if Tarawih (Tablette & PC) */}
-                {reciter && (
-                  <div className="hidden md:flex items-center gap-2 liquid-glass-card px-3 py-1.5 rounded-full border border-emerald-400/30 shadow-lg">
-                    <img
-                      src={reciter.photoUrl}
-                      alt={reciter.name}
-                      className="w-6 h-6 rounded-full object-cover border border-emerald-400"
-                    />
-                    <div className="text-left">
-                      <p className="text-xs font-bold text-emerald-300 leading-tight">{reciter.name}</p>
-                      <p className="text-[9px] text-zinc-300 leading-none">{reciter.mosque}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Open on YouTube external (PC) */}
-                <a
-                  href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden lg:flex items-center gap-1.5 text-zinc-200 hover:text-white text-xs px-3 py-1.5 liquid-glass hover:bg-white/15 rounded-full border border-white/15 transition-all shadow-sm font-semibold"
-                  title="Ouvrir dans YouTube"
-                >
-                  <ExternalLink size={13} />
-                  <span>YouTube</span>
-                </a>
-
-                {/* Mobile Settings Button */}
-                <button
-                  onClick={() => setShowMobileOptions(true)}
-                  className="flex sm:hidden w-8 h-8 rounded-full items-center justify-center liquid-glass hover:bg-white/15 border border-white/15 text-zinc-200 hover:text-white transition-all shadow-sm active:scale-95"
-                  title="Options de lecture"
-                  aria-label="Options de lecture"
-                >
-                  <Settings size={15} />
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setScreenLocked(true);
+                  showCaptionNotification("Écran verrouillé", true);
+                }}
+                className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-semibold liquid-glass hover:bg-white/15 border border-white/15 text-zinc-200 hover:text-rose-300 transition-all shadow-md active:scale-95"
+                title="Verrouiller l'écran (évite les clics involontaires)"
+              >
+                <Lock size={14} />
+                <span className="hidden sm:inline">Verrouiller</span>
+              </button>
             </div>
           </div>
         )}
 
-        {/* Center Pause Indicator */}
-        {!useIframeFallback && !isAudioMode && (
+        {/* Barre de commandes principale du lecteur de l'application */}
+        {!isAudioMode && (
           <div
-            className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
-              !playing && !buffering && showControls ? "opacity-100" : "opacity-0"
+            className={`absolute bottom-0 left-0 right-0 z-30 px-3 sm:px-6 pb-3 sm:pb-4 pt-6 space-y-2 pointer-events-auto transition-opacity duration-300 ${
+              showControls && !screenLocked ? "opacity-100" : "opacity-0 pointer-events-none"
             }`}
           >
-            <div className="w-20 h-20 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-2xl">
-              <Play size={32} fill="white" className="text-white ml-1" />
+            {/* Scrubber / Barre de progression interactive avec info-bulle de temps */}
+            <div
+              ref={progressBarRef}
+              onClick={handleSeekFromEvent}
+              onMouseDown={handleSeekFromEvent}
+              onTouchStart={handleSeekFromEvent}
+              onMouseMove={handleMouseMoveProgressBar}
+              onMouseLeave={handleMouseLeaveProgressBar}
+              className="group/bar relative w-full h-2 hover:h-2.5 bg-white/20 hover:bg-white/30 rounded-full cursor-pointer transition-all flex items-center"
+            >
+              {/* Info-bulle au survol */}
+              {hoverTimeSec !== null && (
+                <div
+                  className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded bg-zinc-900/95 border border-white/20 text-white font-mono text-[11px] shadow-2xl pointer-events-none whitespace-nowrap z-40"
+                  style={{ left: `${hoverPercent}%` }}
+                >
+                  {fmt(hoverTimeSec)}
+                </div>
+              )}
+
+              {/* Barre de progression active émeraude */}
+              <div
+                className="bg-emerald-400 h-full rounded-full relative shadow-[0_0_12px_rgba(52,211,153,0.7)]"
+                style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+              >
+                {/* Thumb curseur */}
+                <div className="w-3.5 h-3.5 rounded-full bg-white border border-emerald-400 shadow-md absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 scale-0 group-hover/bar:scale-100 transition-transform" />
+              </div>
+            </div>
+
+            {/* Rangée des boutons de contrôle */}
+            <div className="flex items-center justify-between gap-3 text-white">
+              {/* Côté gauche : Lecture, Navigation, Volume, Temps */}
+              <div className="flex items-center gap-1 sm:gap-2">
+                {/* Play / Pause principal */}
+                <button
+                  onClick={togglePlay}
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 flex items-center justify-center transition-all shadow-[0_0_16px_rgba(16,185,129,0.4)] active:scale-95 flex-shrink-0"
+                  title={playing ? "Mettre en pause (Espace)" : "Lire la vidéo (Espace)"}
+                >
+                  {playing ? (
+                    <Pause size={18} fill="currentColor" />
+                  ) : (
+                    <Play size={18} fill="currentColor" className="ml-0.5" />
+                  )}
+                </button>
+
+                {/* Reculer 10s */}
+                <button
+                  onClick={() => skip(-10)}
+                  className="p-1.5 sm:p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Reculer de 10 secondes (Flèche gauche)"
+                >
+                  <RotateCcw size={17} />
+                </button>
+
+                {/* Avancer 10s */}
+                <button
+                  onClick={() => skip(10)}
+                  className="p-1.5 sm:p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Avancer de 10 secondes (Flèche droite)"
+                >
+                  <RotateCw size={17} />
+                </button>
+
+                {/* Précédent */}
+                <button
+                  onClick={handlePreviousTrack}
+                  className="hidden md:flex p-1.5 sm:p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Vidéo précédente"
+                >
+                  <SkipBack size={17} />
+                </button>
+
+                {/* Suivant */}
+                <button
+                  onClick={handleNextTrack}
+                  className="hidden md:flex p-1.5 sm:p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Vidéo suivante"
+                >
+                  <SkipForward size={17} />
+                </button>
+
+                {/* Volume & Curseur */}
+                <div className="hidden sm:flex items-center gap-1.5 group/vol ml-0.5 sm:ml-1">
+                  <button
+                    onClick={toggleMute}
+                    className="p-1.5 sm:p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+                    title={muted || volume === 0 ? "Activer le son (M)" : "Couper le son (M)"}
+                  >
+                    {muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={muted ? 0 : volume}
+                    onChange={(e) => handleVolume(Number(e.target.value))}
+                    className="hidden sm:block w-16 lg:w-20 h-1 accent-emerald-400 bg-white/20 rounded-full cursor-pointer"
+                    title="Volume"
+                  />
+                </div>
+
+                {/* Affichage du temps monospace */}
+                <div className="text-zinc-300 text-[11px] sm:text-xs font-mono tracking-tight ml-0.5 sm:ml-2 select-none whitespace-nowrap">
+                  <span>{fmt(currentTimeSec)}</span>
+                  <span className="text-zinc-500 mx-0.5 sm:mx-1">/</span>
+                  <span className="text-zinc-400">{fmt(duration)}</span>
+                </div>
+              </div>
+
+              {/* Côté droit : Sommeil, Vitesse, Sous-titres, Plein écran */}
+              <div className="flex items-center gap-1 sm:gap-2">
+                {/* Minuteur de sommeil (Desktop) */}
+                <div className="relative hidden sm:block">
+                  <button
+                    onClick={() => setShowSleepMenu((v) => !v)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all shadow-sm active:scale-95 ${
+                      sleepTimer !== null
+                        ? "liquid-glass-emerald border-emerald-400/40 text-emerald-300"
+                        : "liquid-glass border-white/15 text-zinc-300 hover:text-white hover:bg-white/10"
+                    }`}
+                    title="Minuteur de sommeil"
+                    aria-label="Minuteur de sommeil"
+                  >
+                    <Moon size={15} className={sleepTimer !== null ? "text-emerald-400" : "text-zinc-300"} />
+                    <span className="hidden sm:inline">Sommeil</span>
+                    {sleepTimeRemaining !== null && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-emerald-300 font-mono text-[10px]">
+                        {formatSleepTime(sleepTimeRemaining)}
+                      </span>
+                    )}
+                  </button>
+                  {showSleepMenu && (
+                    <SleepTimerMenu
+                      sleepTimer={sleepTimer}
+                      sleepTimeRemaining={sleepTimeRemaining}
+                      onSelect={handleSelectSleepTimer}
+                      onExtend={handleExtendSleepTimer}
+                      onClose={() => setShowSleepMenu(false)}
+                      formatSleepTime={formatSleepTime}
+                      align="right"
+                    />
+                  )}
+                </div>
+
+                {/* Badge Sommeil actif (Mobile uniquement) */}
+                {sleepTimer !== null && sleepTimeRemaining !== null && (
+                  <button
+                    onClick={() => setShowMobileOptions(true)}
+                    className="flex sm:hidden items-center gap-1 px-2 py-0.5 rounded-full liquid-glass-emerald border border-emerald-400/40 text-emerald-300 font-mono text-[10px] active:scale-95"
+                    title="Minuteur de sommeil actif"
+                  >
+                    <Moon size={11} className="text-emerald-400" />
+                    <span>{formatSleepTime(sleepTimeRemaining)}</span>
+                  </button>
+                )}
+
+                {/* Vitesse de lecture (Desktop) */}
+                <button
+                  onClick={cyclePlaybackRate}
+                  className="hidden sm:flex px-2.5 py-1 rounded-full text-xs font-bold text-zinc-200 hover:text-white liquid-glass hover:bg-white/15 border border-white/15 transition-all shadow-sm active:scale-95"
+                  title="Changer la vitesse de lecture"
+                >
+                  {playbackRate}x
+                </button>
+
+                {/* Sous-titres (CC) (Desktop) */}
+                <button
+                  onClick={toggleCaptions}
+                  className={`hidden sm:flex p-1.5 sm:p-2 rounded-full transition-colors ${
+                    captionsOn
+                      ? "text-emerald-300 bg-emerald-500/20 border border-emerald-400/40"
+                      : "text-zinc-300 hover:text-white hover:bg-white/10"
+                  }`}
+                  title={captionsOn ? "Désactiver les sous-titres (C)" : "Activer les sous-titres (C)"}
+                >
+                  <Subtitles size={18} />
+                </button>
+
+                {/* Format vidéo (Plein cadre / Zoom / 16:9) (Desktop) */}
+                <button
+                  onClick={cycleVideoFitMode}
+                  className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold text-zinc-200 hover:text-white liquid-glass hover:bg-white/15 border border-white/15 transition-all shadow-sm active:scale-95"
+                  title="Changer le cadrage vidéo (Z)"
+                >
+                  <Film size={13} className="text-emerald-400" />
+                  <span>
+                    {videoFitMode === "cover"
+                      ? "Remplir"
+                      : videoFitMode === "zoom"
+                      ? "Zoom"
+                      : "16:9"}
+                  </span>
+                </button>
+
+                {/* Bouton Options / Plus (Mobile uniquement - Ne s'encombre pas) */}
+                <button
+                  onClick={() => setShowMobileOptions(true)}
+                  className="flex sm:hidden p-1.5 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors active:scale-95"
+                  title="Options et réglages de lecture"
+                  aria-label="Options et réglages de lecture"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+
+                {/* Plein écran */}
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-1.5 sm:p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 transition-colors active:scale-95"
+                  title="Basculer le plein écran (F)"
+                >
+                  {effectiveFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2429,356 +3000,75 @@ export default function PlayerModal({
           </div>
         )}
 
-        {/* Bottom Floating Control Bar avec bande cinéma esthétique et occultante */}
-        {!isAudioMode && !screenLocked && (
-          <div
-            className={`absolute bottom-0 left-0 right-0 z-20 transition-all duration-300 ease-out ${
-              showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-2 pointer-events-none"
-            }`}
-          >
-            {/* Bande noire cinéma esthétique : dégradé velours semi-transparent et flou satiné */}
-            <div className="absolute inset-x-0 bottom-0 h-40 sm:h-48 cinema-band-bottom pointer-events-none shadow-[0_-12px_32px_rgba(0,0,0,0.35)]" />
-
-            {/* Liseré lumineux supérieur ultra-fin */}
-            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent pointer-events-none" />
-
-            {/* Lueur d'ambiance centrale discrète */}
-            <div className="absolute bottom-0 left-1/3 w-1/3 h-28 bg-emerald-500/[0.03] blur-3xl pointer-events-none" />
-
-            <div className="relative z-10">
-              {/* Seek Bar */}
-            <div className="px-4 sm:px-6 pb-2">
-              <div
-                className="group/progress relative h-1.5 hover:h-2.5 bg-white/20 hover:bg-white/25 rounded-full cursor-pointer transition-all duration-150 backdrop-blur-sm"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = ((e.clientX - rect.left) / rect.width) * 100;
-                  seekToPct(pct);
-                }}
-              >
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full relative shadow-[0_0_12px_rgba(16,185,129,0.5)]"
-                  style={{ width: `${progress}%` }}
-                >
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_8px_rgba(0,0,0,0.6)] opacity-0 group-hover/progress:opacity-100 transition-opacity border border-emerald-300" />
-                </div>
+        {/* Overlay Carte d'Enchaînement Automatique Continu (Série ou Catégorie) */}
+        {autoNextCountdown !== null && nextItemToPlay && (
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="max-w-md w-full liquid-glass-modal border border-emerald-400/40 rounded-3xl p-5 sm:p-6 shadow-2xl text-center space-y-4">
+              <div className="flex items-center justify-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                <Play size={14} fill="currentColor" />
+                <span>Lecture automatique continue</span>
               </div>
-              <div className="flex justify-between mt-1.5 px-0.5">
-                <span className="text-emerald-400/90 text-xs font-mono font-medium drop-shadow">
-                  {fmt((progress / 100) * duration)}
-                </span>
-                <span className="text-zinc-400 text-xs font-mono drop-shadow">
-                  {fmt(duration)}
-                </span>
-              </div>
-            </div>
 
-            {/* Disposition Mobile Smartphone : Commandes épurées, simples et centrées */}
-            <div className="flex sm:hidden flex-col gap-2 px-3 pb-3 pt-1 w-full">
-              {/* Ligne des commandes essentielles */}
-              <div className="flex items-center justify-between px-2 max-w-sm mx-auto w-full">
-                {/* 1. Reculer 10s */}
-                <button
-                  onClick={() => skip(-10)}
-                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex flex-col items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
-                  title="Reculer de 10 secondes"
-                  aria-label="Reculer de 10 secondes"
-                >
-                  <RotateCcw size={17} />
-                  <span className="text-[8px] font-extrabold leading-none mt-0.5">-10</span>
-                </button>
-
-                {/* 2. Lecture / Pause (Bouton central proéminent) */}
-                <button
-                  onClick={togglePlay}
-                  className="w-13 h-13 rounded-full bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold border border-white/30 backdrop-blur-md flex items-center justify-center transition-all shadow-[0_0_24px_rgba(52,211,153,0.4)] active:scale-95"
-                  title={playing ? "Mettre en pause" : "Lire la vidéo"}
-                  aria-label={playing ? "Pause" : "Lecture"}
-                >
-                  {playing ? (
-                    <Pause size={24} fill="currentColor" className="text-zinc-950" />
-                  ) : (
-                    <Play size={24} fill="currentColor" className="text-zinc-950 ml-0.5" />
-                  )}
-                </button>
-
-                {/* 3. Avancer 10s */}
-                <button
-                  onClick={() => skip(10)}
-                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex flex-col items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
-                  title="Avancer de 10 secondes"
-                  aria-label="Avancer de 10 secondes"
-                >
-                  <RotateCcw size={17} className="-scale-x-100" />
-                  <span className="text-[8px] font-extrabold leading-none mt-0.5">+10</span>
-                </button>
-
-                {/* 4. Mute / Volume */}
-                <button
-                  onClick={toggleMute}
-                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
-                  title={muted || volume === 0 ? "Activer le son" : "Couper le son"}
-                  aria-label="Contrôle du volume"
-                >
-                  {muted || volume === 0 ? <VolumeX size={18} className="text-rose-400" /> : <Volume2 size={18} />}
-                </button>
-
-                {/* 5. Paramètres du player (Ouvre toutes les options : vitesse, sous-titres, audio, etc.) */}
-                <button
-                  onClick={() => setShowMobileOptions(true)}
-                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 hover:text-white active:scale-90 transition-all shadow-sm"
-                  title="Paramètres de lecture"
-                  aria-label="Paramètres de lecture"
-                >
-                  <Settings size={18} />
-                </button>
-
-                {/* 6. Plein écran */}
-                <button
-                  onClick={toggleFullscreen}
-                  className="w-10 h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 active:scale-90 transition-all shadow-sm"
-                  title={effectiveFullscreen ? "Quitter le plein écran" : "Plein écran"}
-                  aria-label={effectiveFullscreen ? "Quitter le plein écran" : "Plein écran"}
-                >
-                  {effectiveFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Disposition Grand Écran (Tablette / Ordinateur) : Barre complète */}
-            <div className="hidden sm:flex flex-wrap items-center justify-between gap-y-3 gap-x-2 px-4 sm:px-6 pb-4 sm:pb-5">
-              
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <button
-                    onClick={() => skip(-10)}
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 hover:text-white transition-all shadow-sm"
-                    title="Reculer de 10s"
-                  >
-                    <SkipBack size={18} />
-                  </button>
-                  <button
-                    onClick={togglePlay}
-                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold border border-white/30 backdrop-blur-md flex items-center justify-center transition-all shadow-[0_0_24px_rgba(52,211,153,0.35)] hover:scale-105 active:scale-95"
-                  >
-                    {playing ? (
-                      <Pause size={22} fill="currentColor" className="text-zinc-950" />
-                    ) : (
-                      <Play size={22} fill="currentColor" className="text-zinc-950 ml-0.5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => skip(10)}
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-200 hover:text-white transition-all shadow-sm"
-                    title="Avancer de 10s"
-                  >
-                    <SkipForward size={18} />
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="hidden sm:flex items-center gap-2 group/vol liquid-glass px-2.5 py-1.5 rounded-full border border-white/15 shadow-sm">
-                    <button
-                      onClick={toggleMute}
-                      className="text-zinc-300 hover:text-white transition-colors"
-                    >
-                      {muted || volume === 0 ? (
-                        <VolumeX size={17} />
-                      ) : (
-                        <Volume2 size={17} />
-                      )}
-                    </button>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={muted ? 0 : volume}
-                      onChange={(e) => handleVolume(+e.target.value)}
-                      className="w-0 group-hover/vol:w-20 h-1 accent-emerald-400 cursor-pointer transition-all duration-300"
-                    />
+              <div className="relative mx-auto w-32 sm:w-36 aspect-video rounded-xl overflow-hidden shadow-lg border border-white/20">
+                <img
+                  src={nextItemToPlay.thumbnail || nextItemToPlay.image}
+                  alt={nextItemToPlay.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500 text-zinc-950 flex items-center justify-center font-bold text-sm shadow-lg">
+                    {autoNextCountdown}s
                   </div>
-
-              {/* Doublage audio multi-langue */}
-              {hasDubbing && (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowLangMenu((v) => !v)}
-                    className={`liquid-glass text-xs font-semibold px-3 py-1.5 rounded-full border transition-all shadow-sm flex items-center gap-1.5 ${
-                      activeAudioLang !== ORIGINAL_AUDIO_CODE
-                        ? "border-emerald-400/40 text-emerald-200 liquid-glass-emerald"
-                        : "border-white/15 text-zinc-200 hover:text-white"
-                    }`}
-                    title="Langue de doublage"
-                  >
-                    {dubBuffering ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />}
-                    <span>
-                      {activeAudioLang === ORIGINAL_AUDIO_CODE
-                        ? "Original"
-                        : availableAudioTracks.find((t) => t.code === activeAudioLang)?.label || "Original"}
-                    </span>
-                  </button>
-                  {showLangMenu && (
-                    <div className="absolute bottom-full right-0 mb-2 w-36 rounded-2xl border border-white/20 liquid-glass-card backdrop-blur-2xl py-1.5 shadow-2xl z-30">
-                      <button
-                        onClick={() => switchAudioLanguage(ORIGINAL_AUDIO_CODE)}
-                        className={`block w-full px-3 py-1.5 text-left text-xs transition-colors rounded-lg mx-auto ${
-                          activeAudioLang === ORIGINAL_AUDIO_CODE
-                            ? "bg-emerald-500/20 text-emerald-300 font-bold"
-                            : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        Original
-                      </button>
-                      {availableAudioTracks.map((track) => (
-                        <button
-                          key={track.code}
-                          onClick={() => switchAudioLanguage(track.code)}
-                          className={`block w-full px-3 py-1.5 text-left text-xs transition-colors rounded-lg mx-auto ${
-                            activeAudioLang === track.code
-                              ? "bg-emerald-500/20 text-emerald-300 font-bold"
-                              : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >
-                          {track.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              )}
-
-              </div>
               </div>
 
-              <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-2.5">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowSpeedMenu((open) => !open)}
-                    className="liquid-glass text-zinc-200 hover:text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/15 transition-all shadow-sm"
-                    aria-label="Vitesse de lecture"
-                  >
-                    {playbackRate}x
-                  </button>
-                  {showSpeedMenu && (
-                    <div className="absolute bottom-full right-0 mb-2 w-24 rounded-2xl border border-white/20 liquid-glass-card backdrop-blur-2xl py-1.5 shadow-2xl z-30">
-                      {speedOptions.map((rateVal) => (
-                        <button
-                          key={rateVal}
-                          onClick={() => changePlaybackRate(rateVal)}
-                          className={`block w-full px-3 py-1.5 text-left text-xs transition-colors rounded-lg mx-auto ${
-                            playbackRate === rateVal
-                              ? "bg-emerald-500/20 text-emerald-300 font-bold"
-                              : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >
-                          {rateVal}x
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <div>
+                {nextItemToPlay.seriesTitle && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 mb-1.5">
+                    {nextItemToPlay.seriesTitle} {nextItemToPlay.episodeNumber ? `• Épisode ${nextItemToPlay.episodeNumber}` : ""}
+                  </span>
+                )}
+                {!nextItemToPlay.seriesTitle && nextItemToPlay.categories[0] && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 mb-1.5">
+                    Même catégorie • {nextItemToPlay.categories[0]}
+                  </span>
+                )}
+                <h4 className="text-white font-bold text-sm sm:text-base line-clamp-2 leading-snug">
+                  {nextItemToPlay.title}
+                </h4>
+                <p className="text-zinc-400 text-xs mt-1">
+                  Enchaînement automatique dans <span className="text-emerald-400 font-bold font-mono text-sm">{autoNextCountdown}</span> seconde{autoNextCountdown > 1 ? "s" : ""}
+                </p>
+              </div>
 
-                {/* Bouton Mode Sommeil (Vidéo) */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowSleepMenu((open) => !open)}
-                    className={`liquid-glass hover:bg-white/15 border px-3 py-1.5 rounded-full flex items-center justify-center transition-all shadow-sm gap-1.5 ${
-                      sleepTimer !== null
-                        ? "text-emerald-300 border-emerald-400/50 bg-emerald-500/20 font-bold"
-                        : "border-white/15 text-zinc-200 hover:text-white"
-                    }`}
-                    title="Minuteur de sommeil (Arrêt automatique)"
-                  >
-                    <Moon size={14} className={sleepTimer !== null ? "text-emerald-400 animate-pulse" : ""} />
-                    <span className="text-xs font-semibold">
-                      {sleepTimer !== null && sleepTimeRemaining !== null
-                        ? formatSleepTime(sleepTimeRemaining)
-                        : "Sommeil"}
-                    </span>
-                  </button>
-                  {showSleepMenu && (
-                    <SleepTimerMenu
-                      sleepTimer={sleepTimer}
-                      sleepTimeRemaining={sleepTimeRemaining}
-                      onSelect={handleSelectSleepTimer}
-                      onExtend={handleExtendSleepTimer}
-                      onClose={() => setShowSleepMenu(false)}
-                      formatSleepTime={formatSleepTime}
-                      align="right"
-                    />
-                  )}
-                </div>
+              {/* Barre de progression du compte à rebours */}
+              <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-400 transition-all duration-1000 ease-linear rounded-full shadow-[0_0_10px_rgba(52,211,153,0.8)]"
+                  style={{ width: `${((4 - autoNextCountdown) / 4) * 100}%` }}
+                />
+              </div>
 
-                {/* CC Toggle Switch Button (Bouton Bascule Sous-titres) */}
+              <div className="flex items-center gap-2.5 pt-1">
                 <button
                   type="button"
-                  role="switch"
-                  aria-checked={captionsOn}
-                  onClick={toggleCaptions}
-                  className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all duration-200 ${
-                    captionsOn
-                      ? "liquid-glass-emerald border-emerald-400/40 text-emerald-200 shadow-md shadow-emerald-950/30"
-                      : "liquid-glass border-white/15 text-zinc-300 hover:text-white hover:bg-white/15 shadow-sm"
-                  }`}
-                  title={
-                    captionsOn
-                      ? "Sous-titres (CC) : Activés (Cliquer ou appuyer sur C pour désactiver)"
-                      : "Sous-titres (CC) : Désactivés (Cliquer ou appuyer sur C pour activer)"
-                  }
-                  aria-label="Activer ou désactiver les sous-titres (CC)"
+                  onClick={cancelAutoNext}
+                  className="flex-1 py-2.5 px-4 rounded-xl liquid-glass text-zinc-300 hover:text-white border border-white/15 text-xs font-semibold transition-all active:scale-95"
                 >
-                  <Subtitles
-                    size={15}
-                    className={`transition-colors ${
-                      captionsOn ? "text-emerald-300" : "text-zinc-400 group-hover:text-zinc-200"
-                    }`}
-                  />
-                  <span className="font-bold tracking-tight text-[11px]">CC</span>
-                  <div
-                    className={`w-6 h-3.5 flex items-center rounded-full p-0.5 transition-colors duration-200 ${
-                      captionsOn ? "bg-emerald-500 justify-end" : "bg-white/20 justify-start"
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-white shadow-sm" />
-                  </div>
+                  Annuler
                 </button>
-
                 <button
-                  onClick={handleExportVideoFile}
-                  className="w-9 h-9 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-amber-300 transition-all shadow-sm"
-                  title="Exporter la vidéo ou le manifeste multimédia"
-                >
-                  <Share2 size={16} />
-                </button>
-
-                <button
-                  onClick={handleMinimize}
-                  className="w-9 h-9 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-emerald-300 transition-all shadow-sm"
-                  title="Mode miniature (Image dans l'image)"
-                >
-                  <PictureInPicture2 size={17} />
-                </button>
-
-                <button
+                  type="button"
                   onClick={() => {
-                    setScreenLocked(true);
-                    showCaptionNotification("Écran verrouillé", true);
+                    cancelAutoNext();
+                    handleChangeItem(nextItemToPlay.id);
                   }}
-                  className="w-9 h-9 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-rose-300 transition-all shadow-sm hidden sm:flex"
-                  title="Verrouiller l'écran"
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] active:scale-95 flex items-center justify-center gap-1.5"
                 >
-                  <Lock size={17} />
-                </button>
-
-                <button
-                  onClick={goFullscreen}
-                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full liquid-glass hover:bg-white/15 border border-white/15 flex items-center justify-center text-zinc-300 hover:text-white transition-all shadow-sm hidden sm:flex"
-                  title={effectiveFullscreen ? "Quitter le plein écran" : "Plein écran"}
-                >
-                  {effectiveFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+                  <Play size={14} fill="currentColor" />
+                  <span>Lire maintenant</span>
                 </button>
               </div>
-            </div>
             </div>
           </div>
         )}
@@ -2846,6 +3136,29 @@ export default function PlayerModal({
                   }`}
                 >
                   {captionsOn ? "Activé" : "Activer"}
+                </button>
+              </div>
+
+              {/* Lecture automatique continue */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <Play size={18} fill="currentColor" className={continuousAutoplay ? "text-emerald-400" : "text-zinc-400"} />
+                  <div>
+                    <p className="text-xs font-bold text-white">Lecture automatique continue</p>
+                    <p className="text-[10px] text-zinc-400">
+                      {continuousAutoplay ? "Enchaîne les épisodes automatiquement" : "Désactivée"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleContinuousAutoplay}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                    continuousAutoplay
+                      ? "bg-emerald-500 text-zinc-950 font-extrabold"
+                      : "bg-white/10 text-zinc-300 border border-white/10"
+                  }`}
+                >
+                  {continuousAutoplay ? "Activée" : "Activer"}
                 </button>
               </div>
 
@@ -2918,6 +3231,41 @@ export default function PlayerModal({
                   </button>
                 </div>
               )}
+
+              {/* Mode de cadrage vidéo (Plein cadre / Zoom / 16:9) */}
+              <div className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Film size={16} className="text-emerald-400" />
+                    <p className="text-xs font-bold text-white">Cadrage vidéo plein écran</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  {[
+                    { id: "cover", label: "Remplir" },
+                    { id: "zoom", label: "Zoom" },
+                    { id: "contain", label: "16:9" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => {
+                        const mode = opt.id as "cover" | "contain" | "zoom";
+                        setVideoFitMode(mode);
+                        try {
+                          localStorage.setItem("sirat_video_fit_mode", mode);
+                        } catch {}
+                      }}
+                      className={`py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                        videoFitMode === opt.id
+                          ? "bg-emerald-500 text-zinc-950 border-emerald-400 font-extrabold"
+                          : "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Mode Audio HD */}
               <div className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10">
@@ -3075,127 +3423,326 @@ export default function PlayerModal({
             </div>
           </div>
         )}
+
+        {/* Indicateur de défilement vers le bas (masqué automatiquement avec les commandes pour une vidéo 100% pure) */}
+        {!isAudioMode && !effectiveFullscreen && (
+          <div
+            className={`absolute bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-25 transition-all duration-300 ${
+              showControls && !screenLocked
+                ? "opacity-100 translate-y-0 pointer-events-auto"
+                : "opacity-0 translate-y-2 pointer-events-none"
+            }`}
+          >
+            <button
+              onClick={() => {
+                detailsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/75 hover:bg-black/95 text-white/90 hover:text-white border border-emerald-400/40 hover:border-emerald-300 shadow-[0_4px_24px_rgba(0,0,0,0.8)] backdrop-blur-md text-xs font-semibold transition-all hover:scale-105 active:scale-95 group cursor-pointer"
+              title="Faire défiler vers le bas pour voir la description et les détails"
+            >
+              <span className="text-zinc-200 group-hover:text-white">Détails & Description</span>
+              <ChevronDown size={14} className="text-emerald-400 group-hover:translate-y-0.5 transition-transform" />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Video Details & Meta Section (masquée en mode audio ou plein écran pour libérer tout l'écran) */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* SECTION DESCRIPTION, NOTES & DÉTAILS DÉROULANTE (SOUS LA VIDÉO) */}
+      {/* L'utilisateur fait défiler l'écran vers le bas pour y accéder   */}
+      {/* ───────────────────────────────────────────────────────────── */}
       {!isAudioMode && !effectiveFullscreen && (
-        <div className="flex-1 md:flex-none md:flex-shrink-0 bg-black/60 backdrop-blur-2xl border-t border-white/15 md:max-h-[40vh] overflow-y-auto">
-          <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-10 py-5">
-            <div className="flex flex-col lg:flex-row gap-6">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2.5 mb-2.5 flex-wrap">
-                  <span className="liquid-glass-emerald border border-emerald-400/30 text-emerald-200 text-xs font-bold px-2.5 py-0.5 rounded-full tracking-wider uppercase shadow-sm">
-                    {item.channel}
-                  </span>
-                  <span className="liquid-glass border border-white/15 text-emerald-300 font-bold text-xs px-2.5 py-0.5 rounded-full shadow-sm">
-                    {item.score}% Recommandé
-                  </span>
-                  <span className="liquid-glass border border-white/15 text-zinc-300 text-xs px-2.5 py-0.5 rounded-full shadow-sm">
-                    {item.rating}
-                  </span>
-                  <span className="liquid-glass border border-white/15 text-zinc-400 text-xs px-2.5 py-0.5 rounded-full shadow-sm">{item.year}</span>
-                </div>
-                <h3
-                  className="text-white font-bold text-xl leading-tight mb-2 transition-opacity duration-300 hover:!opacity-100"
-                  style={{ opacity: textOpacity }}
-                >
-                  {item.title}
-                </h3>
+        <div
+          ref={detailsSectionRef}
+          className="w-full bg-gradient-to-b from-black via-zinc-950 to-zinc-900 border-t border-white/10 py-8 sm:py-12 px-4 sm:px-8 lg:px-16"
+        >
+          <div className="max-w-6xl mx-auto space-y-8">
+            {/* Bouton pour remonter directement vers la vidéo plein écran */}
+            <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+              <button
+                onClick={() => {
+                  scrollRootRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full liquid-glass hover:bg-white/15 text-emerald-300 hover:text-white border border-emerald-400/30 text-xs font-bold transition-all shadow-md active:scale-95 group cursor-pointer"
+                title="Remonter vers la vidéo en plein écran"
+              >
+                <ChevronUp size={16} className="text-emerald-400 group-hover:-translate-y-0.5 transition-transform" />
+                <span>Remonter vers la vidéo</span>
+              </button>
 
-                {/* Reciter identity banner if Tarawih / Quran */}
-                {reciter && (
-                  <div className="mb-4 p-3.5 rounded-2xl liquid-glass-card border border-emerald-400/30 flex items-center gap-3.5 shadow-md">
-                    <img
-                      src={reciter.photoUrl}
-                      alt={reciter.name}
-                      className="w-13 h-13 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-emerald-400 shadow flex-shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white font-bold text-sm sm:text-base">{reciter.name}</p>
-                        <span className="text-[11px] text-emerald-300 font-semibold liquid-glass-emerald px-2 py-0.5 rounded-full border border-emerald-400/30">
-                          {reciter.years}
-                        </span>
-                      </div>
-                      <p className="text-xs text-emerald-400/90 font-serif mt-0.5" dir="rtl">
-                        {reciter.arabicName}
-                      </p>
-                      <p className="text-xs text-zinc-300 mt-1 line-clamp-1">{reciter.title}</p>
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
+                <Clock size={14} className="text-emerald-400" />
+                <span>{item.duration || "15 min"}</span>
+              </div>
+            </div>
 
-                <p className="text-zinc-300 text-sm leading-relaxed mb-4">
-                  {item.description}
-                </p>
-
-                <div className="flex items-center gap-3 flex-wrap">
-                  <button
-                    onClick={() => toggle(item)}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm ${
-                      inList(item.id)
-                        ? "liquid-glass-emerald border-emerald-400/40 text-emerald-200 shadow-md"
-                        : "liquid-glass border-white/15 text-zinc-200 hover:text-white hover:bg-white/15"
-                    }`}
+            {/* En-tête : Badges, Titre et Récitateur */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="liquid-glass-emerald border border-emerald-400/30 text-emerald-200 text-xs font-bold px-3 py-1 rounded-full tracking-wider uppercase shadow-sm">
+                  {item.channel}
+                </span>
+                <span className="liquid-glass border border-white/15 text-emerald-300 font-bold text-xs px-3 py-1 rounded-full shadow-sm">
+                  {item.score}% Recommandé
+                </span>
+                <span className="liquid-glass border border-white/15 text-zinc-300 text-xs px-3 py-1 rounded-full shadow-sm">
+                  {item.rating}
+                </span>
+                <span className="liquid-glass border border-white/15 text-zinc-400 text-xs px-3 py-1 rounded-full shadow-sm">
+                  {item.year}
+                </span>
+                {item.categories.map((cat) => (
+                  <span
+                    key={cat}
+                    className="liquid-glass-subtle border border-white/10 text-zinc-300 text-xs px-2.5 py-0.5 rounded-full"
                   >
-                    <Plus size={14} />
-                    {inList(item.id) ? "Dans ma liste" : "Ajouter à ma liste"}
-                  </button>
-                  <button
-                    onClick={() => vote(userVote === true ? null : true)}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm ${
-                      userVote === true
-                        ? "liquid-glass-emerald border-emerald-400/40 text-emerald-200 shadow-md"
-                        : "liquid-glass border-white/15 text-zinc-200 hover:text-white hover:bg-white/15"
-                    }`}
-                  >
-                    <ThumbsUp size={14} /> J'aime
-                  </button>
-                  <button
-                    onClick={handleShare}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold liquid-glass border border-white/15 text-zinc-200 hover:text-white hover:bg-white/15 transition-all shadow-sm"
-                  >
-                    <Share2 size={14} /> Partager
-                  </button>
-                </div>
-
-                {/* Rating Section */}
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center gap-4 flex-wrap">
-                  <RatingStars
-                    averageRating={averageRating}
-                    ratingCount={ratingCount}
-                    userRating={userRating}
-                    onRate={rate}
-                  />
-                </div>
+                    {cat}
+                  </span>
+                ))}
               </div>
 
-              {/* Up Next / Related Column */}
-              {upNext && (
-                <div className="lg:w-80 flex-shrink-0">
-                  <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                    À suivre
-                  </p>
-                  <div
-                    onClick={() => handleChangeItem(upNext.id)}
-                    className="group flex gap-3 p-2.5 rounded-2xl liquid-glass-card hover:bg-white/15 border border-white/15 transition-all cursor-pointer shadow-md"
-                  >
-                    <img
-                      src={upNext.thumbnail}
-                      alt={upNext.title}
-                      className="w-28 h-16 rounded-xl object-cover flex-shrink-0 group-hover:opacity-90"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-white text-xs font-semibold line-clamp-2 group-hover:text-emerald-300 transition-colors">
-                        {upNext.title}
-                      </p>
-                      <p className="text-zinc-400 text-[10px] mt-1">
-                        {upNext.channel} · {upNext.year}
-                      </p>
+              <h2
+                className="text-white font-black text-2xl sm:text-3xl lg:text-4xl leading-tight transition-opacity duration-300"
+                style={{ opacity: textOpacity }}
+              >
+                {item.title}
+              </h2>
+
+              {/* Récitateur si Tarawih / Haramain */}
+              {reciter && (
+                <div className="p-4 sm:p-5 rounded-2xl liquid-glass-card border border-emerald-400/30 flex items-center gap-4 shadow-xl max-w-2xl">
+                  <img
+                    src={reciter.photoUrl}
+                    alt={reciter.name}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-emerald-400 shadow-md flex-shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <p className="text-white font-bold text-base sm:text-lg">{reciter.name}</p>
+                      <span className="text-xs text-emerald-300 font-semibold liquid-glass-emerald px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                        {reciter.years}
+                      </span>
                     </div>
+                    <p className="text-sm text-emerald-400/90 font-serif mt-0.5" dir="rtl">
+                      {reciter.arabicName}
+                    </p>
+                    <p className="text-xs text-zinc-300 mt-1 line-clamp-1">{reciter.title}</p>
                   </div>
                 </div>
               )}
+
+              {/* Actions Rapides */}
+              <div className="flex items-center gap-3 flex-wrap pt-2">
+                <button
+                  onClick={() => toggle(item)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border shadow-md active:scale-95 cursor-pointer ${
+                    inList(item.id)
+                      ? "liquid-glass-emerald border-emerald-400/50 text-emerald-200 shadow-emerald-950/40"
+                      : "liquid-glass border-white/15 text-zinc-200 hover:text-white hover:bg-white/15"
+                  }`}
+                >
+                  <Plus size={15} />
+                  <span>{inList(item.id) ? "Dans ma liste" : "Ajouter à ma liste"}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const willBeLiked = userVote !== true;
+                    vote(willBeLiked);
+                    showCaptionNotification(
+                      willBeLiked ? "Ajouté à vos mentions J'aime !" : "Mention J'aime retirée",
+                      willBeLiked
+                    );
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all border shadow-md active:scale-95 cursor-pointer ${
+                    userVote === true
+                      ? "liquid-glass-emerald border-emerald-400/50 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.3)] scale-[1.02]"
+                      : "liquid-glass border-white/15 text-zinc-200 hover:text-white hover:bg-white/15"
+                  }`}
+                >
+                  <ThumbsUp
+                    size={15}
+                    fill={userVote === true ? "currentColor" : "none"}
+                    className={userVote === true ? "text-emerald-400" : ""}
+                  />
+                  <span>{userVote === true ? "Aimé" : "J'aime"}</span>
+                  {likes > 0 && <span className="font-mono opacity-80">({likes})</span>}
+                </button>
+
+                <button
+                  onClick={handleShare}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold liquid-glass border border-white/15 text-zinc-200 hover:text-white hover:bg-white/15 transition-all shadow-sm active:scale-95 cursor-pointer"
+                >
+                  <Share2 size={15} />
+                  <span>Partager</span>
+                </button>
+
+                <a
+                  href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold liquid-glass border border-white/15 text-zinc-300 hover:text-red-400 hover:bg-white/10 transition-all shadow-sm active:scale-95"
+                >
+                  <ExternalLink size={15} />
+                  <span>Ouvrir sur YouTube</span>
+                </a>
+
+                {upNext && (
+                  <button
+                    onClick={() => handleChangeItem(upNext.id)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition-all shadow-[0_0_16px_rgba(16,185,129,0.35)] active:scale-95 ml-auto cursor-pointer"
+                  >
+                    <span>Épisode suivant</span>
+                    <ChevronRight size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Description complète */}
+            <div className="liquid-glass-card rounded-2xl p-5 sm:p-6 border border-white/10 shadow-xl space-y-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-400">
+                Synopsis & Description
+              </h3>
+              <p className="text-zinc-200 text-sm sm:text-base leading-relaxed whitespace-pre-line font-normal">
+                {item.description || "Aucune description détaillée n'est fournie pour cette vidéo."}
+              </p>
+            </div>
+
+            {/* Section Évaluation / Étoiles */}
+            <div className="liquid-glass-card rounded-2xl p-5 sm:p-6 border border-white/10 shadow-xl">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-400 mb-3">
+                Avis & Évaluation de la communauté
+              </h3>
+              <RatingStars
+                averageRating={averageRating}
+                ratingCount={ratingCount}
+                userRating={userRating}
+                onRate={rate}
+              />
+            </div>
+
+            {/* Section Notes Spirituelles / Personnelles */}
+            <div className="liquid-glass-card rounded-2xl p-5 sm:p-6 border border-white/10 shadow-xl">
+              <VideoNotesSection contentId={item.id} contentTitle={item.title} />
+            </div>
+
+            {/* Épisodes de la même série (si applicable) */}
+            {seriesEpisodes.length > 0 && (
+              <div className="space-y-4 pt-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Tv size={18} className="text-emerald-400" />
+                    <span>Épisodes de la série ({seriesEpisodes.length})</span>
+                  </h3>
+                  {item.seriesTitle && (
+                    <p className="text-xs text-zinc-400 mt-0.5">{item.seriesTitle}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {seriesEpisodes.map((ep) => {
+                    const isCurrent = ep.id === item.id;
+                    return (
+                      <Card3D
+                        key={ep.id}
+                        onClick={() => !isCurrent && handleChangeItem(ep.id)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                          isCurrent
+                            ? "bg-emerald-950/40 border-emerald-400/60 shadow-[0_0_20px_rgba(52,211,153,0.25)] ring-1 ring-emerald-400/40"
+                            : "liquid-glass-card hover:border-emerald-400/30"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="relative w-24 aspect-video rounded-xl overflow-hidden bg-zinc-900 flex-shrink-0">
+                            <img
+                              src={ep.thumbnail || ep.image}
+                              alt={ep.title}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                              {isCurrent ? (
+                                <div className="w-6 h-6 rounded-full bg-emerald-500 text-zinc-950 flex items-center justify-center font-bold text-[10px]">
+                                  ▶
+                                </div>
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center text-[10px] group-hover:bg-emerald-500 group-hover:text-zinc-950">
+                                  <Play size={10} fill="currentColor" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                              <span className="font-bold text-emerald-400">
+                                Ép. {ep.episodeNumber ?? "—"}
+                              </span>
+                              <span>•</span>
+                              <span>{ep.duration || "15 min"}</span>
+                            </div>
+                            <h4 className="text-xs font-bold text-white line-clamp-2 mt-0.5">
+                              {ep.title}
+                            </h4>
+                          </div>
+                        </div>
+                      </Card3D>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recommandations / Dans la même catégorie */}
+            {related.length > 0 && (
+              <div className="space-y-4 pt-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Film size={18} className="text-emerald-400" />
+                  <span>Dans la même catégorie</span>
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
+                  {related.slice(0, 5).map((rel) => (
+                    <Card3D
+                      key={rel.id}
+                      onClick={() => handleChangeItem(rel.id)}
+                      className="group rounded-2xl liquid-glass-card overflow-hidden border border-white/10 hover:border-emerald-400/40 transition-all cursor-pointer flex flex-col"
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden bg-zinc-950">
+                        <img
+                          src={rel.thumbnail || rel.image}
+                          alt={rel.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] text-zinc-300 font-mono">
+                          <span className="text-emerald-300 font-bold">{rel.score}%</span>
+                          <span>{rel.duration || "15 min"}</span>
+                        </div>
+                      </div>
+                      <div className="p-2.5 flex-1 flex flex-col justify-between">
+                        <p className="text-[10px] text-amber-300/90 font-bold uppercase truncate">
+                          {rel.channel}
+                        </p>
+                        <h4 className="text-xs font-bold text-white line-clamp-2 mt-0.5 group-hover:text-emerald-300 transition-colors">
+                          {rel.title}
+                        </h4>
+                      </div>
+                    </Card3D>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Bouton de pied de page pour remonter */}
+            <div className="pt-8 pb-8 text-center">
+              <button
+                onClick={() => {
+                  scrollRootRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full liquid-glass hover:bg-white/15 text-emerald-300 hover:text-white border border-emerald-400/30 text-xs font-bold transition-all shadow-xl active:scale-95 group cursor-pointer"
+              >
+                <ChevronUp size={16} className="text-emerald-400 group-hover:-translate-y-0.5 transition-transform" />
+                <span>Remonter tout en haut vers la vidéo</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3203,4 +3750,7 @@ export default function PlayerModal({
 
     </div>
   );
+
+  if (typeof document === "undefined") return modalContent;
+  return createPortal(modalContent, document.body);
 }

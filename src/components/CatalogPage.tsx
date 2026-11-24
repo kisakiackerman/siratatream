@@ -35,6 +35,127 @@ type CatalogPageProps = {
 
 type SortMode = "score" | "recent" | "title";
 
+function CatalogGridCard({
+  item,
+  onInfo,
+  onPlay,
+}: {
+  item: ContentItem;
+  onInfo: (id: string) => void;
+  onPlay: (id: string) => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const isTarawih = item.channel === "Récitations Haramain" || item.categories.includes("Coran");
+  const reciter = isTarawih ? getReciterForItem(item.title, item.description, item.channel) : null;
+  const isNew = item.year >= 2025 || item.score >= 97;
+
+  return (
+    <div
+      onClick={() => onInfo(item.id)}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
+      className="video-thumb-interactive group relative flex flex-col rounded-2xl liquid-glass-card hover:bg-white/10 border border-white/18 hover:border-emerald-400/40 shadow-xl cursor-pointer"
+    >
+      {/* Image format portrait vertical */}
+      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-t-2xl bg-zinc-950">
+        <YouTubeHoverPreview
+          youtubeId={item.youtubeId}
+          image={item.image}
+          alt={item.title}
+          imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          fallbackImage={reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg"}
+          isHovered={isHovered}
+          videoUrl={item.videoUrl}
+        />
+
+        {/* Dégradé sombre du bas vers le haut pour lisibilité */}
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/25 to-transparent pointer-events-none" />
+
+        {/* Badge haut gauche : Série, Nouveau ou Catégorie en Liquid Glass */}
+        <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1 items-start max-w-[85%]">
+          {item.seriesId ? (
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-400/50 text-amber-200 text-[10px] font-black uppercase tracking-wider backdrop-blur-xl shadow-md">
+              {item.episodeNumber ? `Ép. ${item.episodeNumber}` : "Série"}
+            </span>
+          ) : isNew ? (
+            <span className="px-2 py-0.5 rounded-full liquid-glass-badge-emerald text-[10px] font-black uppercase tracking-wider shadow-md">
+              Nouveau
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full liquid-glass-badge text-zinc-100 text-[10px] font-bold truncate max-w-full shadow-sm border border-white/20">
+              {item.categories[0] || item.channel}
+            </span>
+          )}
+        </div>
+
+        {/* Badge récitateur si Tarawih/Coran */}
+        {reciter && (
+          <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 liquid-glass-subtle px-1.5 py-0.5 rounded-full border border-white/25 shadow">
+            <img
+              src={reciter.photoUrl}
+              alt={reciter.name}
+              className="w-3.5 h-3.5 rounded-full object-cover border border-white/40"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+            <span className="text-[9px] text-zinc-200 font-semibold truncate leading-none max-w-[65px]">
+              {reciter.name.replace("Sheikh ", "")}
+            </span>
+          </div>
+        )}
+
+        {/* Année affichée en bas à gauche en overlay sur l'image */}
+        <div className="absolute bottom-2.5 left-3 z-10 flex items-center gap-2">
+          <span className="text-[11px] font-extrabold text-zinc-200 font-mono liquid-glass-badge px-1.5 py-0.5 rounded-md border border-white/20">
+            {item.year}
+          </span>
+          <span className="text-[10px] font-bold text-emerald-300 drop-shadow">
+            {item.score}%
+          </span>
+        </div>
+
+        {/* Bouton de lecture rapide au survol */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlay(item.id);
+            }}
+            className="w-11 h-11 rounded-full liquid-glass-emerald flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-105 active:scale-95 transition-all shadow-xl border border-emerald-300/50 cursor-pointer"
+            title="Lire la vidéo"
+          >
+            <Play size={18} fill="currentColor" className="ml-0.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Informations textuelles sous la miniature */}
+      <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider font-bold text-amber-300/90 line-clamp-1 vignette-meta">
+            {item.channel}
+          </p>
+          <VideoTitleTooltip
+            item={item}
+            as="h4"
+            titleClassName="text-xs sm:text-sm font-bold text-white leading-snug mt-0.5 group-hover:text-emerald-300 transition-colors vignette-title"
+            lineClamp={2}
+          />
+        </div>
+
+        <div className="pt-1.5 flex items-center justify-between border-t border-white/10 text-[10px] text-zinc-300 vignette-meta">
+          <span className="truncate max-w-[120px] vignette-meta">
+            {item.categories.slice(0, 2).join(" · ")}
+          </span>
+          <span className="font-mono text-zinc-400 vignette-meta">{item.duration || "15 min"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CatalogPage({
   onClose,
   onPlay,
@@ -602,117 +723,14 @@ export default function CatalogPage({
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4 md:gap-5">
-                  {displayedItems.map((item) => {
-                    const isTarawih =
-                      item.channel === "Récitations Haramain" || item.categories.includes("Coran");
-                    const reciter = isTarawih
-                      ? getReciterForItem(item.title, item.description, item.channel)
-                      : null;
-                    const isNew = item.year >= 2025 || item.score >= 97;
-
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => onInfo(item.id)}
-                        className="video-thumb-interactive group relative flex flex-col rounded-2xl liquid-glass-card hover:bg-white/10 border border-white/18 hover:border-emerald-400/40 shadow-xl cursor-pointer"
-                      >
-                        {/* Image format portrait vertical */}
-                        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-t-2xl bg-zinc-950">
-                          <YouTubeHoverPreview
-                            youtubeId={item.youtubeId}
-                            image={item.image}
-                            alt={item.title}
-                            imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            fallbackImage={reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg"}
-                          />
-
-                          {/* Dégradé sombre du bas vers le haut pour lisibilité */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/25 to-transparent pointer-events-none" />
-
-                          {/* Badge haut gauche : Série, Nouveau ou Catégorie en Liquid Glass */}
-                          <div className="absolute top-2.5 left-2.5 z-10 flex flex-col gap-1 items-start max-w-[85%]">
-                            {item.seriesId ? (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-500/25 border border-amber-400/50 text-amber-200 text-[10px] font-black uppercase tracking-wider backdrop-blur-xl shadow-md">
-                                {item.episodeNumber ? `Ép. ${item.episodeNumber}` : "Série"}
-                              </span>
-                            ) : isNew ? (
-                              <span className="px-2 py-0.5 rounded-full liquid-glass-badge-emerald text-[10px] font-black uppercase tracking-wider shadow-md">
-                                Nouveau
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full liquid-glass-badge text-zinc-100 text-[10px] font-bold truncate max-w-full shadow-sm border border-white/20">
-                                {item.categories[0] || item.channel}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Badge récitateur si Tarawih/Coran */}
-                          {reciter && (
-                            <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 liquid-glass-subtle px-1.5 py-0.5 rounded-full border border-white/25 shadow">
-                              <img
-                                src={reciter.photoUrl}
-                                alt={reciter.name}
-                                className="w-3.5 h-3.5 rounded-full object-cover border border-white/40"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                              <span className="text-[9px] text-zinc-200 font-semibold truncate leading-none max-w-[65px]">
-                                {reciter.name.replace("Sheikh ", "")}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Année affichée en bas à gauche en overlay sur l'image */}
-                          <div className="absolute bottom-2.5 left-3 z-10 flex items-center gap-2">
-                            <span className="text-[11px] font-extrabold text-zinc-200 font-mono liquid-glass-badge px-1.5 py-0.5 rounded-md border border-white/20">
-                              {item.year}
-                            </span>
-                            <span className="text-[10px] font-bold text-emerald-300 drop-shadow">
-                              {item.score}%
-                            </span>
-                          </div>
-
-                          {/* Bouton de lecture rapide au survol */}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onPlay(item.id);
-                              }}
-                              className="w-11 h-11 rounded-full liquid-glass-emerald flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-105 active:scale-95 transition-all shadow-xl border border-emerald-300/50 cursor-pointer"
-                              title="Lire la vidéo"
-                            >
-                              <Play size={18} fill="currentColor" className="ml-0.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Informations textuelles sous la miniature */}
-                        <div className="p-3 flex-1 flex flex-col justify-between space-y-1.5">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider font-bold text-amber-300/90 line-clamp-1 vignette-meta">
-                              {item.channel}
-                            </p>
-                            <VideoTitleTooltip
-                              item={item}
-                              as="h4"
-                              titleClassName="text-xs sm:text-sm font-bold text-white leading-snug mt-0.5 group-hover:text-emerald-300 transition-colors vignette-title"
-                              lineClamp={2}
-                            />
-                          </div>
-
-                          <div className="pt-1.5 flex items-center justify-between border-t border-white/10 text-[10px] text-zinc-300 vignette-meta">
-                            <span className="truncate max-w-[120px] vignette-meta">
-                              {item.categories.slice(0, 2).join(" · ")}
-                            </span>
-                            <span className="font-mono text-zinc-400 vignette-meta">{item.duration || "15 min"}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {displayedItems.map((item) => (
+                    <CatalogGridCard
+                      key={item.id}
+                      item={item}
+                      onInfo={onInfo}
+                      onPlay={onPlay}
+                    />
+                  ))}
                 </div>
 
                 {/* Sentinelle pour chargement infini fluide et bouton de chargement manuel */}

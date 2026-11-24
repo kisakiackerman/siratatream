@@ -25,6 +25,10 @@ import ProfileSelector from "@/components/ProfileSelector";
 import AppUpdateNotifier from "@/components/AppUpdateNotifier";
 import { autonomousAIGuardian } from "@/lib/autonomousAIGuardian";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
+import { init3DEffects } from "@/lib/tilt3d";
+import Scene3D from "@/components/3d/Scene3D";
+import Card3D from "@/components/3d/Card3D";
+import PageTransition from "@/components/3d/PageTransition";
 
 // Core catalog pages imported directly to ensure immediate availability and prevent stale chunk errors
 import CatalogPage from "@/components/CatalogPage";
@@ -165,32 +169,53 @@ function AuthScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-emerald-400/5 rounded-full blur-3xl pointer-events-none" />
+    <div
+      className="min-h-screen bg-[#070b09] flex flex-col items-center justify-center px-4 relative overflow-hidden"
+      style={{ perspective: "1200px" }}
+    >
+      {/* Three.js 3D Floating Golden Lanterns & Nocturnal Sky */}
+      <Scene3D className="opacity-90" />
 
-      <div className="relative z-10 max-w-lg w-full text-center space-y-7 liquid-glass-card p-6 sm:p-9 rounded-3xl border border-emerald-300/30 backdrop-blur-2xl shadow-2xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-2 h-8 bg-emerald-400 rounded-sm shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
-          <div className="w-2 h-5 bg-zinc-400 rounded-sm" />
-          <div className="w-2 h-9 bg-white rounded-sm" />
-          <span className="text-white font-black text-3xl tracking-tight ml-2">
-            SiratStream<span className="text-emerald-400 text-lg font-semibold">.app</span>
+      {/* Subtle depth lighting */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      <div
+        className="relative z-10 max-w-lg w-full text-center space-y-7 liquid-glass-card p-6 sm:p-9 rounded-3xl border border-amber-400/30 backdrop-blur-2xl shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_36px_rgba(245,158,11,0.18),inset_0_1.5px_1px_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(0,0,0,0.4)]"
+        style={{ transformStyle: "preserve-3d" }}
+      >
+        {/* 3D Embossed Logo */}
+        <div
+          className="flex items-center justify-center gap-2.5 transition-transform duration-300 hover:scale-105"
+          style={{ transform: "translateZ(24px)", transformStyle: "preserve-3d" }}
+        >
+          <div className="flex items-center gap-1.5 p-2 rounded-2xl bg-zinc-900/60 border border-amber-400/40 shadow-[0_8px_20px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(251,191,36,0.5)]">
+            <div className="w-2.5 h-9 bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 rounded-sm shadow-[0_0_12px_rgba(251,191,36,0.7)]" />
+            <div className="w-2 h-6 bg-gradient-to-b from-emerald-300 to-emerald-600 rounded-sm shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+            <div className="w-2.5 h-10 bg-gradient-to-b from-white via-zinc-200 to-zinc-400 rounded-sm shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
+          </div>
+          <span
+            className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-white to-emerald-200 font-black text-3xl tracking-tight ml-1"
+            style={{
+              textShadow: "0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(245,158,11,0.4)",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            SiratStream
           </span>
         </div>
 
-        <div className="space-y-1.5">
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+        <div className="space-y-1.5" style={{ transform: "translateZ(14px)" }}>
+          <h1 className="text-2xl font-bold text-white tracking-tight drop-shadow-md">
             Plateforme Streaming &amp; Connaissance
           </h1>
-          <p className="text-zinc-400 text-sm leading-relaxed">
+          <p className="text-zinc-300 text-sm leading-relaxed">
             Récits des Prophètes, miracles, compagnons et espace personnel synchronisé.
           </p>
         </div>
 
         {authError && (
-          <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/40 text-red-200 text-xs text-left flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="p-3 rounded-2xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs text-left flex items-center justify-between gap-3 animate-fadeIn shadow-lg">
             <p className="leading-relaxed flex-1">
               {authError.includes("console Google Firebase") || authError.includes("operation-not-allowed")
                 ? "Le mot de passe ou l'adresse email est incorrect, ou le compte n'est pas encore enregistré dans Google."
@@ -206,14 +231,14 @@ function AuthScreen() {
           </div>
         )}
 
-        <div className="space-y-4 pt-1">
-          {/* Les 4 options d'accès rapides : Invité, Email, Google, Apple */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="space-y-4 pt-1" style={{ transformStyle: "preserve-3d" }}>
+          {/* Les 4 options d'accès rapides : Invité, Email, Google, Apple avec profondeur 3D */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {/* 1. Début / Mode Invité */}
             <button
               onClick={signInDemo}
               disabled={loading || emailLoading}
-              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_4px_12px_rgba(16,185,129,0.35)] active:scale-95 disabled:opacity-50 text-center"
+              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-gradient-to-b from-emerald-300 to-emerald-500 hover:from-emerald-200 hover:to-emerald-400 text-zinc-950 font-bold transition-all shadow-[0_6px_16px_rgba(16,185,129,0.4),inset_0_1.5px_1px_rgba(255,255,255,0.6)] hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(16,185,129,0.5)] active:translate-y-0.5 active:scale-95 disabled:opacity-50 text-center cursor-pointer"
               title="Démarrer directement en mode invité"
             >
               <div className="flex items-center gap-1">
@@ -233,7 +258,7 @@ function AuthScreen() {
                 }
               }}
               disabled={loading || emailLoading}
-              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-emerald-400/20 hover:bg-emerald-400/30 border border-emerald-300/40 text-emerald-200 font-bold transition-all backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] active:scale-95 disabled:opacity-50 text-center"
+              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-emerald-400/20 hover:bg-emerald-400/30 border border-emerald-300/40 text-emerald-200 font-bold transition-all backdrop-blur-xl shadow-[0_6px_16px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(167,243,208,0.35)] hover:-translate-y-1 hover:border-emerald-300/60 hover:shadow-[0_12px_24px_rgba(16,185,129,0.3)] active:translate-y-0.5 active:scale-95 disabled:opacity-50 text-center cursor-pointer"
               title="Entrer avec votre adresse email"
             >
               <div className="flex items-center gap-1">
@@ -243,14 +268,15 @@ function AuthScreen() {
               <span className="text-[10px] text-emerald-300/90 font-semibold">Par mail</span>
             </button>
 
-            {/* 3. Connexion Google */}
+            {/* 3. Connexion Google - Élevé avec relief 3D au survol */}
             <button
               onClick={signInWithGoogle}
               disabled={loading || emailLoading}
-              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-white hover:bg-zinc-100 text-black font-bold transition-all shadow-xl active:scale-95 disabled:opacity-50 text-center"
+              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-white hover:bg-zinc-50 text-black font-bold transition-all shadow-[0_8px_20px_rgba(0,0,0,0.5),inset_0_1.5px_1px_rgba(255,255,255,0.9),0_0_12px_rgba(255,255,255,0.2)] hover:-translate-y-1.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.65),0_0_20px_rgba(251,191,36,0.35)] active:translate-y-0.5 active:scale-95 disabled:opacity-50 text-center cursor-pointer border border-white/40"
               title="Connexion avec votre compte Google"
+              style={{ transformStyle: "preserve-3d" }}
             >
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
@@ -269,7 +295,7 @@ function AuthScreen() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span className="font-extrabold text-xs">Google</span>
+                <span className="font-extrabold text-xs tracking-tight">Google</span>
               </div>
               <span className="text-[10px] text-zinc-600 font-semibold">Connexion</span>
             </button>
@@ -278,7 +304,7 @@ function AuthScreen() {
             <button
               onClick={() => signInWithApple()}
               disabled={loading || emailLoading}
-              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold transition-all backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),inset_0_-2px_4px_rgba(0,0,0,0.25)] active:scale-95 disabled:opacity-50 text-center"
+              className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white font-bold transition-all backdrop-blur-xl shadow-[0_6px_16px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.25)] hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(0,0,0,0.5)] active:translate-y-0.5 active:scale-95 disabled:opacity-50 text-center cursor-pointer"
               title="Synchronisation avec votre identifiant Apple / iCloud"
             >
               <div className="flex items-center gap-1">
@@ -524,6 +550,11 @@ function MainStreamingApp() {
     };
   }, [handlePlay]);
 
+  // Initialisation globale des effets de perspective et tilt 3D sur l'ensemble des interfaces
+  useEffect(() => {
+    return init3DEffects();
+  }, []);
+
   const handleInfo = useCallback((id: string) => {
     setInfoId(id);
   }, []);
@@ -586,7 +617,7 @@ function MainStreamingApp() {
   );
 
   return (
-    <div className="fixed inset-0 bg-black text-white selection:bg-white selection:text-black">
+    <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden bg-zinc-950 text-white selection:bg-white selection:text-black">
       {/* Fond d'ambiance derrière le cadre — masqué maintenant que la carte occupe tout l'écran */}
       <div
         className="absolute inset-0"
@@ -1395,12 +1426,11 @@ function MainStreamingApp() {
               </div>
             </div>
 
-            {/* Brand & SEO Identity for Google indexing (sirat stream, sirat streaming, https://sirat-stream.ai.studio) */}
+            {/* Brand & SEO Identity for Google indexing (SiratStream) */}
             <div className="pt-6 border-t border-zinc-900/80 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-zinc-400">
               <div className="space-y-1.5 md:col-span-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-sm text-white tracking-tight">Sirat Stream</span>
-                  <span className="text-zinc-400 text-xs font-medium">(Sirat Streaming)</span>
+                  <span className="font-bold text-sm text-white tracking-tight">SiratStream</span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[10px] font-semibold">
                     100% Gratuit · Sans Abonnement
                   </span>
@@ -1409,7 +1439,7 @@ function MainStreamingApp() {
                   </span>
                 </div>
                 <p className="text-zinc-400 text-xs leading-relaxed max-w-2xl">
-                  <strong>Sirat Stream</strong> (également recherché sous <em>Sirat Streaming</em>, <em>Sirat</em> ou <em>streaming musulman</em>) est accessible gratuitement et sans aucun paiement à l'adresse <a href="https://sirat-stream.ai.studio/" className="text-emerald-400 hover:underline font-medium">https://sirat-stream.ai.studio/</a>. Retrouvez en accès libre la plateforme de streaming musulman et islamique pour les récitations du Noble Coran, enseignements spirituels, récits prophétiques et horaires de prière.
+                  <strong>SiratStream</strong> est accessible gratuitement et sans aucun paiement à l'adresse <a href="https://sirat-stream.ai.studio/" className="text-emerald-400 hover:underline font-medium">https://sirat-stream.ai.studio/</a>. Retrouvez en accès libre la plateforme de streaming musulman pour les récitations du Noble Coran, enseignements spirituels, récits prophétiques et horaires de prière.
                 </p>
               </div>
               <div className="flex md:justify-end items-start gap-3">
@@ -1424,7 +1454,7 @@ function MainStreamingApp() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-zinc-900 text-xs">
               <p className="flex items-center gap-1.5">
-                <span>© {new Date().getFullYear()} Sirat Stream (Sirat Streaming · sirat-stream.ai.studio) · Accès libre et gratuit pour la communauté</span>
+                <span>© {new Date().getFullYear()} SiratStream · Accès libre et gratuit pour la communauté</span>
               </p>
               <p className="text-zinc-600">
                 Contenus vidéos issus de créateurs YouTube indépendants
@@ -1733,7 +1763,9 @@ function RootApp() {
           <Loader2 size={40} className="text-white animate-spin" />
         </div>
       ) : !activeProfile ? (
-        <ProfileSelector onSelect={() => {}} />
+        <PageTransition key="profile-select">
+          <ProfileSelector onSelect={() => {}} />
+        </PageTransition>
       ) : (
         <CreatorCatalogProvider>
           <MyListProvider>

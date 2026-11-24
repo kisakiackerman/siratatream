@@ -157,23 +157,23 @@ export default function PrayerTimes({ compact = false, onClose }: PrayerTimesPro
 
   if (compact) {
     return (
-      <div className="flex items-center gap-3 sm:gap-4 rounded-2xl liquid-glass px-4 py-3 h-full border border-emerald-300/30 transition-all hover:bg-emerald-400/15">
-        <Clock3 size={18} className="text-emerald-400 flex-shrink-0" />
+      <div className="card-3d-tilt flex items-center gap-3 sm:gap-4 rounded-2xl liquid-glass px-4 py-3 h-full border border-emerald-300 dark:border-emerald-300/30 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-400/15">
+        <Clock3 size={18} className="text-emerald-700 dark:text-emerald-400 flex-shrink-0" />
         <div className="min-w-0 flex-1">
           {nextPrayer ? (
-            <p className="text-xs sm:text-sm text-zinc-200 truncate">
-              Prochaine prière : <strong className="text-white font-semibold">{nextPrayer.label}</strong> à {nextPrayer.time}
-              <span className="ml-2 font-mono font-bold bg-emerald-400/15 border border-emerald-300/30 text-emerald-200 px-2 py-0.5 rounded-full text-[11px] shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+            <p className="text-xs sm:text-sm text-zinc-700 dark:text-zinc-200 truncate">
+              Prochaine prière : <strong className="text-zinc-900 dark:text-white font-semibold">{nextPrayer.label}</strong> à {nextPrayer.time}
+              <span className="ml-2 font-mono font-bold bg-emerald-100 border border-emerald-300 text-emerald-900 shadow-sm dark:bg-emerald-400/15 dark:border-emerald-300/30 dark:text-emerald-200 px-2 py-0.5 rounded-full text-[11px] dark:shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
                 {formatCountdown(countdown)}
               </span>
             </p>
           ) : (
-            <p className="text-xs sm:text-sm text-zinc-300">Horaires de prière configurés.</p>
+            <p className="text-xs sm:text-sm text-zinc-700 dark:text-zinc-300">Horaires de prière configurés.</p>
           )}
         </div>
         {location && (
-          <span className="flex-shrink-0 hidden sm:flex items-center gap-1 text-[11px] text-emerald-200 bg-emerald-400/15 border border-emerald-300/30 px-2 py-0.5 rounded-full shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
-            <MapPin size={11} className="text-emerald-400" />
+          <span className="flex-shrink-0 hidden sm:flex items-center gap-1 text-[11px] text-emerald-900 bg-emerald-100 border border-emerald-300 shadow-sm dark:text-emerald-200 dark:bg-emerald-400/15 dark:border-emerald-300/30 px-2 py-0.5 rounded-full dark:shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+            <MapPin size={11} className="text-emerald-700 dark:text-emerald-400" />
             {locationLabel}
           </span>
         )}

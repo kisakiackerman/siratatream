@@ -11,9 +11,6 @@ import {
   Trash2,
   Check,
   Copy,
-  Moon,
-  Sun,
-  Monitor,
   Sparkles,
   BarChart3,
   Subtitles,
@@ -54,7 +51,6 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewerProfile, AVATAR_COLORS } from "@/hooks/useViewerProfile";
-import { useTheme } from "@/hooks/useTheme";
 import { AVATAR_ICONS, getAvatarIcon, AvatarIconId } from "@/data/avatarIcons";
 import { catalog, ContentItem } from "@/data/catalog";
 import {
@@ -120,7 +116,6 @@ export default function AccountSettingsModal({
     updateProfile,
     deleteProfile,
   } = useViewerProfile();
-  const { theme, systemTheme, setTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [notice, setNotice] = useState<string | null>(null);
@@ -198,7 +193,13 @@ export default function AccountSettingsModal({
 
   // --- Playback Preferences ---
   const [autoplayNext, setAutoplayNext] = useState(() => {
-    return localStorage.getItem("nexstream_auto_next") !== "false";
+    try {
+      const v = localStorage.getItem("siratstream_continuous_autoplay");
+      if (v !== null) return v !== "false";
+      return localStorage.getItem("nexstream_auto_next") !== "false";
+    } catch {
+      return true;
+    }
   });
   const [autoplayPreview, setAutoplayPreview] = useState(() => {
     return localStorage.getItem("nexstream_autoplay_preview") !== "false";
@@ -411,7 +412,14 @@ export default function AccountSettingsModal({
   const handleToggleAutoNext = () => {
     const next = !autoplayNext;
     setAutoplayNext(next);
+    localStorage.setItem("siratstream_continuous_autoplay", String(next));
     localStorage.setItem("nexstream_auto_next", String(next));
+    window.dispatchEvent(new Event("continuous_autoplay_changed"));
+    showToast(
+      next
+        ? "Lecture automatique continue activée : les épisodes s'enchaîneront sans intervention manuelle."
+        : "Lecture automatique continue désactivée."
+    );
   };
 
   const handleTogglePreview = () => {
@@ -502,7 +510,7 @@ export default function AccountSettingsModal({
         profiles,
         watchHistory: activeProfile ? getLocalWatchHistory(activeProfile.id) : [],
         preferences: {
-          theme,
+          theme: "dark",
           autoplayNext,
           autoplayPreview,
           ambientGlow,
@@ -554,9 +562,7 @@ export default function AccountSettingsModal({
     }
     setTimeout(() => {
       if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        url.searchParams.set("updated", Date.now().toString());
-        window.location.replace(url.toString());
+        window.location.reload();
       }
     }, 400);
   };
@@ -1405,54 +1411,35 @@ export default function AccountSettingsModal({
           {/* ============================================================ */}
           {activeTab === "playback" && (
             <div className="space-y-4">
-              {/* Thème & Détection Automatique Système */}
-              <GlassPanel variant="card" className="p-5 border border-white/15 space-y-3">
-                <div className="flex items-center justify-between">
+              {/* Lecture automatique continue */}
+              <GlassPanel variant="card" className="p-4 sm:p-5 border border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 flex items-center justify-center shrink-0 mt-0.5">
+                    <Play size={17} fill="currentColor" className="ml-0.5" />
+                  </div>
                   <div>
-                    <h4 className="text-white text-sm font-semibold flex items-center gap-2">
-                      <Moon size={16} className="text-emerald-400" />
-                      <span>Thème de l'application</span>
-                    </h4>
-                    <p className="text-zinc-300 text-xs mt-0.5 max-w-sm">
-                      L'application est configurée en mode sombre permanent pour un confort de visionnage optimal.
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-white text-sm font-semibold">Lecture automatique continue</h4>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        autoplayNext
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                          : "bg-white/10 text-zinc-400 border-white/10"
+                      }`}>
+                        {autoplayNext ? "Activée" : "Désactivée"}
+                      </span>
+                    </div>
+                    <p className="text-zinc-300 text-xs mt-1 max-w-md leading-relaxed">
+                      Enchaîne automatiquement les épisodes de la même série ou de la même catégorie sans intervention manuelle.
                     </p>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full liquid-glass-emerald text-emerald-300 border border-emerald-400/30 text-[10px] font-bold uppercase tracking-wider">
-                    Sombre (Actif)
-                  </span>
-                </div>
-
-                <div className="pt-1">
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl border liquid-glass-emerald text-emerald-200 border-emerald-300/50 shadow-md">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-300 border border-emerald-400/30">
-                        <Moon size={20} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white">Mode Sombre Permanent</p>
-                        <p className="text-[11px] text-zinc-400">Atmosphère cinéma sombre, reposante pour les yeux</p>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-400/30">
-                      Toujours actif
-                    </span>
-                  </div>
-                </div>
-              </GlassPanel>
-
-              {/* Lecture automatique épisode suivant */}
-              <GlassPanel variant="card" className="p-4 border border-white/15 flex items-center justify-between">
-                <div>
-                  <h4 className="text-white text-sm font-semibold">Lecture automatique de l'épisode suivant</h4>
-                  <p className="text-zinc-300 text-xs mt-0.5 max-w-sm">
-                    Enchaîne automatiquement avec le récit ou épisode suivant à la fin de la vidéo.
-                  </p>
                 </div>
                 <button
+                  type="button"
                   onClick={handleToggleAutoNext}
-                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors shrink-0 self-end sm:self-center cursor-pointer ${
                     autoplayNext ? "bg-emerald-500" : "bg-white/15"
                   }`}
+                  aria-label="Basculer la lecture automatique continue"
                 >
                   <div
                     className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${

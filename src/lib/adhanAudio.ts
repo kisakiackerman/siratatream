@@ -382,8 +382,8 @@ export async function exportAdhanMp3(
     onProgress?.(100);
     return true;
   } catch {
-    // Method 3: window.open as absolute last resort
-    window.open(downloadApiUrl, "_blank");
+    // Method 3: Direct download navigation (Content-Disposition: attachment keeps page intact)
+    window.location.assign(downloadApiUrl);
     return false;
   }
 }

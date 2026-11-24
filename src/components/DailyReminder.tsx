@@ -15,20 +15,20 @@ export default function DailyReminder({ compact = false, onClose, onOpenModal }:
     return (
       <div
         onClick={onOpenModal}
-        className="flex items-center justify-between gap-3 sm:gap-4 rounded-2xl liquid-glass px-4 py-3 cursor-pointer hover:bg-emerald-400/15 transition-all h-full border border-emerald-300/30"
+        className="card-3d-tilt flex items-center justify-between gap-3 sm:gap-4 rounded-2xl liquid-glass px-4 py-3 cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-400/15 transition-all h-full border border-emerald-300 dark:border-emerald-300/30"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <Sparkles size={18} className="text-emerald-300 flex-shrink-0 animate-pulse" />
+          <Sparkles size={18} className="text-emerald-800 dark:text-emerald-300 flex-shrink-0 animate-pulse" />
           <div className="min-w-0">
-            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-emerald-300/90">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300/90">
               Rappel du jour • {reminder.reference}
             </p>
-            <p className="text-xs sm:text-sm text-zinc-100 truncate">
+            <p className="text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 truncate">
               « {reminder.translation} »
             </p>
           </div>
         </div>
-        <span className="text-[11px] text-emerald-200 bg-emerald-400/15 border border-emerald-300/30 px-2.5 py-1 rounded-full whitespace-nowrap hidden sm:inline flex-shrink-0 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+        <span className="text-[11px] font-semibold text-emerald-900 bg-emerald-100 border border-emerald-300 shadow-sm dark:font-normal dark:text-emerald-200 dark:bg-emerald-400/15 dark:border-emerald-300/30 px-2.5 py-1 rounded-full whitespace-nowrap hidden sm:inline flex-shrink-0 dark:shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
           Lire le verset
         </span>
       </div>
@@ -37,25 +37,25 @@ export default function DailyReminder({ compact = false, onClose, onOpenModal }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md px-4">
-      <div className="relative w-full max-w-xl rounded-2xl liquid-glass-modal p-6 sm:p-8 text-white shadow-2xl border border-emerald-300/30">
+      <div className="relative w-full max-w-xl rounded-2xl liquid-glass-modal p-6 sm:p-8 text-zinc-900 dark:text-white shadow-2xl border border-emerald-300 dark:border-emerald-300/30">
         {onClose && (
-          <button onClick={onClose} className="absolute right-4 top-4 text-emerald-300 hover:text-white bg-emerald-400/15 hover:bg-emerald-400/25 p-1.5 rounded-full border border-emerald-300/30 transition-colors" aria-label="Fermer le rappel">
+          <button onClick={onClose} className="absolute right-4 top-4 text-emerald-800 hover:text-emerald-950 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 dark:text-emerald-300 dark:hover:text-white dark:bg-emerald-400/15 dark:hover:bg-emerald-400/25 p-1.5 rounded-full dark:border-emerald-300/30 transition-colors" aria-label="Fermer le rappel">
             <X size={18} />
           </button>
         )}
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300 flex items-center gap-2">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
           <Sparkles size={14} />
           Rappel & Méditation du jour
         </p>
-        <h2 className="mb-6 text-xl sm:text-2xl font-bold text-white">{reminder.reference}</h2>
+        <h2 className="mb-6 text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white">{reminder.reference}</h2>
 
         {reminder.arabic && (
-          <p dir="rtl" lang="ar" className="mb-6 text-right font-serif text-2xl sm:text-3xl leading-loose text-zinc-100">
+          <p dir="rtl" lang="ar" className="mb-6 text-right font-serif text-2xl sm:text-3xl leading-loose text-zinc-900 dark:text-zinc-100">
             {reminder.arabic}
           </p>
         )}
 
-        <blockquote className="mb-6 rounded-2xl border-l-2 border-emerald-400 bg-emerald-400/10 backdrop-blur-xl p-4 sm:p-5 text-sm sm:text-base leading-relaxed text-zinc-100 border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+        <blockquote className="mb-6 rounded-2xl border-l-2 border-emerald-600 dark:border-emerald-400 bg-emerald-50 dark:bg-emerald-400/10 backdrop-blur-xl p-4 sm:p-5 text-sm sm:text-base leading-relaxed text-zinc-900 dark:text-zinc-100 border border-emerald-300 dark:border-emerald-300/25 shadow-sm dark:shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
           « {reminder.translation} »
         </blockquote>
 
