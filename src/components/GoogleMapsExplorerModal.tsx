@@ -626,10 +626,10 @@ export default function GoogleMapsExplorerModal({
             </div>
 
             {/* Map Canvas */}
-            <div className="flex-1 relative flex flex-col min-h-[350px]">
+            <div className="flex-1 relative flex flex-col min-h-[380px]">
               {apiKey ? (
-                <APIProvider apiKey={apiKey}>
-                  <div className="w-full h-full relative" style={{ minHeight: "100%", height: "100%" }}>
+                <APIProvider apiKey={apiKey} language="fr">
+                  <div className="w-full flex-1 min-h-[380px] h-full relative">
                     <Map
                       mapId="DEMO_MAP_ID"
                       center={center}

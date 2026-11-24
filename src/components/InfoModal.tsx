@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { X, Play, Plus, ThumbsUp, Share2, Star, Check, CheckCircle, Tv, Film } from "lucide-react";
+import { X, Play, Plus, ThumbsUp, Share2, Star, Check, CheckCircle, Tv } from "lucide-react";
 import { motion } from "motion/react";
 import { ContentItem, catalog, getSeriesEpisodes } from "@/data/catalog";
 import { useMyList } from "@/lib/useMyList";
@@ -22,7 +22,6 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
   const { inList, toggle } = useMyList();
   const saved = inList(item.id);
   const [copied, setCopied] = useState(false);
-  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const isTarawih = item.channel === "Récitations Haramain" || item.categories.includes("Coran");
   const reciter = isTarawih ? getReciterForItem(item.title, item.description, item.channel) : null;
 
@@ -128,7 +127,7 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
         style={{ transformStyle: "preserve-3d" }}
         className="relative z-10 w-full sm:max-w-2xl max-h-[90vh] liquid-glass-modal rounded-3xl overflow-hidden flex flex-col shadow-[0_25px_60px_rgba(0,0,0,0.85),0_0_35px_rgba(16,185,129,0.2)] border border-emerald-300/30"
       >
-        {/* Hero Video Frame with Depth */}
+        {/* Hero Poster Frame with Depth (No inline video playback — opens PlayerModal) */}
         <div
           className="relative h-64 sm:h-72 flex-shrink-0 overflow-hidden bg-zinc-950 border-b border-emerald-300/20"
           style={{
@@ -136,107 +135,83 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
               "inset 0 2px 2px 0 rgba(255, 255, 255, 0.3), inset 0 -4px 8px 0 rgba(0, 0, 0, 0.65)",
           }}
         >
-          {isPlayingPreview ? (
-            <div className="absolute inset-0 z-15 bg-black flex items-center justify-center">
-              {item.videoUrl && (item.videoUrl.endsWith(".mp4") || item.videoUrl.endsWith(".webm")) ? (
-                <video
-                  src={item.videoUrl}
-                  controls
-                  autoPlay
-                  className="w-full h-full object-contain"
-                />
-              ) : item.youtubeId ? (
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&rel=0&iv_load_policy=3&playsinline=1`}
-                  title={item.title}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setIsPlayingPreview(false)}
-                className="absolute top-4 left-4 z-30 px-3 py-1 rounded-full liquid-glass border border-white/20 text-xs font-semibold text-white hover:bg-white/15 shadow-lg flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>Fermer l'aperçu</span>
-              </button>
+          {/* Ambient Blur Layer */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <img
+              src={item.heroImage || item.image || getThematicFallbackBanner(item)}
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-cover scale-125 filter blur-2xl opacity-40 brightness-75"
+            />
+          </div>
+
+          {/* Sharp Foreground Image */}
+          <img
+            src={item.heroImage ?? item.image ?? getThematicFallbackBanner(item)}
+            alt={item.title}
+            className="w-full h-full object-cover relative z-0"
+            onLoad={(e) => {
+              const img = e.currentTarget;
+              if (img.naturalWidth <= 120 && img.naturalHeight <= 90) {
+                if (!img.dataset.triedHq && item.youtubeId) {
+                  img.dataset.triedHq = "true";
+                  img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                } else if (!img.dataset.triedThematic) {
+                  img.dataset.triedThematic = "true";
+                  img.src = getThematicFallbackBanner(item);
+                }
+              }
+            }}
+            onError={(e) => {
+              const img = e.target as HTMLImageElement;
+              if (!img.dataset.triedHq && item.youtubeId) {
+                img.dataset.triedHq = "true";
+                img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+              } else if (!img.dataset.triedThematic) {
+                img.dataset.triedThematic = "true";
+                img.src = getThematicFallbackBanner(item);
+              } else if (!img.dataset.triedReciter) {
+                img.dataset.triedReciter = "true";
+                img.src = reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg";
+              }
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/40 to-transparent z-10 pointer-events-none" />
+
+          {/* Center Play button — redirects directly to PlayerModal */}
+          <div className="absolute inset-0 z-15 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onPlay(item.id);
+              }}
+              className="w-14 h-14 rounded-full liquid-glass-emerald border border-emerald-300/40 text-emerald-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-[0_0_24px_rgba(52,211,153,0.35)] cursor-pointer group"
+              title="Regarder la vidéo dans le lecteur"
+              aria-label={`Regarder ${item.title}`}
+            >
+              <Play size={24} fill="currentColor" className="ml-1 group-hover:scale-105 transition-transform" />
+            </button>
+          </div>
+
+          {/* Title overlay */}
+          <div className="absolute bottom-4 left-4 right-4 sm:left-6 sm:right-6 z-10 pointer-events-none">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="liquid-glass-badge-emerald px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase">
+                {item.channel}
+              </span>
             </div>
-          ) : (
-            <>
-              {/* Ambient Blur Layer */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <img
-                  src={item.heroImage || item.image || getThematicFallbackBanner(item)}
-                  alt=""
-                  aria-hidden="true"
-                  className="w-full h-full object-cover scale-125 filter blur-2xl opacity-40 brightness-75"
-                />
-              </div>
-
-              {/* Sharp Foreground Image */}
-              <img
-                src={item.heroImage ?? item.image ?? getThematicFallbackBanner(item)}
-                alt={item.title}
-                className="w-full h-full object-cover relative z-0"
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  if (img.naturalWidth <= 120 && img.naturalHeight <= 90) {
-                    if (!img.dataset.triedHq && item.youtubeId) {
-                      img.dataset.triedHq = "true";
-                      img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
-                    } else if (!img.dataset.triedThematic) {
-                      img.dataset.triedThematic = "true";
-                      img.src = getThematicFallbackBanner(item);
-                    }
-                  }
-                }}
-                onError={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  if (!img.dataset.triedHq && item.youtubeId) {
-                    img.dataset.triedHq = "true";
-                    img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
-                  } else if (!img.dataset.triedThematic) {
-                    img.dataset.triedThematic = "true";
-                    img.src = getThematicFallbackBanner(item);
-                  } else if (!img.dataset.triedReciter) {
-                    img.dataset.triedReciter = "true";
-                    img.src = reciter?.photoUrl || "/images/sheikh_ali_jaber.jpg";
-                  }
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/40 to-transparent z-10 pointer-events-none" />
-
-              {/* Center Play/Preview icon */}
-              <div className="absolute inset-0 z-15 flex items-center justify-center">
-                <button
-                  type="button"
-                  onClick={() => setIsPlayingPreview(true)}
-                  className="w-14 h-14 rounded-full liquid-glass-emerald border border-emerald-300/40 text-emerald-200 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-[0_0_24px_rgba(52,211,153,0.35)] cursor-pointer group"
-                  title="Lancer l'aperçu vidéo"
-                >
-                  <Play size={24} fill="currentColor" className="ml-1 group-hover:scale-105 transition-transform" />
-                </button>
-              </div>
-
-              {/* Title overlay */}
-              <div className="absolute bottom-4 left-4 right-4 sm:left-6 sm:right-6 z-10 pointer-events-none">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="liquid-glass-badge-emerald px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wider uppercase">
-                    {item.channel}
-                  </span>
-                </div>
-                <h2 className="text-white text-xl sm:text-2xl md:text-3xl font-black leading-tight line-clamp-2">
-                  {item.title}
-                </h2>
-              </div>
-            </>
-          )}
+            <h2 className="text-white text-xl sm:text-2xl md:text-3xl font-black leading-tight line-clamp-2">
+              {item.title}
+            </h2>
+          </div>
 
           {/* Close */}
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full liquid-glass border border-white/20 flex items-center justify-center text-white hover:bg-white/15 transition-all shadow-lg cursor-pointer"
+            aria-label="Fermer"
           >
             <X size={17} />
           </button>
@@ -247,6 +222,7 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
           {/* Actions */}
           <div className="flex items-center gap-3 mb-6 flex-wrap">
             <button
+              type="button"
               onClick={() => {
                 onClose();
                 onPlay(item.id);
@@ -255,18 +231,6 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
             >
               <Play size={17} fill="currentColor" />
               Lecture
-            </button>
-            <button
-              onClick={() => setIsPlayingPreview((prev) => !prev)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-bold text-sm transition-all border shadow-md active:scale-95 cursor-pointer ${
-                isPlayingPreview
-                  ? "bg-emerald-500 text-zinc-950 border-emerald-400"
-                  : "liquid-glass text-zinc-200 hover:text-white border-white/20 hover:bg-white/15"
-              }`}
-              title="Prévisualiser la vidéo"
-            >
-              <Film size={16} />
-              <span>{isPlayingPreview ? "Arrêter l'aperçu" : "Aperçu vidéo"}</span>
             </button>
             <button
               onClick={() => toggle(item)}

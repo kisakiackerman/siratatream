@@ -1426,30 +1426,17 @@ function MainStreamingApp() {
               </div>
             </div>
 
-            {/* Brand & SEO Identity for Google indexing (SiratStream) */}
-            <div className="pt-6 border-t border-zinc-900/80 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-zinc-400">
-              <div className="space-y-1.5 md:col-span-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-sm text-white tracking-tight">SiratStream</span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[10px] font-semibold">
-                    100% Gratuit · Sans Abonnement
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700 text-zinc-300 text-[10px] font-medium">
-                    sirat-stream.ai.studio
-                  </span>
-                </div>
-                <p className="text-zinc-400 text-xs leading-relaxed max-w-2xl">
-                  <strong>SiratStream</strong> est accessible gratuitement et sans aucun paiement à l'adresse <a href="https://sirat-stream.ai.studio/" className="text-emerald-400 hover:underline font-medium">https://sirat-stream.ai.studio/</a>. Retrouvez en accès libre la plateforme de streaming musulman pour les récitations du Noble Coran, enseignements spirituels, récits prophétiques et horaires de prière.
-                </p>
+            {/* Brand & Platform Info */}
+            <div className="pt-6 border-t border-zinc-900/80 flex flex-col gap-2 text-xs text-zinc-400">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-sm text-white tracking-tight">SiratStream</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[10px] font-semibold">
+                  100% Gratuit · Sans Abonnement
+                </span>
               </div>
-              <div className="flex md:justify-end items-start gap-3">
-                <a
-                  href="https://sirat-stream.ai.studio/"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors shadow-sm"
-                >
-                  <span>https://sirat-stream.ai.studio/</span>
-                </a>
-              </div>
+              <p className="text-zinc-400 text-xs leading-relaxed max-w-2xl">
+                <strong>SiratStream</strong> est accessible gratuitement et sans aucun abonnement. Retrouvez en accès libre la plateforme de streaming musulman pour les récitations du Noble Coran, enseignements spirituels, récits prophétiques et horaires de prière.
+              </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-zinc-900 text-xs">
@@ -1778,8 +1765,32 @@ function RootApp() {
 }
 
 export default function App() {
+  const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const handleQuotaExceeded = () => setGmpQuotaExceeded(true);
+    window.addEventListener("gmp-quota-exceeded", handleQuotaExceeded);
+    return () => window.removeEventListener("gmp-quota-exceeded", handleQuotaExceeded);
+  }, []);
+
   return (
     <ThemeProvider>
+      {gmpQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{" "}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{" "}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
       <AuthProvider>
         <ViewerProfileProvider>
           <RootApp />

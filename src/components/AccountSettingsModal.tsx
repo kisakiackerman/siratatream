@@ -540,13 +540,9 @@ export default function AccountSettingsModal({
 
   const handleCopyAppUrl = () => {
     if (typeof window !== "undefined") {
-      const link =
-        window.location.origin.includes("sirat-stream") || window.location.hostname.includes("ai.studio")
-          ? "https://sirat-stream.ai.studio/"
-          : window.location.origin;
-      navigator.clipboard?.writeText(link);
+      navigator.clipboard?.writeText(window.location.origin);
       setUrlCopied(true);
-      showToast("Lien officiel copié dans le presse-papiers !");
+      showToast("Lien d'accès copié dans le presse-papiers !");
       setTimeout(() => setUrlCopied(false), 2500);
     }
   };
@@ -1982,13 +1978,8 @@ export default function AccountSettingsModal({
                       </span>
                     </div>
                     <p className="text-emerald-200 text-xs font-mono truncate mt-0.5 select-all font-semibold">
-                      https://sirat-stream.ai.studio/
+                      {typeof window !== "undefined" ? window.location.origin : ""}
                     </p>
-                    {typeof window !== "undefined" && !window.location.origin.includes("sirat-stream") && (
-                      <p className="text-zinc-400 text-[10px] font-mono truncate mt-0.5">
-                        Lien actif actuel : {window.location.origin}
-                      </p>
-                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
                     <button
