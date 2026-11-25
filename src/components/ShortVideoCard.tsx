@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { type ContentItem } from "@/data/catalog";
 import { useContentStats } from "@/hooks/useContentStats";
 import { useMyList } from "@/lib/useMyList";
-import { formatYouTubeLikes, getCachedYouTubeMeta } from "@/lib/youtubeApi";
+import { formatYouTubeLikes, getCachedYouTubeMeta, markVideoAsUnplayable } from "@/lib/youtubeApi";
 import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
 
 type ShortVideoCardProps = {
@@ -92,9 +92,38 @@ export const ShortVideoCard = memo(function ShortVideoCard({
     }
   }, []);
 
+  // Listen for YouTube iframe error events and automatically remove restricted/deleted shorts
+  useEffect(() => {
+    if (!shouldRenderIframe) return;
+    const handleMessage = (event: MessageEvent) => {
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.event === "onError") {
+          const errCode = Number(data.info);
+          if (errCode === 101 || errCode === 150 || errCode === 100 || errCode === 2 || errCode === 153) {
+            markVideoAsUnplayable(item.youtubeId, { errorCode: errCode });
+          }
+        }
+      } catch {
+        // Ignore non-JSON postMessage payloads
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [shouldRenderIframe, item.youtubeId]);
+
   // Handle iframe load: starts playback if active, or primes and pauses if preloading
   const handleIframeLoad = useCallback(() => {
     setIframeLoaded(true);
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: "listening" }),
+        "*"
+      );
+    } catch {
+      // ignore
+    }
     if (isActive) {
       postCommand("playVideo");
       if (isMuted) {
@@ -251,10 +280,13 @@ export const ShortVideoCard = memo(function ShortVideoCard({
             <iframe
               ref={iframeRef}
               onLoad={handleIframeLoad}
-              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=${item.youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}`}
+              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=${item.youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}&origin=${encodeURIComponent(
+                typeof window !== "undefined" ? window.location.origin : ""
+              )}`}
               title={item.title}
               className="w-full h-full object-cover pointer-events-none scale-[1.03]"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              referrerPolicy="strict-origin-when-cross-origin"
               loading="eager"
             />
             {/* Poster layer during initial buffering to eliminate black frames */}

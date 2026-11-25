@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Zap, ChevronLeft, ChevronRight, Play, Eye, LayoutGrid } from "lucide-react";
-import { allShortsList } from "@/data/shortsCatalog";
+import { getAllShortsItems } from "@/data/shortsCatalog";
 import type { ContentItem } from "@/data/catalog";
 
 type ShortsRowProps = {
@@ -10,7 +10,16 @@ type ShortsRowProps = {
 
 export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const previewShorts = allShortsList.slice(0, 16);
+  const [unplayableTick, setUnplayableTick] = useState(0);
+
+  useEffect(() => {
+    const onUnplayable = () => setUnplayableTick((t) => t + 1);
+    window.addEventListener("sirat:unplayable-video", onUnplayable);
+    return () => window.removeEventListener("sirat:unplayable-video", onUnplayable);
+  }, []);
+
+  const shortsList = useMemo(() => getAllShortsItems(), [unplayableTick]);
+  const previewShorts = shortsList.slice(0, 16);
 
   const scrollBy = (dir: number) => {
     scrollerRef.current?.scrollBy({ left: dir * 420, behavior: "smooth" });
@@ -46,7 +55,7 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
               aria-label="Ouvrir le catalogue des Shorts"
             >
               <LayoutGrid size={13} className="text-emerald-400" />
-              <span>Catalogue ({allShortsList.length})</span>
+              <span>Catalogue ({shortsList.length})</span>
             </button>
           )}
 

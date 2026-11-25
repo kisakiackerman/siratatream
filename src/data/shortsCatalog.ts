@@ -1,5 +1,6 @@
 import { catalog, type ContentItem, type Category } from "@/data/catalog";
 import { towardsEternityShortsRaw } from "@/data/towardsEternityShorts";
+import { isKnownUnplayableVideo } from "@/lib/youtubeApi";
 
 /**
  * Parses duration string (e.g. "02:39" or "01:15:30") into seconds.
@@ -34,9 +35,6 @@ const comedyShortsRaw: [string, string, string, string, number][] = [
   ["lBOtNSV0Iqg", "Un Australien très drôle se convertit à l’Islam – Impossible de ne pas rire !", "Pour rire", "380k vues", 380000],
   ["bdiXw-vS74s", "Comédien américain : « Nous allons faire de “terroriste” un mot tendance et génial !!! »", "Pour rire", "210k vues", 210000],
   ["r5nVnd03XE8", "Avec sagesse et humour, voici comment Nouman Ali Khan répond aux critiques", "Pour rire", "95k vues", 95000],
-  ["e-ORhEE9VVg", "Stand-up comédie : Quand l'humour rassemble les cœurs (Extrait exclusif)", "Pour rire", "145k vues", 145000],
-  ["3JZ_D3ELwOQ", "Anecdote hilarante : Les malentendus les plus drôles au quotidien", "Pour rire", "180k vues", 180000],
-  ["YQHsXMglC9A", "Humour & sagesse : Réflexions pleines d'esprit avec le sourire", "Pour rire", "125k vues", 125000],
 ];
 
 export function isComedyShort(item: ContentItem): boolean {
@@ -73,7 +71,7 @@ export function getAllShortsItems(): ContentItem[] {
 
   // 1. First add comedy and fast laugh shorts
   for (const [ytId, title, category, viewsStr, viewsCount] of comedyShortsRaw) {
-    if (seenIds.has(ytId)) continue;
+    if (!ytId || seenIds.has(ytId) || isKnownUnplayableVideo(ytId)) continue;
     seenIds.add(ytId);
     const ytLikes = Math.max(25, Math.round(viewsCount * 0.07));
     const ytLikesStr = ytLikes >= 1000 ? `${(ytLikes / 1000).toFixed(1).replace(".0", "")}k` : `${ytLikes}`;
@@ -103,7 +101,7 @@ export function getAllShortsItems(): ContentItem[] {
 
   // 2. Add the dedicated Towards Eternity shorts
   for (const [ytId, title, category, viewsStr, viewsCount] of towardsEternityShortsRaw) {
-    if (seenIds.has(ytId)) continue;
+    if (!ytId || seenIds.has(ytId) || isKnownUnplayableVideo(ytId)) continue;
     seenIds.add(ytId);
 
     const validCategory = (category || "Histoire & Mystère") as Category;
@@ -140,7 +138,7 @@ export function getAllShortsItems(): ContentItem[] {
 
   // 2. Add all videos from the catalog that are <= 5 min or Minute Islam
   for (const item of catalog) {
-    if (seenIds.has(item.youtubeId)) continue;
+    if (!item.youtubeId || seenIds.has(item.youtubeId) || isKnownUnplayableVideo(item.youtubeId)) continue;
     if (isShortVideo(item)) {
       seenIds.add(item.youtubeId);
       const estViews = item.viewsCount || Math.max(5000, Math.round((item.score || 85) * 450));

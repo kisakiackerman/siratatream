@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { type ContentItem, type Category } from "@/data/catalog";
-import { allShortsList } from "@/data/shortsCatalog";
+import { getAllShortsItems } from "@/data/shortsCatalog";
 import { useVoiceSearch } from "@/hooks/useVoiceSearch";
 
 type ShortsCatalogPageProps = {
@@ -92,30 +92,40 @@ export default function ShortsCatalogPage({
     }
   }, [isListening, voiceTranscript]);
 
+  const [unplayableTick, setUnplayableTick] = useState(0);
+
+  useEffect(() => {
+    const onUnplayable = () => setUnplayableTick((t) => t + 1);
+    window.addEventListener("sirat:unplayable-video", onUnplayable);
+    return () => window.removeEventListener("sirat:unplayable-video", onUnplayable);
+  }, []);
+
+  const shortsList = useMemo(() => getAllShortsItems(), [unplayableTick]);
+
   // Channels available in shorts
   const channels = useMemo(() => {
     const set = new Set<string>();
-    for (const item of allShortsList) {
+    for (const item of shortsList) {
       if (item.channel) set.add(item.channel);
     }
     return Array.from(set);
-  }, []);
+  }, [shortsList]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allShortsList.length };
+    const counts: Record<string, number> = { all: shortsList.length };
     for (const cat of SHORTS_CATEGORIES) {
       if (cat.id === "all") continue;
-      counts[cat.id] = allShortsList.filter((item) =>
+      counts[cat.id] = shortsList.filter((item) =>
         item.categories.includes(cat.id as Category)
       ).length;
     }
     return counts;
-  }, []);
+  }, [shortsList]);
 
   // Filter and sort items
   const filteredShorts = useMemo(() => {
-    let result = allShortsList;
+    let result = shortsList;
 
     // Search query filter
     if (query.trim().length > 0) {
@@ -157,7 +167,7 @@ export default function ShortsCatalogPage({
       // Default score
       return (b.score || 0) - (a.score || 0);
     });
-  }, [query, selectedCategory, selectedChannel, sortOption]);
+  }, [query, selectedCategory, selectedChannel, sortOption, shortsList]);
 
   // Réinitialiser la pagination lors de changements de filtre ou de tri
   useEffect(() => {
@@ -219,7 +229,7 @@ export default function ShortsCatalogPage({
                 Catalogue Short
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                {allShortsList.length} vidéos
+                {shortsList.length} vidéos
               </span>
             </div>
             <p className="text-xs text-zinc-400 hidden sm:block">
@@ -404,7 +414,7 @@ export default function ShortsCatalogPage({
               <strong className="text-white font-semibold">
                 {filteredShorts.length}
               </strong>{" "}
-              sur {allShortsList.length} shorts
+              sur {shortsList.length} shorts
               {selectedCategory !== "all" && (
                 <span>
                   {" "}

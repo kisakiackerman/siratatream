@@ -44,7 +44,6 @@ export const minhajAnNubuwwahRaw: [string, string, string][] = [
   ["4SJHl8X54B8", "NOUS SOMMES NOMBREUX, POURQUOI NOUS NE COMBATTONS PAS POUR LA PALESTINE !? - Dr 'Abdul Basit Faheem", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « NOUS SOMMES NOMBREUX, POURQUOI NOUS NE COMBATTONS PAS POUR LA PALESTINE !? - Dr 'Abdul Basit Faheem » (10:55). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["YjFzqdnJuaQ", "🇵🇸 À CEUX QUI APPELLENT AU COMBAT EN PALESTINE ! - Cheikh Sulayman Ar-Ruhayli", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « 🇵🇸 À CEUX QUI APPELLENT AU COMBAT EN PALESTINE ! - Cheikh Sulayman Ar-Ruhayli » (18:03). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["GdzMXzuEYbA", "🇵🇸  « VOUS AVEZ DÉLAISSÉ LA PALESTINE ! » - Cheikh 'Abd Al-'Aziz Ar-Rayis", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « 🇵🇸  « VOUS AVEZ DÉLAISSÉ LA PALESTINE ! » - Cheikh 'Abd Al-'Aziz Ar-Rayis » (18:19). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
-  ["GboFwadw5a4", "NOUS AVONS LA PLEINE CERTITUDE QUE LA PALESTINE SERA LIBÉRÉE ! - Cheikh Ibrahim Al-Muhaymid", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « NOUS AVONS LA PLEINE CERTITUDE QUE LA PALESTINE SERA LIBÉRÉE ! - Cheikh Ibrahim Al-Muhaymid » (14:10). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["_lkNln_bzpg", "LE DANGER DU TAQLID FANATIQUE | Cheikh Zubair ’Ali Zai", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « LE DANGER DU TAQLID FANATIQUE | Cheikh Zubair ’Ali Zai » (1:00:18). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["YCjc2FUUBik", "QUI SONT LES MADAKHILA ? QUI EST RABI' IBN HADI AL-MADKHALI ? - Cheikh 'Ali Ar-Ramli", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « QUI SONT LES MADAKHILA ? QUI EST RABI' IBN HADI AL-MADKHALI ? - Cheikh 'Ali Ar-Ramli » (1:08:09). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["JMR5v2wnOYE", "EXPLICATION DU HADITH: « CERTES, LES ACTES NE VALENT QUE PAR LEURS INTENTIONS » - Cheikh Al-Uthaymin", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « EXPLICATION DU HADITH: « CERTES, LES ACTES NE VALENT QUE PAR LEURS INTENTIONS » - Cheikh Al-Uthaymin » (24:14). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
@@ -125,7 +124,6 @@ export const minhajAnNubuwwahRaw: [string, string, string][] = [
   ["KR474s618OQ", "❌ Mise en garde contre Imran Hosein ❌", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « ❌ Mise en garde contre Imran Hosein ❌ » (16:09). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["JgcS2ipj6fQ", "Biographie du Prophète Muhammad صلى الله عليه وسلم - Sheikh 'Abdul Al-'Aziz Al Ash-Sheikh", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « Biographie du Prophète Muhammad صلى الله عليه وسلم - Sheikh 'Abdul Al-'Aziz Al Ash-Sheikh » (39:48). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["8r1w47A5ins", "Réfutation : Celui qui ne juge pas avec les lois d'Allah est un mécréant", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « Réfutation : Celui qui ne juge pas avec les lois d'Allah est un mécréant » (14:33). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
-  ["G1nEM0ZJX5A", "❌ Mise en garde contre Ayman TR ❌", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « ❌ Mise en garde contre Ayman TR ❌ » (11:24). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["XPk0lzr--L8", "Matn : Les Trois Fondements | متن : الأصول الثلاثة", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « Matn : Les Trois Fondements | متن : الأصول الثلاثة » (24:32). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["rcHMoG7XkcQ", "Tome de Médine 2 - Cours N°31", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « Tome de Médine 2 - Cours N°31 » (16:43). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
   ["zy20aTsOr0c", "Tome de Médine 2 - Cours N°30", "Enseignement et rappel islamique par Minhaj An-Nubuwwah : « Tome de Médine 2 - Cours N°30 » (18:34). Explications théologiques fondées sur le Coran et la Sunnah selon la compréhension des pieux prédécesseurs."],
@@ -399,11 +397,6 @@ export const minhajAnNubuwwahMeta: Record<string, MinhajAnNubuwwahMetaItem> = {
     cats: ["Héros & Personnages"],
     year: 2024,
     duration: "18:19",
-  },
-  "GboFwadw5a4": {
-    cats: ["Prophètes","Héros & Personnages"],
-    year: 2024,
-    duration: "14:10",
   },
   "_lkNln_bzpg": {
     cats: ["Compagnons","Anges & Djinns","Héros & Personnages"],
@@ -804,11 +797,6 @@ export const minhajAnNubuwwahMeta: Record<string, MinhajAnNubuwwahMetaItem> = {
     cats: ["Histoire & Mystère"],
     year: 2024,
     duration: "14:33",
-  },
-  "G1nEM0ZJX5A": {
-    cats: ["Histoire & Mystère"],
-    year: 2024,
-    duration: "11:24",
   },
   "XPk0lzr--L8": {
     cats: ["Histoire & Mystère"],

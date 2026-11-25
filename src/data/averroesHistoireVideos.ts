@@ -107,7 +107,6 @@ export const averroesHistoireRaw: [string, string, string][] = [
   ["61Dd4j_AN1A", "La conquête musulmane de l'Espagne : une invention ? / Al-Andalus (2/?) - Chroniques d'Islam #4", "Documentaire historique et analyse par Averroès Histoire : « La conquête musulmane de l'Espagne : une invention ? / Al-Andalus (2/?) - Chroniques d'Islam #4 » (24:42). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
   ["1E3Pjc1RXn4", "La PESTE NOIRE de 1347 dans le monde musulman (partie 2/2)", "Documentaire historique et analyse par Averroès Histoire : « La PESTE NOIRE de 1347 dans le monde musulman (partie 2/2) » (26:51). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
   ["iBUn0l1Bk7E", "Histoire d'un emblème : le croissant islamique. Un étendard politique ? - Focus #5", "Documentaire historique et analyse par Averroès Histoire : « Histoire d'un emblème : le croissant islamique. Un étendard politique ? - Focus #5 » (10:03). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
-  ["jBllEIei1BA", "Le Rire au Moyen Âge (2/2) - Islam vs Occident #4", "Documentaire historique et analyse par Averroès Histoire : « Le Rire au Moyen Âge (2/2) - Islam vs Occident #4 » (31:20). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
   ["DYvlfCw81Fc", "Histoire des Émotions & Moyen Âge (1/2) - Islam vs Occident #3", "Documentaire historique et analyse par Averroès Histoire : « Histoire des Émotions & Moyen Âge (1/2) - Islam vs Occident #3 » (16:57). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
   ["YXsUT_tELgg", "La PESTE NOIRE de 1347 dans le Monde Musulman (partie 1/2)", "Documentaire historique et analyse par Averroès Histoire : « La PESTE NOIRE de 1347 dans le Monde Musulman (partie 1/2) » (20:00). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
   ["x0c0GidH4XI", "Ibn Khaldun - La théorie du pouvoir : Naissance et déclin de l'État - Focus #4", "Documentaire historique et analyse par Averroès Histoire : « Ibn Khaldun - La théorie du pouvoir : Naissance et déclin de l'État - Focus #4 » (17:03). Exploration approfondie des faits, sources médiévales et enseignements de la civilisation islamique."],
@@ -828,13 +827,6 @@ export const averroesHistoireMeta: Record<string, AverroesHistoireMetaItem> = {
     ],
     "year": 2018,
     "duration": "10:03"
-  },
-  "jBllEIei1BA": {
-    "cats": [
-      "Histoire & Mystère"
-    ],
-    "year": 2018,
-    "duration": "31:20"
   },
   "DYvlfCw81Fc": {
     "cats": [

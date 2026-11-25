@@ -729,7 +729,9 @@ export default function VideoSuggestionModal({
                     ? cleanUrl.split("youtu.be/")[1]?.split("?")[0]
                     : "";
                   const safeSrc = isValidYouTubeId(rawYtId)
-                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${rawYtId}`
+                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${rawYtId}&origin=${encodeURIComponent(
+                        typeof window !== "undefined" ? window.location.origin : ""
+                      )}`
                     : cleanUrl;
 
                   if (!safeSrc) {
@@ -746,6 +748,7 @@ export default function VideoSuggestionModal({
                       className="w-full h-full border-0"
                       sandbox="allow-scripts allow-same-origin allow-presentation"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      referrerPolicy="strict-origin-when-cross-origin"
                       allowFullScreen
                     />
                   );

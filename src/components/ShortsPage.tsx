@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { type ContentItem, type Category } from "@/data/catalog";
-import { allShortsList, isComedyShort } from "@/data/shortsCatalog";
+import { getAllShortsItems, isComedyShort } from "@/data/shortsCatalog";
 import { ShortVideoCard } from "@/components/ShortVideoCard";
 import ShortsCatalogPage from "@/components/ShortsCatalogPage";
 
@@ -49,17 +49,26 @@ export default function ShortsPage({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [unplayableTick, setUnplayableTick] = useState(0);
+
+  useEffect(() => {
+    const onUnplayable = () => setUnplayableTick((t) => t + 1);
+    window.addEventListener("sirat:unplayable-video", onUnplayable);
+    return () => window.removeEventListener("sirat:unplayable-video", onUnplayable);
+  }, []);
+
+  const shortsList = useMemo(() => getAllShortsItems(), [unplayableTick]);
 
   // Filtered list of shorts including dedicated comedy / fast laughs
   const items = useMemo(() => {
-    if (selectedCategory === "all") return allShortsList;
+    if (selectedCategory === "all") return shortsList;
     if (selectedCategory === "comedy") {
-      return allShortsList.filter((item) => isComedyShort(item));
+      return shortsList.filter((item) => isComedyShort(item));
     }
-    return allShortsList.filter((item) =>
+    return shortsList.filter((item) =>
       item.categories.includes(selectedCategory as Category)
     );
-  }, [selectedCategory]);
+  }, [selectedCategory, shortsList]);
 
   // Handle initial short navigation if requested
   useEffect(() => {
@@ -157,13 +166,13 @@ export default function ShortsPage({
       setTimeout(() => scrollToIndex(idx), 50);
     } else {
       setSelectedCategory("all");
-      const fullIdx = allShortsList.findIndex((it) => it.id === id || it.youtubeId === id);
+      const fullIdx = shortsList.findIndex((it) => it.id === id || it.youtubeId === id);
       if (fullIdx !== -1) {
         setActiveIndex(fullIdx);
         setTimeout(() => scrollToIndex(fullIdx), 100);
       }
     }
-  }, [items, scrollToIndex]);
+  }, [items, shortsList, scrollToIndex]);
 
   // Preload adjacent thumbnail images (n-1, n+1, n+2) to eliminate image flicker
   useEffect(() => {

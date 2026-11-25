@@ -16,7 +16,6 @@ import {
   Loader2,
   Subtitles,
   CheckCircle,
-  ExternalLink,
   Music,
   Tv,
   RotateCcw,
@@ -217,8 +216,29 @@ export default function PlayerModal({
     sleepTimerValRef.current = sleepTimer;
   }, [sleepTimer]);
 
-  // Screen Lock
+  // Screen Lock (verrouillage transparent pour voir nettement la vidéo)
   const [screenLocked, setScreenLocked] = useState(false);
+  const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
+  const screenLockedRef = useRef(false);
+  const unlockPromptTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    screenLockedRef.current = screenLocked;
+  }, [screenLocked]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(unlockPromptTimer.current);
+    };
+  }, []);
+
+  const revealUnlockPrompt = useCallback(() => {
+    setShowUnlockPrompt(true);
+    clearTimeout(unlockPromptTimer.current);
+    unlockPromptTimer.current = setTimeout(() => {
+      setShowUnlockPrompt(false);
+    }, 3500);
+  }, []);
 
   // Réglage de l'opacité des textes (Titre, chaîne et infos) — réduit à 65% par défaut pour discrétion
   const [textOpacity, setTextOpacity] = useState<number>(() => {
@@ -508,17 +528,18 @@ export default function PlayerModal({
   // Priorité 1 : Épisode suivant de la même série
   // Priorité 2 : Vidéo suivante de la même catégorie
   const upNext = useMemo((): ContentItem | null => {
+    const isPlayableCandidate = (c: ContentItem) =>
+      c.id !== item.id && (!c.youtubeId || !isKnownUnplayableVideo(c.youtubeId));
+
     // 1. Si la vidéo actuelle fait partie d'une SÉRIE : enchaîner sur l'épisode suivant de la même série
     if (item.seriesId) {
-      const seriesEps = getSeriesEpisodes(item.seriesId);
-      if (seriesEps.length > 1) {
+      const seriesEps = getSeriesEpisodes(item.seriesId).filter(isPlayableCandidate);
+      if (seriesEps.length > 0) {
         const curEpNum = item.episodeNumber ?? 0;
         // Trouver l'épisode avec le numéro strictement supérieur le plus proche
         const nextInSeries = seriesEps.find((ep) => (ep.episodeNumber ?? 0) > curEpNum);
         if (nextInSeries) return nextInSeries;
-        // Si on est au dernier épisode, reprendre un autre épisode de la série ou continuer
-        const otherInSeries = seriesEps.find((ep) => ep.id !== item.id);
-        if (otherInSeries) return otherInSeries;
+        return seriesEps[0];
       }
     }
 
@@ -527,13 +548,13 @@ export default function PlayerModal({
     if (primaryCat) {
       // Priorité 2a : Vidéos de la même chaîne dans la même catégorie
       const sameChannelSameCat = catalog.filter(
-        (c) => c.id !== item.id && c.channel === item.channel && c.categories.includes(primaryCat)
+        (c) => isPlayableCandidate(c) && c.channel === item.channel && c.categories.includes(primaryCat)
       );
       if (sameChannelSameCat.length > 0) return sameChannelSameCat[0];
 
       // Priorité 2b : Toute vidéo de la même catégorie
       const sameCat = catalog.filter(
-        (c) => c.id !== item.id && c.categories.includes(primaryCat)
+        (c) => isPlayableCandidate(c) && c.categories.includes(primaryCat)
       );
       if (sameCat.length > 0) return sameCat[0];
     }
@@ -541,7 +562,7 @@ export default function PlayerModal({
     // 3. Repli : Vidéos associées
     const fallback = catalog.find(
       (c) =>
-        c.id !== item.id &&
+        isPlayableCandidate(c) &&
         (c.channel === item.channel || c.categories.some((g) => item.categories.includes(g)))
     );
     return fallback || null;
@@ -549,13 +570,16 @@ export default function PlayerModal({
 
   // Liste des vidéos associées pour la file d'attente et recommandations
   const related = useMemo(() => {
+    const isPlayableCandidate = (c: ContentItem) =>
+      c.id !== item.id && (!c.youtubeId || !isKnownUnplayableVideo(c.youtubeId));
+
     const list: ContentItem[] = [];
     if (upNext) list.push(upNext);
 
     if (item.seriesId) {
       const seriesEps = getSeriesEpisodes(item.seriesId);
       for (const ep of seriesEps) {
-        if (ep.id !== item.id && !list.some((x) => x.id === ep.id)) {
+        if (isPlayableCandidate(ep) && !list.some((x) => x.id === ep.id)) {
           list.push(ep);
         }
       }
@@ -564,13 +588,13 @@ export default function PlayerModal({
     const primaryCat = item.categories[0];
     if (primaryCat) {
       const sameCat = catalog.filter(
-        (c) => c.id !== item.id && c.categories.includes(primaryCat) && !list.some((x) => x.id === c.id)
+        (c) => isPlayableCandidate(c) && c.categories.includes(primaryCat) && !list.some((x) => x.id === c.id)
       );
       list.push(...sameCat.slice(0, 8));
     }
 
     const sameChannel = catalog.filter(
-      (c) => c.id !== item.id && c.channel === item.channel && !list.some((x) => x.id === c.id)
+      (c) => isPlayableCandidate(c) && c.channel === item.channel && !list.some((x) => x.id === c.id)
     );
     list.push(...sameChannel.slice(0, 6));
 
@@ -1199,6 +1223,7 @@ export default function PlayerModal({
             hd: 1,
             loop: 1,
             playlist: item.youtubeId,
+            origin: typeof window !== "undefined" ? window.location.origin : undefined,
           };
 
           playerRef.current = new (window as any).YT.Player(playerDivRef.current, {
@@ -1210,6 +1235,10 @@ export default function PlayerModal({
               onReady: (e: any) => {
                 if (cancelled) return;
                 try {
+                  const iframeEl = e.target?.getIframe?.();
+                  if (iframeEl) {
+                    iframeEl.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+                  }
                   e.target.setVolume(volume);
                   if (muted) e.target.mute();
                   if (resumeTime > 0) {
@@ -1235,8 +1264,8 @@ export default function PlayerModal({
                 if (cancelled) return;
                 const errCode = e?.data;
 
-                // Codes 100 (deleted/private), 101/150 (embed restricted), 2 (invalid ID)
-                if (errCode === 101 || errCode === 150 || errCode === 100 || errCode === 2) {
+                // Codes 100 (deleted/private), 101/150 (embed restricted), 2 (invalid ID), 153 (embed configuration blocked)
+                if (errCode === 101 || errCode === 150 || errCode === 100 || errCode === 2 || errCode === 153) {
                   markVideoAsUnplayable(item.youtubeId, { errorCode: errCode });
                   const errInfo = getYouTubeErrorDetails(errCode);
                   setPlaybackError(errInfo);
@@ -1317,6 +1346,30 @@ export default function PlayerModal({
     // et recréer le player YouTube en cours de lecture (ex: dès que `duration`
     // devient disponible, ou quand on bascule shuffle/repeat).
   }, [item.youtubeId, directStreamUrl, useIframeFallback, resumeTime, initRetryCount]);
+
+  // Listen to postMessage errors when fallback iframe is active so blocked videos are auto-removed instead of showing "Watch on YouTube"
+  useEffect(() => {
+    if (!useIframeFallback) return;
+    const handleIframeMessage = (event: MessageEvent) => {
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.event === "onError") {
+          const errCode = Number(data.info);
+          if (errCode === 101 || errCode === 150 || errCode === 100 || errCode === 2 || errCode === 153) {
+            markVideoAsUnplayable(item.youtubeId, { errorCode: errCode });
+            setPlaybackError(getYouTubeErrorDetails(errCode));
+            setBuffering(false);
+            setPlaying(false);
+          }
+        }
+      } catch {
+        // Ignore non-JSON postMessage
+      }
+    };
+    window.addEventListener("message", handleIframeMessage);
+    return () => window.removeEventListener("message", handleIframeMessage);
+  }, [useIframeFallback, item.youtubeId]);
 
   useEffect(() => {
     logView();
@@ -1407,7 +1460,17 @@ export default function PlayerModal({
   useEffect(() => {
     document.body.style.overflow = "hidden";
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
+      if (e.key === "Escape") {
+        handleClose();
+        return;
+      }
+      if (screenLockedRef.current) {
+        if ([" ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "c", "C", "f", "F", "m", "M", "z", "Z"].includes(e.key)) {
+          e.preventDefault();
+          revealUnlockPrompt();
+        }
+        return;
+      }
       if (e.key === " ") {
         e.preventDefault();
         togglePlay();
@@ -1463,6 +1526,7 @@ export default function PlayerModal({
   }, [playing]);
 
   const resetControlsTimer = useCallback((customDuration?: number | React.SyntheticEvent) => {
+    if (screenLockedRef.current) return;
     clearTimeout(controlsTimer.current);
     setShowControls(true);
     // Les bandes et commandes restent affichées pendant 5 secondes avant de s'estomper
@@ -1476,17 +1540,37 @@ export default function PlayerModal({
   // Les commandes et bandes restent visibles tant que le doigt est sur l'écran,
   // puis restent affichées pendant 5 secondes complètes après relâchement.
   const handleTouchStart = useCallback(() => {
+    if (screenLockedRef.current) return;
     clearTimeout(controlsTimer.current);
     setShowControls(true);
   }, []);
 
   const handleTouchEnd = useCallback(() => {
+    if (screenLockedRef.current) return;
     clearTimeout(controlsTimer.current);
     setShowControls(true);
     controlsTimer.current = setTimeout(() => {
       if (playingRef.current) setShowControls(false);
     }, 5000); // 5 secondes après avoir cessé de toucher l'écran
   }, []);
+
+  const activateScreenLock = useCallback(() => {
+    clearTimeout(unlockPromptTimer.current);
+    clearTimeout(controlsTimer.current);
+    setShowControls(false);
+    setScreenLocked(true);
+    setShowUnlockPrompt(false);
+    scrollRootRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    showCaptionNotification("Écran verrouillé — Touchez l'écran pour déverrouiller", true);
+  }, []);
+
+  const deactivateScreenLock = useCallback(() => {
+    clearTimeout(unlockPromptTimer.current);
+    setShowUnlockPrompt(false);
+    setScreenLocked(false);
+    resetControlsTimer(5000);
+    showCaptionNotification("Écran déverrouillé", false);
+  }, [resetControlsTimer]);
 
   useEffect(() => {
     // Au démarrage ou dès que la lecture commence, afficher la bande et les contrôleurs pendant 5 secondes
@@ -2054,7 +2138,7 @@ export default function PlayerModal({
     <div
       ref={scrollRootRef}
       className={`fixed inset-0 z-[100] w-screen h-[100dvh] bg-black overflow-x-hidden font-sans player-cinema-modal scroll-smooth ${
-        isAudioMode || effectiveFullscreen ? "overflow-hidden" : "overflow-y-auto"
+        isAudioMode || effectiveFullscreen || screenLocked ? "overflow-hidden" : "overflow-y-auto"
       }`}
     >
       {/* Élément audio caché pour le doublage — ne rend rien visuellement */}
@@ -2152,6 +2236,14 @@ export default function PlayerModal({
                   referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                   onLoad={() => {
+                    try {
+                      iframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: "listening" }),
+                        "*"
+                      );
+                    } catch {
+                      // ignore
+                    }
                     setTimeout(() => applyCaptionsToTarget(captionsOnRef.current), 800);
                     if (playbackRateRef.current !== 1) {
                       setTimeout(
@@ -2207,22 +2299,10 @@ export default function PlayerModal({
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
-                <a
-                  href={`https://www.youtube.com/watch?v=${item.youtubeId}${
-                    resumeTime > 0 ? `&t=${Math.floor(resumeTime)}s` : ""
-                  }`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:shadow-red-950/50"
-                >
-                  <ExternalLink size={15} />
-                  <span>Regarder sur YouTube</span>
-                </a>
-
                 {upNext && (
                   <button
                     onClick={() => handleChangeItem(upNext.id)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg cursor-pointer"
                   >
                     <span>Épisode suivant</span>
                     <ChevronRight size={15} />
@@ -2232,12 +2312,20 @@ export default function PlayerModal({
                 {playbackError.canRetry && (
                   <button
                     onClick={handleRetry}
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs font-semibold transition-colors border border-zinc-700"
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl text-xs font-semibold transition-colors border border-zinc-700 cursor-pointer"
                   >
                     <RefreshCw size={13} />
                     <span>Réessayer</span>
                   </button>
                 )}
+
+                <button
+                  onClick={handleClose}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs font-semibold transition-colors border border-zinc-700 cursor-pointer"
+                >
+                  <X size={14} />
+                  <span>Fermer</span>
+                </button>
               </div>
             </div>
           </div>
@@ -2297,14 +2385,6 @@ export default function PlayerModal({
                     </button>
                     {showMoreMenu && (
                       <div className="absolute right-0 top-full mt-2 w-52 liquid-glass-card backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl py-2 z-30">
-                        <a
-                          href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-zinc-200 hover:text-white hover:bg-white/10 transition-colors"
-                        >
-                          <ExternalLink size={14} /> Ouvrir sur YouTube
-                        </a>
                         <button
                           onClick={handleShare}
                           className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-zinc-200 hover:text-white hover:bg-white/10 transition-colors text-left"
@@ -2613,20 +2693,27 @@ export default function PlayerModal({
               <RotateCcw size={28} className="text-red-400" />
             </div>
             <h3 className="text-white font-bold text-lg mb-2">
-              Lecture restreinte par la plateforme externe
+              Vidéo non diffusable ici
             </h3>
             <p className="text-zinc-400 text-sm max-w-md mb-6">
-              Cette vidéo est protégée par les règles d'intégration de YouTube. Vous pouvez la lancer en direct sur YouTube :
+              Cette vidéo n'autorise pas la lecture intégrée et a été retirée du catalogue.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <a
-                href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-colors flex items-center gap-2"
+              {upNext && (
+                <button
+                  onClick={() => handleChangeItem(upNext.id)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Épisode suivant</span>
+                  <ChevronRight size={16} />
+                </button>
+              )}
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 cursor-pointer"
               >
-                <ExternalLink size={16} /> Ouvrir sur YouTube
-              </a>
+                <X size={16} /> Fermer
+              </button>
             </div>
           </div>
         )}
@@ -2656,24 +2743,54 @@ export default function PlayerModal({
           </div>
         )}
 
-        {/* Screen Locked Overlay (Verrouillage écran actif) */}
+        {/* Screen Locked Overlay (Transparent pour voir nettement la vidéo, bloque tout appui accidentel) */}
         {screenLocked && (
           <div
-            className="absolute inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm pointer-events-auto"
+            className="absolute inset-0 z-50 flex items-end justify-center pb-8 sm:pb-12 bg-transparent pointer-events-auto select-none cursor-pointer touch-none"
             onClick={(e) => {
+              e.stopPropagation();
+              revealUnlockPrompt();
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchMove={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+            }}
+            onWheel={(e) => {
               e.stopPropagation();
             }}
           >
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setScreenLocked(false);
-                showCaptionNotification("Écran déverrouillé", false);
+                deactivateScreenLock();
               }}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-full bg-black/85 backdrop-blur-md border border-white/20 text-white font-bold hover:bg-black transition-all shadow-2xl scale-100 active:scale-95 pointer-events-auto"
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+              }}
+              className={`flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-black/80 hover:bg-black/95 backdrop-blur-md border border-white/25 text-white text-xs sm:text-sm font-bold shadow-[0_8px_30px_rgba(0,0,0,0.8)] transition-all duration-200 active:scale-95 cursor-pointer ${
+                showUnlockPrompt
+                  ? "opacity-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 translate-y-3 pointer-events-none"
+              }`}
+              aria-hidden={!showUnlockPrompt}
+              tabIndex={showUnlockPrompt ? 0 : -1}
             >
-              <Unlock size={20} className="text-emerald-400" />
-              <span>Déverrouiller l'écran</span>
+              <Lock size={15} className="text-zinc-300" />
+              <span className="text-zinc-200">Écran verrouillé</span>
+              <span className="text-white/30">•</span>
+              <span className="flex items-center gap-1.5 text-emerald-400">
+                <Unlock size={15} />
+                <span>Déverrouiller</span>
+              </span>
             </button>
           </div>
         )}
@@ -2736,8 +2853,7 @@ export default function PlayerModal({
 
               <button
                 onClick={() => {
-                  setScreenLocked(true);
-                  showCaptionNotification("Écran verrouillé", true);
+                  activateScreenLock();
                 }}
                 className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-semibold liquid-glass hover:bg-white/15 border border-white/15 text-zinc-200 hover:text-rose-300 transition-all shadow-md active:scale-95"
                 title="Verrouiller l'écran (évite les clics involontaires)"
@@ -2981,7 +3097,15 @@ export default function PlayerModal({
         {captionToast && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-all duration-300">
             <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/90 backdrop-blur-md border border-white/15 text-white text-xs font-semibold shadow-2xl">
-              <Subtitles size={16} className={captionToast.active ? "text-emerald-400" : "text-zinc-400"} />
+              {captionToast.message.toLowerCase().includes("verrouill") ? (
+                captionToast.active ? (
+                  <Lock size={15} className="text-emerald-400" />
+                ) : (
+                  <Unlock size={15} className="text-zinc-300" />
+                )
+              ) : (
+                <Subtitles size={16} className={captionToast.active ? "text-emerald-400" : "text-zinc-400"} />
+              )}
               <span>{captionToast.message}</span>
               <span
                 className={`w-2 h-2 rounded-full ${
@@ -3392,8 +3516,7 @@ export default function PlayerModal({
                 <button
                   onClick={() => {
                     setShowMobileOptions(false);
-                    setScreenLocked(true);
-                    showCaptionNotification("Écran verrouillé", true);
+                    activateScreenLock();
                   }}
                   className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-white/5 border border-white/10 text-zinc-300 active:scale-95"
                   title="Verrouiller"
@@ -3570,16 +3693,6 @@ export default function PlayerModal({
                   <Share2 size={15} />
                   <span>Partager</span>
                 </button>
-
-                <a
-                  href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-semibold liquid-glass border border-white/15 text-zinc-300 hover:text-red-400 hover:bg-white/10 transition-all shadow-sm active:scale-95"
-                >
-                  <ExternalLink size={15} />
-                  <span>Ouvrir sur YouTube</span>
-                </a>
 
                 {upNext && (
                   <button

@@ -371,11 +371,12 @@ export function getYouTubeErrorDetails(errorCode?: number | string): PlaybackErr
   switch (codeNum) {
     case 101:
     case 150:
+    case 153:
       return {
         code: codeNum,
-        title: "Lecture intégrée restreinte",
-        message: "Le propriétaire de cette vidéo ou YouTube n'autorise pas sa diffusion dans un lecteur intégré tiers.",
-        subMessage: "Vous pouvez toujours visionner cet épisode directement et gratuitement sur YouTube en un clic.",
+        title: "Vidéo non diffusable ici",
+        message: "Le propriétaire de cette vidéo n'autorise pas sa lecture intégrée en dehors de sa plateforme d'origine.",
+        subMessage: "Elle a été automatiquement masquée du catalogue afin de ne conserver que des vidéos lisibles directement ici.",
         isRestricted: true,
         isInvalidOrDeleted: false,
         canRetry: false,
@@ -384,8 +385,8 @@ export function getYouTubeErrorDetails(errorCode?: number | string): PlaybackErr
       return {
         code: codeNum,
         title: "Vidéo introuvable ou retirée",
-        message: "Cette vidéo a été supprimée ou passée en mode privé sur YouTube par son créateur.",
-        subMessage: "L'épisode n'est plus disponible publiquement. Vous pouvez passer à l'épisode suivant.",
+        message: "Cette vidéo a été supprimée ou passée en mode privé par son créateur.",
+        subMessage: "Elle a été automatiquement masquée du catalogue. Vous pouvez passer à l'épisode suivant.",
         isRestricted: false,
         isInvalidOrDeleted: true,
         canRetry: false,
@@ -395,7 +396,7 @@ export function getYouTubeErrorDetails(errorCode?: number | string): PlaybackErr
         code: codeNum,
         title: "Identifiant de vidéo invalide",
         message: "Le lien vers ce contenu contient un paramètre de lecture non reconnu ou mal formaté.",
-        subMessage: "Vérifiez votre connexion ou passez au contenu suivant de la liste.",
+        subMessage: "Elle a été automatiquement masquée du catalogue. Vous pouvez passer au contenu suivant.",
         isRestricted: false,
         isInvalidOrDeleted: true,
         canRetry: false,
@@ -405,7 +406,7 @@ export function getYouTubeErrorDetails(errorCode?: number | string): PlaybackErr
         code: codeNum,
         title: "Erreur de lecteur HTML5",
         message: "Un problème temporaire est survenu lors du décodage du flux vidéo dans votre navigateur.",
-        subMessage: "Cliquez sur 'Réessayer' ou basculez vers le mode secours iframe.",
+        subMessage: "Cliquez sur 'Réessayer' ou passez à l'épisode suivant.",
         isRestricted: false,
         isInvalidOrDeleted: false,
         canRetry: true,
@@ -415,7 +416,7 @@ export function getYouTubeErrorDetails(errorCode?: number | string): PlaybackErr
         code: codeNum,
         title: "Vidéo indisponible pour le moment",
         message: "La lecture de cette vidéo n'a pas pu démarrer correctement (délai dépassé ou restriction).",
-        subMessage: "Vous pouvez retenter la lecture ou ouvrir la vidéo directement sur YouTube.",
+        subMessage: "Vous pouvez retenter la lecture ou passer à l'épisode suivant.",
         isRestricted: false,
         isInvalidOrDeleted: false,
         canRetry: true,
@@ -437,6 +438,9 @@ export function markVideoAsUnplayable(youtubeId: string, details?: { reason?: st
       reason: details?.reason || "Video unavailable in embedded player",
     };
     localStorage.setItem(UNPLAYABLE_STORAGE_KEY, JSON.stringify(map));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("sirat:unplayable-video", { detail: { youtubeId } }));
+    }
   } catch {
     // Ignore storage issues
   }
@@ -477,6 +481,9 @@ export function clearUnplayableVideo(youtubeId: string) {
     if (map[youtubeId]) {
       delete map[youtubeId];
       localStorage.setItem(UNPLAYABLE_STORAGE_KEY, JSON.stringify(map));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("sirat:unplayable-video", { detail: { youtubeId } }));
+      }
     }
   } catch {
     // Ignore

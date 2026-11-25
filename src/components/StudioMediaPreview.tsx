@@ -254,10 +254,13 @@ export default function StudioMediaPreview({
             />
           ) : validYtId ? (
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${validYtId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1`}
+              src={`https://www.youtube-nocookie.com/embed/${validYtId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&origin=${encodeURIComponent(
+                typeof window !== "undefined" ? window.location.origin : ""
+              )}`}
               title={item.title || "Aperçu YouTube"}
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
               onLoad={() => setFrameLoaded(true)}
               onError={() => setMediaError(true)}

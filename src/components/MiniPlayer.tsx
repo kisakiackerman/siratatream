@@ -219,11 +219,16 @@ export default function MiniPlayer({
               hd: 1,
               loop: 1,
               playlist: item.youtubeId,
+              origin: typeof window !== "undefined" ? window.location.origin : undefined,
             },
             events: {
               onReady: (e: any) => {
                 if (cancelled) return;
                 try {
+                  const iframeEl = e.target?.getIframe?.();
+                  if (iframeEl) {
+                    iframeEl.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+                  }
                   if (initialTime > 0) {
                     e.target.seekTo(initialTime, true);
                   }
@@ -238,8 +243,11 @@ export default function MiniPlayer({
               onError: (e: any) => {
                 if (cancelled) return;
                 const errCode = e?.data;
-                if (errCode === 101 || errCode === 150 || errCode === 100 || errCode === 2) {
+                if (errCode === 101 || errCode === 150 || errCode === 100 || errCode === 2 || errCode === 153) {
                   markVideoAsUnplayable(item.youtubeId, { errorCode: errCode });
+                  setIsBuffering(false);
+                  onClose();
+                  return;
                 }
                 setUseIframe(true);
                 setIsBuffering(false);
@@ -535,7 +543,9 @@ export default function MiniPlayer({
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(
               initialTime
-            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&loop=1&playlist=${item.youtubeId}`}
+            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+              typeof window !== "undefined" ? window.location.origin : ""
+            )}`}
             title={item.title}
             className={`w-full h-full border-0 scale-[1.03] ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

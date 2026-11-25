@@ -12,6 +12,7 @@ import { deduplicateCatalog } from "@/lib/catalogDeduplication";
 import { diversifyCatalogByChannel } from "@/lib/catalogDiversity";
 import { db, doc, setDoc, getDoc, collection, onSnapshot, getDocs, deleteDoc } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { isKnownUnplayableVideo } from "@/lib/youtubeApi";
 
 const STORAGE_CUSTOM_KEY = "nexstream_custom_content_v2";
 const STORAGE_ANNOUNCEMENT_KEY = "nexstream_announcement_v2";
@@ -181,6 +182,13 @@ export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [unplayableTick, setUnplayableTick] = useState(0);
+
+  useEffect(() => {
+    const handleUnplayableUpdate = () => setUnplayableTick((t) => t + 1);
+    window.addEventListener("sirat:unplayable-video", handleUnplayableUpdate);
+    return () => window.removeEventListener("sirat:unplayable-video", handleUnplayableUpdate);
+  }, []);
 
   // Sync from Firestore if available
   useEffect(() => {
@@ -314,20 +322,23 @@ export function CreatorCatalogProvider({ children }: { children: ReactNode }) {
     return all;
   })();
 
-  const filteredCatalog = allCatalogIncludingDeleted.filter((item) => {
-    if (deletedVideoIds.includes(item.id)) return false;
-    // Dérogation officielle accordée pour Les Savants de la Sunnah (extraits courts, sagesses et fatwas des savants)
-    if (isChannelExemptedFrom10MinRule(item.channel, item.id)) {
+  const filteredCatalog = useMemo(() => {
+    return allCatalogIncludingDeleted.filter((item) => {
+      if (deletedVideoIds.includes(item.id)) return false;
+      if (item.youtubeId && isKnownUnplayableVideo(item.youtubeId)) return false;
+      // Dérogation officielle accordée pour Les Savants de la Sunnah (extraits courts, sagesses et fatwas des savants)
+      if (isChannelExemptedFrom10MinRule(item.channel, item.id)) {
+        return true;
+      }
+      const sec = parseDurationToSeconds(item.duration);
+      if (sec > 0 && sec < 600) return false;
+      const titleLower = item.title.toLowerCase();
+      if (titleLower.includes("bande-annonce") || titleLower.includes("bande annonce") || titleLower.includes("teaser")) {
+        return false;
+      }
       return true;
-    }
-    const sec = parseDurationToSeconds(item.duration);
-    if (sec > 0 && sec < 600) return false;
-    const titleLower = item.title.toLowerCase();
-    if (titleLower.includes("bande-annonce") || titleLower.includes("bande annonce") || titleLower.includes("teaser")) {
-      return false;
-    }
-    return true;
-  });
+    });
+  }, [allCatalogIncludingDeleted, deletedVideoIds, unplayableTick]);
 
   const mergedCatalog = useMemo(() => {
     const deduped = deduplicateCatalog(filteredCatalog, "Catalogue Global / Créateur");
