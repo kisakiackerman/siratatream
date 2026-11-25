@@ -729,7 +729,7 @@ export default function VideoSuggestionModal({
                     ? cleanUrl.split("youtu.be/")[1]?.split("?")[0]
                     : "";
                   const safeSrc = isValidYouTubeId(rawYtId)
-                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&playlist=${rawYtId}&origin=${encodeURIComponent(
+                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&vq=highres&hd=1&loop=1&playlist=${rawYtId}&origin=${encodeURIComponent(
                         typeof window !== "undefined" ? window.location.origin : ""
                       )}`
                     : cleanUrl;

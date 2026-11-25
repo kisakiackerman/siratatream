@@ -15,23 +15,25 @@ export interface NetworkSpeedSample {
   suggestedQuality: string;
 }
 
-// Échelle des résolutions YouTube en fonction du débit descendant
-// - excellent (>= 12 Mbps / Fibre / 5G) : 4K (hd2160/highres) ou 1440p (hd1440) ou 1080p (hd1080)
-// - fast (5 - 12 Mbps / 4G+ / Bon Wi-Fi) : 1080p (hd1080)
-// - medium (2.5 - 5 Mbps / 4G standard / Wi-Fi moyen) : 720p (hd720)
-// - low (1 - 2.5 Mbps / 3G) : 480p (large)
-// - very_low (< 1 Mbps / 2G) : 360p (medium) ou 240p (small)
+export const ULTRA_HD_QUALITY_ORDER = [
+  "hd4320",
+  "highres",
+  "hd2160",
+  "hd1440",
+  "hd1080",
+  "hd720",
+] as const;
+
+// Échelle des résolutions YouTube en mode Ultra-HD automatique :
+// Toujours privilégier la résolution maximale disponible (8K hd4320 / highres, 4K hd2160, 2K hd1440, 1080p)
 export function getQualityForDownlink(downlinkMbps: number, effectiveType: string, rttMs: number): {
   tier: ConnectionSpeedTier;
   quality: string;
 } {
-  // Très haut débit (>= 15 Mbps, Fibre, 5G) : 4K si disponible
-  if (downlinkMbps >= 15.0 && (effectiveType === "4g" || effectiveType === "5g")) {
-    return { tier: "excellent", quality: "highres" };
-  }
-
-  // Par défaut et pour toute connexion : Forcer Full HD minimum 1080p
-  return { tier: "fast", quality: "hd1080" };
+  void downlinkMbps;
+  void effectiveType;
+  void rttMs;
+  return { tier: "excellent", quality: "highres" };
 }
 
 /**
@@ -40,11 +42,11 @@ export function getQualityForDownlink(downlinkMbps: number, effectiveType: strin
 export function detectNetworkSpeed(): NetworkSpeedSample {
   if (typeof window === "undefined") {
     return {
-      tier: "fast",
-      downlinkMbps: 10,
+      tier: "excellent",
+      downlinkMbps: 100,
       effectiveType: "4g",
-      rttMs: 50,
-      suggestedQuality: "hd1080",
+      rttMs: 20,
+      suggestedQuality: "highres",
     };
   }
 
@@ -53,9 +55,9 @@ export function detectNetworkSpeed(): NetworkSpeedSample {
     const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
 
     if (conn) {
-      const downlink = typeof conn.downlink === "number" && conn.downlink > 0 ? conn.downlink : 10;
+      const downlink = typeof conn.downlink === "number" && conn.downlink > 0 ? conn.downlink : 100;
       const effectiveType = conn.effectiveType || (conn.type === "cellular" ? "3g" : "4g");
-      const rtt = typeof conn.rtt === "number" ? conn.rtt : 50;
+      const rtt = typeof conn.rtt === "number" ? conn.rtt : 20;
 
       const { tier, quality } = getQualityForDownlink(downlink, effectiveType, rtt);
       return {
@@ -70,20 +72,19 @@ export function detectNetworkSpeed(): NetworkSpeedSample {
     // ignore
   }
 
-  // Fallback si l'API Network Information n'est pas supportée (ex: Safari) :
-  // Détection par défaut haute qualité rapide (1080p)
+  // Fallback automatique en qualité maximale (8K / 4K / highres)
   return {
-    tier: "fast",
-    downlinkMbps: 10,
+    tier: "excellent",
+    downlinkMbps: 100,
     effectiveType: "4g",
-    rttMs: 50,
-    suggestedQuality: "hd1080",
+    rttMs: 20,
+    suggestedQuality: "highres",
   };
 }
 
 /**
- * Choisit la meilleure qualité disponible sur le lecteur YouTube
- * qui correspond à la puissance de la connexion mesurée.
+ * Choisit automatiquement la résolution maximale disponible sur le lecteur YouTube
+ * (8K 4320p -> highres -> 4K 2160p -> 2K 1440p -> 1080p).
  */
 export function selectAdaptiveQuality(
   player: any,
@@ -95,39 +96,52 @@ export function selectAdaptiveQuality(
       : player?.getAvailableQualityLevels?.() || [];
 
   if (!levels || levels.length === 0) {
-    return "hd1080";
+    return "highres";
   }
 
-  // Forcer systématiquement au minimum Full HD (1080p ou supérieur : 1440p, 4K)
-  if (levels.includes("highres")) return "highres";
-  if (levels.includes("hd2160")) return "hd2160";
-  if (levels.includes("hd1440")) return "hd1440";
-  if (levels.includes("hd1080")) return "hd1080";
+  for (const level of ULTRA_HD_QUALITY_ORDER) {
+    if (levels.includes(level)) {
+      return level;
+    }
+  }
 
-  // Si la vidéo source ne dispose pas de 1080p sur YouTube, sélectionner la meilleure disponible
   return levels[0];
 }
 
 /**
- * Applique silencieusement et dynamiquement la qualité adaptative sur un lecteur YouTube
+ * Applique silencieusement et automatiquement la résolution maximale (8K/4K+) sur un lecteur YouTube
  */
 export function applyAdaptiveConnectionQuality(
   player: any,
   onQualityResolved?: (quality: string) => void
 ): string {
-  if (!player) return "hd1080";
+  if (!player) return "highres";
 
   try {
     const chosen = selectAdaptiveQuality(player);
     player.setPlaybackQuality?.(chosen);
     player.setSuggestedQuality?.(chosen);
+    player.setPlaybackQualityRange?.(chosen, "highres");
+
+    const iframe = player.getIframe?.();
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.postMessage(
+        JSON.stringify({ event: "command", func: "setPlaybackQuality", args: [chosen] }),
+        "*"
+      );
+      iframe.contentWindow.postMessage(
+        JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: [chosen, "highres"] }),
+        "*"
+      );
+    }
+
     if (onQualityResolved) {
       onQualityResolved(chosen);
     }
     return chosen;
   } catch (err) {
     console.warn("Adaptive quality application error:", err);
-    return "hd1080";
+    return "highres";
   }
 }
 

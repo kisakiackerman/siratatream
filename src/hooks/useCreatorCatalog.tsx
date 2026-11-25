@@ -90,7 +90,7 @@ interface CreatorCatalogContextValue {
 const CreatorCatalogContext = createContext<CreatorCatalogContextValue | null>(null);
 
 const DEFAULT_CHANNELS: CustomChannelInfo[] = [
-  { name: "NARRO DIN", description: "Voyages immersifs, récits des prophètes et miracles coraniques", avatar: "https://i.ytimg.com/vi/GBxsINL9kWw/hqdefault.jpg" },
+  { name: "NARRO DIN", description: "Voyages immersifs, récits des prophètes et miracles coraniques", avatar: "https://i.ytimg.com/vi/GBxsINL9kWw/maxresdefault.jpg" },
   { name: "NARRO", description: "Récits immersifs & biographies prophétiques authentiques", avatar: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=100" },
   { name: "Yacine", description: "Histoires captivantes et leçons morales de la Sîra", avatar: "https://images.unsplash.com/photo-1564769625905-50e93615e769?w=100" },
   { name: "Towards Eternity", description: "Méditations spirituelles et quête du sens profond", avatar: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=100" },

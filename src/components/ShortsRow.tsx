@@ -97,6 +97,18 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
                 alt={item.title}
                 className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300 filter brightness-90 group-hover/card:brightness-100"
                 loading="lazy"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth <= 120 && img.naturalHeight <= 90 && !img.src.includes("hqdefault") && item.youtubeId) {
+                    img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                  }
+                }}
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.src.includes("hqdefault") && item.youtubeId) {
+                    img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                  }
+                }}
               />
 
               {/* Gradient Overlay */}

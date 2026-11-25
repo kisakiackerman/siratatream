@@ -42,7 +42,7 @@ export default function StudioMediaPreview({
     item.heroImage ||
     item.thumbnail ||
     item.image ||
-    (validYtId ? `https://i.ytimg.com/vi/${validYtId}/hqdefault.jpg` : fallbackBanner);
+    (validYtId ? `https://i.ytimg.com/vi/${validYtId}/maxresdefault.jpg` : fallbackBanner);
 
   const [posterSrc, setPosterSrc] = useState(initialPoster);
 
@@ -54,7 +54,7 @@ export default function StudioMediaPreview({
       item.heroImage ||
         item.thumbnail ||
         item.image ||
-        (validYtId ? `https://i.ytimg.com/vi/${validYtId}/hqdefault.jpg` : fallbackBanner)
+        (validYtId ? `https://i.ytimg.com/vi/${validYtId}/maxresdefault.jpg` : fallbackBanner)
     );
   }, [item.id, item.youtubeId, item.videoUrl, item.heroImage, item.thumbnail, item.image, autoPlay, validYtId, fallbackBanner]);
 
@@ -254,7 +254,7 @@ export default function StudioMediaPreview({
             />
           ) : validYtId ? (
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${validYtId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&origin=${encodeURIComponent(
+              src={`https://www.youtube-nocookie.com/embed/${validYtId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&vq=highres&hd=1&origin=${encodeURIComponent(
                 typeof window !== "undefined" ? window.location.origin : ""
               )}`}
               title={item.title || "Aperçu YouTube"}

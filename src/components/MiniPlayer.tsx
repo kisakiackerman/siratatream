@@ -215,7 +215,7 @@ export default function MiniPlayer({
               iv_load_policy: 3,
               disablekb: 1,
               fs: 0,
-              vq: "hd1080",
+              vq: "highres",
               hd: 1,
               loop: 1,
               playlist: item.youtubeId,
@@ -266,6 +266,10 @@ export default function MiniPlayer({
                   // Buffering
                   setIsBuffering(true);
                 }
+              },
+              onPlaybackQualityChange: (e: any) => {
+                if (cancelled) return;
+                applyAdaptiveConnectionQuality(playerRef.current || e.target);
               },
             },
           });
@@ -543,7 +547,7 @@ export default function MiniPlayer({
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(
               initialTime
-            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&vq=highres&hd=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
               typeof window !== "undefined" ? window.location.origin : ""
             )}`}
             title={item.title}

@@ -2,6 +2,57 @@
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   RENDU ULTRA-HAUTE RÉSOLUTION AUTOMATIQUE (4K / 5K / 8K+)
+   Mise à l'échelle fluide automatique, netteté vectorielle & typographique
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  font-kerning: normal;
+}
+
+svg {
+  shape-rendering: geometricPrecision;
+}
+
+img,
+video,
+iframe {
+  image-rendering: high-quality;
+}
+
+/* Mise à l'échelle automatique transparente sur écrans 2K / 4K / 5K / 8K+ */
+@media (min-width: 2400px) {
+  html {
+    font-size: clamp(18px, 0.78vw, 24px);
+  }
+  .max-w-screen-2xl {
+    max-width: min(94vw, 108rem) !important;
+  }
+}
+
+@media (min-width: 3400px) {
+  html {
+    font-size: clamp(24px, 0.78vw, 34px);
+  }
+  .max-w-screen-2xl {
+    max-width: min(94vw, 112rem) !important;
+  }
+}
+
+@media (min-width: 6000px) {
+  html {
+    font-size: clamp(42px, 0.78vw, 64px);
+  }
+  .max-w-screen-2xl {
+    max-width: min(94vw, 118rem) !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    LIQUID GLASS (Verre Liquide Teinté Émeraude)
    Translucent emerald-tinted surfaces, refractive specular reflections in emerald-200
    ═══════════════════════════════════════════════════════════════════════════ */

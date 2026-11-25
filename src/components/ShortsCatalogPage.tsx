@@ -464,6 +464,18 @@ export default function ShortsCatalogPage({
                         alt={item.title}
                         loading="lazy"
                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-95 group-hover:brightness-105"
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          if (img.naturalWidth <= 120 && img.naturalHeight <= 90 && !img.src.includes("hqdefault") && item.youtubeId) {
+                            img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                          }
+                        }}
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (!img.src.includes("hqdefault") && item.youtubeId) {
+                            img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                          }
+                        }}
                       />
 
                       {/* Gradient overlay for readability */}

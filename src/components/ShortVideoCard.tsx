@@ -280,7 +280,7 @@ export const ShortVideoCard = memo(function ShortVideoCard({
             <iframe
               ref={iframeRef}
               onLoad={handleIframeLoad}
-              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=${item.youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}&origin=${encodeURIComponent(
+              src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?enablejsapi=1&autoplay=1&mute=1&loop=1&playlist=${item.youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}&hd=1&origin=${encodeURIComponent(
                 typeof window !== "undefined" ? window.location.origin : ""
               )}`}
               title={item.title}
@@ -299,6 +299,18 @@ export const ShortVideoCard = memo(function ShortVideoCard({
                 src={item.image}
                 alt={item.title}
                 className="w-full h-full object-cover filter brightness-90"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth <= 120 && img.naturalHeight <= 90 && !img.src.includes("hqdefault") && item.youtubeId) {
+                    img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                  }
+                }}
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (!img.src.includes("hqdefault") && item.youtubeId) {
+                    img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                  }
+                }}
               />
             </div>
           </>
@@ -309,6 +321,18 @@ export const ShortVideoCard = memo(function ShortVideoCard({
               alt={item.title}
               className="w-full h-full object-cover filter brightness-75"
               loading="lazy"
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                if (img.naturalWidth <= 120 && img.naturalHeight <= 90 && !img.src.includes("hqdefault") && item.youtubeId) {
+                  img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                }
+              }}
+              onError={(e) => {
+                const img = e.currentTarget;
+                if (!img.src.includes("hqdefault") && item.youtubeId) {
+                  img.src = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+                }
+              }}
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
               <div className="w-16 h-16 rounded-full bg-emerald-500/30 backdrop-blur-md flex items-center justify-center border border-emerald-400/40 text-emerald-300">

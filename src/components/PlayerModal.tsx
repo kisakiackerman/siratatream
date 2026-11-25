@@ -185,7 +185,6 @@ export default function PlayerModal({
   const [resumeToast, setResumeToast] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(() => getStoredPlaybackSpeed());
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [availableQualities, setAvailableQualities] = useState<string[]>([]);
   const [directStreamUrl, setDirectStreamUrl] = useState<string | null>(null);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
   const [isAudioMode, setIsAudioMode] = useState(Boolean(initialAudioMode));
@@ -866,19 +865,16 @@ export default function PlayerModal({
     [availableAudioTracks, muted, volume, playing]
   );
 
-  // Forçage absolu de la qualité vidéo en Full HD minimum (1080p ou supérieur selon la source)
+  // Forçage automatique de la résolution maximale disponible (8K 4320p / highres / 4K 2160p / 2K / 1080p)
   const applyForcedHDQuality = useCallback((player: any) => {
     if (!player) return;
     try {
       const levels: string[] = player.getAvailableQualityLevels?.() || [];
+      let chosen = "highres";
       if (levels.length > 0) {
-        setAvailableQualities(levels);
-      }
-
-      // Priorité stricte au Full HD minimum : 4K / 2K si supporté par la vidéo, sinon 1080p
-      let chosen = "hd1080";
-      if (levels.length > 0) {
-        if (levels.includes("highres")) {
+        if (levels.includes("hd4320")) {
+          chosen = "hd4320";
+        } else if (levels.includes("highres")) {
           chosen = "highres";
         } else if (levels.includes("hd2160")) {
           chosen = "hd2160";
@@ -893,8 +889,8 @@ export default function PlayerModal({
 
       player.setPlaybackQuality?.(chosen);
       player.setSuggestedQuality?.(chosen);
+      player.setPlaybackQualityRange?.(chosen, "highres");
 
-      // Envoi direct des commandes au conteneur Iframe YouTube pour maximiser la prise en compte
       const iframe = player.getIframe?.() || containerRef.current?.querySelector("iframe");
       if (iframe && iframe.contentWindow) {
         iframe.contentWindow.postMessage(
@@ -1219,7 +1215,7 @@ export default function PlayerModal({
             fs: 0,
             cc_load_policy: captionsOnRef.current ? 1 : 0,
             cc_lang_pref: "fr",
-            vq: "hd1080",
+            vq: "highres",
             hd: 1,
             loop: 1,
             playlist: item.youtubeId,
@@ -1300,6 +1296,21 @@ export default function PlayerModal({
                 if (state === "ended") {
                   saveCurrentProgressRef.current();
                   triggerContinuousAutoplayRef.current();
+                }
+              },
+              onPlaybackQualityChange: (e: any) => {
+                if (cancelled) return;
+                try {
+                  const target = playerRef.current || e.target;
+                  const levels: string[] = target?.getAvailableQualityLevels?.() || [];
+                  const topTier =
+                    levels.find((l) => ["hd4320", "highres", "hd2160", "hd1440", "hd1080"].includes(l)) ||
+                    levels[0];
+                  if (topTier && e?.data && e.data !== topTier) {
+                    applyForcedHDQuality(target);
+                  }
+                } catch {
+                  // ignore
                 }
               },
             },
@@ -2085,13 +2096,6 @@ export default function PlayerModal({
   };
 
   const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
-  const qualityOptions: { key: string; label: string }[] = [
-    { key: "auto_max", label: "Max Disponible (4K/FHD)" },
-    { key: "hd2160", label: "4K Ultra HD (2160p)" },
-    { key: "hd1440", label: "2K Quad HD (1440p)" },
-    { key: "hd1080", label: "Full HD (1080p)" },
-    { key: "hd720", label: "Haute Définition (720p)" },
-  ];
 
   const isCustomOrDirect = Boolean(customEmbedUrl || directStreamUrl);
   const videoCoverStyle: React.CSSProperties = (() => {
@@ -2227,7 +2231,7 @@ export default function PlayerModal({
                 <iframe
                   ref={iframeRef}
                   key={item.youtubeId}
-                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&cc_load_policy=${captionsOn ? 1 : 0}&cc_lang_pref=fr&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&vq=highres&hd=1&cc_load_policy=${captionsOn ? 1 : 0}&cc_lang_pref=fr&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
                     typeof window !== "undefined" ? window.location.origin : ""
                   )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
                   title={item.title}
@@ -2239,6 +2243,14 @@ export default function PlayerModal({
                     try {
                       iframeRef.current?.contentWindow?.postMessage(
                         JSON.stringify({ event: "listening" }),
+                        "*"
+                      );
+                      iframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: "command", func: "setPlaybackQuality", args: ["highres"] }),
+                        "*"
+                      );
+                      iframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: ["hd2160", "highres"] }),
                         "*"
                       );
                     } catch {

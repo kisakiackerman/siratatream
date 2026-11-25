@@ -146,7 +146,7 @@ function HeroSlide({ item, direction }: { item: ContentItem; direction: number }
 function HeroAmbientBackground({ item, ambientGlow }: { item: ContentItem; ambientGlow: string }) {
   const ambientSrc = useMemo(() => {
     if (item.heroImage && item.heroImage.trim().length > 0) return item.heroImage;
-    if (item.youtubeId) return `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+    if (item.youtubeId) return `https://i.ytimg.com/vi/${item.youtubeId}/maxresdefault.jpg`;
     if (item.image && item.image.trim().length > 0) return item.image;
     return getThematicFallbackBanner(item);
   }, [item]);
