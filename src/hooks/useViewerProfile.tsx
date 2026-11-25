@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from "react";
 import { supabase, isValidUuid, toSupabaseUuid, type ViewerProfile } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { getAccountStartingName } from "@/lib/accountName";
 
-const STORAGE_KEY = "nexstream_active_profile";
+const LEGACY_STORAGE_KEY = "nexstream_active_profile";
+const ACTIVE_PROFILE_PREFIX = "nexstream_active_profile_";
 const LOCAL_PROFILES_PREFIX = "nexstream_local_profiles_";
+
+const getProfileStorageKey = (userId: string) => `${ACTIVE_PROFILE_PREFIX}${userId}`;
 
 export const AVATAR_COLORS = [
   "#ef4444",
@@ -31,7 +35,7 @@ type ViewerProfileContextValue = {
     pinCode?: string,
     avatarIcon?: string,
     favoriteCategories?: string[]
-  ) => Promise<{ error: string | null }>;
+  ) => Promise<{ error: string | null; profile?: ViewerProfile }>;
   updateProfile: (
     id: string,
     updates: {
@@ -51,58 +55,86 @@ type ViewerProfileContextValue = {
 
 const ViewerProfileContext = createContext<ViewerProfileContextValue | null>(null);
 
-function getDefaultGuestProfile(userId: string): ViewerProfile {
-  return {
-    id: "guest-profile-principal",
-    account_id: userId,
-    name: "Invité",
-    avatar_color: "#ef4444",
-    is_kid: false,
-    pin_code: null,
-    avatar_icon: "film",
-    favorite_categories: null,
-    prayer_location: null,
-    created_at: new Date().toISOString(),
-  };
-}
-
 export function ViewerProfileProvider({ children }: { children: ReactNode }) {
-  const { user, isGuest } = useAuth();
+  const { user, firebaseUser, userSpace, isGuest, isInvitationMode } = useAuth();
   const [profiles, setProfiles] = useState<ViewerProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<ViewerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const getUserId = useCallback(() => {
-    if (!user) return "";
-    return (user as any).uid || (user as any).id || "guest-user";
-  }, [user]);
+  const currentUserId = user ? ((user as any).uid || (user as any).id || "") : "";
 
-  const getLocalProfiles = useCallback((userId: string): ViewerProfile[] => {
-    try {
-      const raw = localStorage.getItem(LOCAL_PROFILES_PREFIX + userId);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  const isEphemeralGuest = useCallback(
+    (uId: string) => isGuest || isInvitationMode || uId.startsWith("guest-"),
+    [isGuest, isInvitationMode]
+  );
+
+  const writeStoredActiveProfileId = useCallback(
+    (uId: string, profileId: string) => {
+      if (!uId) return;
+      try {
+        if (isEphemeralGuest(uId)) {
+          sessionStorage.setItem(getProfileStorageKey(uId), profileId);
+        } else {
+          localStorage.setItem(getProfileStorageKey(uId), profileId);
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-    const def = [getDefaultGuestProfile(userId)];
-    localStorage.setItem(LOCAL_PROFILES_PREFIX + userId, JSON.stringify(def));
-    return def;
-  }, []);
+    },
+    [isEphemeralGuest]
+  );
 
-  const saveLocalProfiles = useCallback((userId: string, profs: ViewerProfile[]) => {
-    try {
-      localStorage.setItem(LOCAL_PROFILES_PREFIX + userId, JSON.stringify(profs));
-    } catch {
-      // ignore
-    }
-  }, []);
+  const removeStoredActiveProfileId = useCallback(
+    (uId: string) => {
+      if (!uId) return;
+      try {
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+        localStorage.removeItem(getProfileStorageKey(uId));
+        sessionStorage.removeItem(getProfileStorageKey(uId));
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
 
-  const fetchProfiles = useCallback(async () => {
-    if (!user) {
+  const getLocalProfiles = useCallback(
+    (userId: string): ViewerProfile[] => {
+      const storage = isEphemeralGuest(userId) ? sessionStorage : localStorage;
+      const sbId = toSupabaseUuid(userId);
+      try {
+        const raw = storage.getItem(LOCAL_PROFILES_PREFIX + userId);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(
+              (p) => p && (p.account_id === userId || p.account_id === sbId)
+            );
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return [];
+    },
+    [isEphemeralGuest]
+  );
+
+  const saveLocalProfiles = useCallback(
+    (userId: string, profs: ViewerProfile[]) => {
+      const storage = isEphemeralGuest(userId) ? sessionStorage : localStorage;
+      try {
+        storage.setItem(LOCAL_PROFILES_PREFIX + userId, JSON.stringify(profs));
+      } catch {
+        // ignore
+      }
+    },
+    [isEphemeralGuest]
+  );
+
+  const fetchProfiles = useCallback(async (resetActive = true) => {
+    if (!user || !currentUserId) {
       setProfiles([]);
       setActiveProfile(null);
       setLoading(false);
@@ -110,16 +142,20 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true);
-    const uId = (user as any).uid || (user as any).id || "guest-user";
-    const userDisplayName = user.displayName || user.email?.split("@")[0] || "Principal";
+    setProfiles([]);
+    if (resetActive) {
+      removeStoredActiveProfileId(currentUserId);
+      setActiveProfile(null);
+    }
+    const uId = currentUserId;
 
-    // If guest mode, load directly from local storage
-    if (isGuest || uId.startsWith("guest-")) {
+    // Guest / invitation mode: load local session profiles (empty on fresh invitation so user sees personalized creation step)
+    if (isEphemeralGuest(uId)) {
       const local = getLocalProfiles(uId);
       setProfiles(local);
-      const storedId = localStorage.getItem(STORAGE_KEY);
-      const matched = storedId ? local.find((p) => p.id === storedId) : null;
-      setActiveProfile(matched || local[0] || null);
+      if (resetActive) {
+        setActiveProfile(null);
+      }
       setLoading(false);
       return;
     }
@@ -134,7 +170,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
       ]);
     };
 
-    // Try fetching from Supabase with timeout guard
+    // Try fetching from Supabase with timeout guard — never auto-insert or auto-select a default profile
     const sbAccountId = toSupabaseUuid(uId);
     try {
       const { data, error: sbError } = await withTimeout(
@@ -146,86 +182,68 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         2500
       );
 
+      const local = getLocalProfiles(uId);
       if (sbError || !data) {
-        const local = getLocalProfiles(uId);
         setProfiles(local);
-        const storedId = localStorage.getItem(STORAGE_KEY);
-        const matched = storedId ? local.find((p) => p.id === storedId) : null;
-        setActiveProfile(matched || local[0] || null);
-      } else if (data.length === 0) {
-        // Create an initial default profile
-        const newProf = getDefaultGuestProfile(uId);
-        newProf.name = userDisplayName;
-        try {
-          const { data: created } = await withTimeout(
-            supabase
-              .from("viewer_profiles")
-              .insert({
-                account_id: sbAccountId,
-                name: newProf.name,
-                avatar_color: newProf.avatar_color,
-                is_kid: false,
-              })
-              .select()
-              .maybeSingle(),
-            2000
-          );
-
-          const profToUse = (created as ViewerProfile) || newProf;
-          setProfiles([profToUse]);
-          saveLocalProfiles(uId, [profToUse]);
-          localStorage.setItem(STORAGE_KEY, profToUse.id);
-          setActiveProfile(profToUse);
-        } catch {
-          setProfiles([newProf]);
-          saveLocalProfiles(uId, [newProf]);
-          localStorage.setItem(STORAGE_KEY, newProf.id);
-          setActiveProfile(newProf);
-        }
       } else {
-        setProfiles(data);
-        saveLocalProfiles(uId, data);
-        const storedId = localStorage.getItem(STORAGE_KEY);
-        const matched = storedId ? data.find((p) => p.id === storedId) : null;
-        const selected = matched || data[0] || null;
-        if (selected) {
-          localStorage.setItem(STORAGE_KEY, selected.id);
+        const ownProfiles = (data as ViewerProfile[]).filter((p) => p.account_id === sbAccountId);
+        const merged = [...ownProfiles];
+        for (const lp of local) {
+          if (!merged.some((sp) => sp.id === lp.id)) {
+            merged.push(lp);
+          }
         }
-        setActiveProfile(selected);
+        setProfiles(merged);
+        saveLocalProfiles(uId, merged);
       }
     } catch {
       const local = getLocalProfiles(uId);
       setProfiles(local);
-      const storedId = localStorage.getItem(STORAGE_KEY);
-      const matched = storedId ? local.find((p) => p.id === storedId) : null;
-      const selected = matched || local[0] || null;
-      if (selected) {
-        localStorage.setItem(STORAGE_KEY, selected.id);
-      }
-      setActiveProfile(selected);
     } finally {
+      if (resetActive) {
+        setActiveProfile(null);
+      }
       setLoading(false);
     }
-  }, [user ? (user as any).uid || (user as any).id : null, isGuest, getLocalProfiles]);
+  }, [
+    user,
+    currentUserId,
+    isEphemeralGuest,
+    getLocalProfiles,
+    removeStoredActiveProfileId,
+    saveLocalProfiles,
+  ]);
 
   useEffect(() => {
-    fetchProfiles();
+    void fetchProfiles(true);
   }, [fetchProfiles]);
 
-  const selectProfile = useCallback((profile: ViewerProfile) => {
-    localStorage.setItem(STORAGE_KEY, profile.id);
-    setActiveProfile(profile);
-  }, []);
+  const selectProfile = useCallback(
+    (profile: ViewerProfile) => {
+      if (!currentUserId) return;
+      writeStoredActiveProfileId(currentUserId, profile.id);
+      setActiveProfile(profile);
+    },
+    [currentUserId, writeStoredActiveProfileId]
+  );
 
   const clearActiveProfile = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    if (currentUserId) {
+      removeStoredActiveProfileId(currentUserId);
+    }
     setActiveProfile(null);
-  }, []);
+  }, [currentUserId, removeStoredActiveProfileId]);
 
   const switchProfile = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    if (currentUserId) {
+      removeStoredActiveProfileId(currentUserId);
+      const local = getLocalProfiles(currentUserId);
+      if (local.length > 0) {
+        setProfiles((prev) => (prev.length >= local.length ? prev : local));
+      }
+    }
     setActiveProfile(null);
-  }, []);
+  }, [currentUserId, removeStoredActiveProfileId, getLocalProfiles]);
 
   const createProfile = useCallback(
     async (
@@ -238,12 +256,20 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
     ) => {
       if (!user) return { error: "Not authenticated" };
 
+      const resolvedName = (
+        name.trim() ||
+        getAccountStartingName(firebaseUser || user, userSpace)
+      ).slice(0, 32);
+      if (!resolvedName) {
+        return { error: "Veuillez saisir un nom pour votre profil." };
+      }
+
       const uId = (user as any).uid || (user as any).id || "guest-user";
       const newId = "profile-" + Date.now();
       const newProf: ViewerProfile = {
         id: newId,
         account_id: uId,
-        name,
+        name: resolvedName,
         avatar_color: color,
         is_kid: isKid,
         pin_code: pinCode || null,
@@ -253,11 +279,11 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         created_at: new Date().toISOString(),
       };
 
-      if (isGuest || uId.startsWith("guest-")) {
+      if (isEphemeralGuest(uId)) {
         const updated = [...profiles, newProf];
         setProfiles(updated);
         saveLocalProfiles(uId, updated);
-        return { error: null };
+        return { error: null, profile: newProf };
       }
 
       const sbAccountId = toSupabaseUuid(uId);
@@ -266,7 +292,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
           .from("viewer_profiles")
           .insert({
             account_id: sbAccountId,
-            name,
+            name: resolvedName,
             avatar_color: color,
             is_kid: isKid,
             avatar_icon: avatarIcon ?? null,
@@ -276,11 +302,10 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
 
         if (error) {
-          // Fallback to local
           const updated = [...profiles, newProf];
           setProfiles(updated);
           saveLocalProfiles(uId, updated);
-          return { error: null };
+          return { error: null, profile: newProf };
         }
 
         if (data && pinCode && isValidUuid(data.id)) {
@@ -290,18 +315,19 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        if (data) {
-          setProfiles((prev) => [...prev, data as ViewerProfile]);
-        }
-        return { error: null };
+        const createdProf = (data as ViewerProfile) || newProf;
+        const updated = [...profiles, createdProf];
+        setProfiles(updated);
+        saveLocalProfiles(uId, updated);
+        return { error: null, profile: createdProf };
       } catch {
         const updated = [...profiles, newProf];
         setProfiles(updated);
         saveLocalProfiles(uId, updated);
-        return { error: null };
+        return { error: null, profile: newProf };
       }
     },
-    [user, isGuest, profiles, saveLocalProfiles]
+    [user, firebaseUser, userSpace, isEphemeralGuest, profiles, saveLocalProfiles]
   );
 
   const updateProfile = useCallback(
@@ -344,11 +370,12 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      if (isGuest || uId.startsWith("guest-") || !isValidUuid(id)) {
+      if (isEphemeralGuest(uId) || !isValidUuid(id)) {
         applyLocal();
         return { error: null };
       }
 
+      const sbAccountId = toSupabaseUuid(uId);
       try {
         const patch: Record<string, unknown> = {};
         if (updates.name !== undefined) patch.name = updates.name;
@@ -362,6 +389,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
           .from("viewer_profiles")
           .update(patch)
           .eq("id", id)
+          .eq("account_id", sbAccountId)
           .select()
           .maybeSingle();
 
@@ -387,7 +415,7 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
         return { error: null };
       }
     },
-    [user, isGuest, profiles, activeProfile, saveLocalProfiles]
+    [user, isEphemeralGuest, profiles, activeProfile, saveLocalProfiles]
   );
 
   const verifyProfilePin = useCallback(
@@ -416,30 +444,36 @@ export function ViewerProfileProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       if (!user) return { error: "Non connecté" };
 
-      const uId = (user as any).uid || (user as any).id || "guest-user";
+      const uId = (user as any).uid || (user as any).id || "";
+      if (!uId) return { error: "Non connecté" };
       const updated = profiles.filter((p) => p.id !== id);
       setProfiles(updated);
       saveLocalProfiles(uId, updated);
 
       if (activeProfile?.id === id) {
-        localStorage.removeItem(STORAGE_KEY);
-        setActiveProfile(updated[0] || null);
+        removeStoredActiveProfileId(uId);
+        setActiveProfile(null);
       }
 
-      if (!isGuest && !uId.startsWith("guest-") && isValidUuid(id)) {
+      if (!isEphemeralGuest(uId) && isValidUuid(id)) {
+        const sbAccountId = toSupabaseUuid(uId);
         try {
-          await supabase.from("viewer_profiles").delete().eq("id", id);
+          await supabase
+            .from("viewer_profiles")
+            .delete()
+            .eq("id", id)
+            .eq("account_id", sbAccountId);
         } catch {
           // ignore
         }
       }
       return { error: null };
     },
-    [user, isGuest, profiles, activeProfile, saveLocalProfiles]
+    [user, isEphemeralGuest, profiles, activeProfile, saveLocalProfiles, removeStoredActiveProfileId]
   );
 
   const refresh = useCallback(async () => {
-    await fetchProfiles();
+    await fetchProfiles(false);
   }, [fetchProfiles]);
 
   return (

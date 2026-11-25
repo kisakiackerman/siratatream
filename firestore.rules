@@ -189,15 +189,16 @@ service cloud.firestore {
                        isValidActiveSession(incoming(), sessionId) &&
                        (
                          isCreator() ||
-                         (isAuthenticated() && incoming().userId == request.auth.uid) ||
-                         (!isAuthenticated() && incoming().accountType == 'guest')
+                         (isAuthenticated() && ('userId' in incoming()) && incoming().userId == request.auth.uid && incoming().accountType != 'guest') ||
+                         (!isAuthenticated() && incoming().accountType == 'guest' && (!('userId' in incoming()) || incoming().userId.matches('^guest.*')))
                        );
       allow update: if isValidId(sessionId) &&
                        isValidActiveSession(incoming(), sessionId) &&
+                       incoming().sessionId == existing().sessionId &&
                        (
                          isCreator() ||
-                         (isAuthenticated() && incoming().userId == request.auth.uid && existing().userId == request.auth.uid) ||
-                         (!isAuthenticated() && incoming().accountType == 'guest' && existing().accountType == 'guest')
+                         (isAuthenticated() && ('userId' in incoming()) && ('userId' in existing()) && incoming().userId == request.auth.uid && existing().userId == request.auth.uid) ||
+                         (!isAuthenticated() && incoming().accountType == 'guest' && existing().accountType == 'guest' && (!('userId' in incoming()) || incoming().userId.matches('^guest.*')) && (!('userId' in existing()) || incoming().userId == existing().userId))
                        );
       allow delete: if isValidId(sessionId) && isCreator();
     }

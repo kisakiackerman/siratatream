@@ -67,6 +67,7 @@ import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
 import { GlassPanel } from "@/components/GlassSurface";
 import ExitAppModal from "@/components/ExitAppModal";
 import AIGuardianStatusSection from "@/components/AIGuardianStatusSection";
+import { getAccountStartingName } from "@/lib/accountName";
 
 type AccountSettingsModalProps = {
   onClose: () => void;
@@ -102,9 +103,11 @@ export default function AccountSettingsModal({
     firebaseUser,
     userSpace,
     isCreator,
+    isInvitationMode,
     signInWithGoogle,
     signInWithApple,
     openEmailSyncModal,
+    resetPasswordWithEmail,
     signOut,
     updateUserSpace,
   } = useAuth();
@@ -112,6 +115,7 @@ export default function AccountSettingsModal({
     profiles,
     activeProfile,
     selectProfile,
+    switchProfile,
     createProfile,
     updateProfile,
     deleteProfile,
@@ -166,12 +170,8 @@ export default function AccountSettingsModal({
   const [editProfileIcon, setEditProfileIcon] = useState<AvatarIconId>("moon");
   const [editProfileIsKid, setEditProfileIsKid] = useState(false);
 
-  // --- Password change state ---
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // --- Password reset state ---
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [showPassText, setShowPassText] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
 
   // --- Supabase Connected Devices & Remote Revocation Hook ---
@@ -303,33 +303,37 @@ export default function AccountSettingsModal({
     showToast("Avatar mis à jour !");
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const isPasswordAccount = Boolean(
+    firebaseUser?.providerData?.some((p) => p.providerId === "password") && firebaseUser?.email
+  );
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordFeedback("Le mot de passe doit comporter au moins 6 caractères.");
+    if (!isPasswordAccount || !firebaseUser?.email) {
+      setPasswordFeedback("La réinitialisation par mot de passe est réservée aux comptes Email.");
       return;
     }
-    if (newPassword !== confirmPassword) {
-      setPasswordFeedback("Les mots de passe ne correspondent pas.");
-      return;
+    try {
+      await resetPasswordWithEmail(firebaseUser.email);
+      setPasswordFeedback(null);
+      setShowPasswordForm(false);
+      showToast("Un lien sécurisé de réinitialisation a été envoyé à votre adresse email.");
+    } catch (err: any) {
+      setPasswordFeedback(err?.message || "Impossible d'envoyer le lien de réinitialisation.");
     }
-    // Simulation / Storage update
-    setPasswordFeedback(null);
-    setOldPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setShowPasswordForm(false);
-    showToast("Mot de passe modifié avec succès !");
   };
 
+  const googleDefaultName = getAccountStartingName(firebaseUser || user, userSpace);
+
   const handleCreateProfile = async () => {
-    if (!newProfileName.trim()) return;
+    const resolvedName = (newProfileName.trim() || googleDefaultName).slice(0, 32);
+    if (!resolvedName) return;
     if (profiles.length >= 5) {
       showToast("La limite maximale de 5 profils par compte est atteinte.");
       return;
     }
     await createProfile(
-      newProfileName.trim(),
+      resolvedName,
       newProfileColor,
       newProfileIsKid,
       undefined,
@@ -391,15 +395,22 @@ export default function AccountSettingsModal({
   const handleDeleteAccount = async () => {
     if (deleteConfirmText.trim().toUpperCase() !== "SUPPRIMER") return;
     try {
-      // Clear all local nexstream data
+      // Clear all local account/app data across localStorage and sessionStorage
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith("nexstream_")) {
+        if (
+          k &&
+          (k.startsWith("nexstream_") ||
+            k.startsWith("sirat_") ||
+            k.startsWith("read_notification_ids") ||
+            k.startsWith("narro_recent_searches"))
+        ) {
           keysToRemove.push(k);
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
+      sessionStorage.clear();
       await signOut();
       onClose();
       window.location.reload();
@@ -502,7 +513,7 @@ export default function AccountSettingsModal({
         exportDate: new Date().toISOString(),
         application: "SiratStream v2.4",
         user: {
-          email: user?.email || "invite@siratstream.app",
+          email: firebaseUser?.email || user?.email || (isInvitationMode ? "Mode d'invitation" : ""),
           displayName: activeProfile?.name || "Utilisateur",
           provider: userSpace?.provider || "guest",
         },
@@ -923,15 +934,27 @@ export default function AccountSettingsModal({
                     </p>
                   </div>
 
-                  {profiles.length < 5 && (
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={() => setShowCreateProfileModal(true)}
-                      className="px-3.5 py-1.5 liquid-glass-emerald hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-95"
+                      onClick={() => {
+                        onClose();
+                        switchProfile();
+                      }}
+                      className="px-3.5 py-1.5 liquid-glass hover:bg-white/15 text-zinc-100 border border-white/20 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-95"
                     >
-                      <Plus size={14} />
-                      <span>Ajouter un profil</span>
+                      <RefreshCw size={13} />
+                      <span>Changer de profil</span>
                     </button>
-                  )}
+                    {profiles.length < 5 && (
+                      <button
+                        onClick={() => setShowCreateProfileModal(true)}
+                        className="px-3.5 py-1.5 liquid-glass-emerald hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-95"
+                      >
+                        <Plus size={14} />
+                        <span>Ajouter un profil</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Profiles Grid */}
@@ -1007,27 +1030,35 @@ export default function AccountSettingsModal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <KeyRound size={16} className="text-emerald-400" />
-                    <h3 className="text-white text-sm font-semibold">Sécurité & Mot de passe</h3>
+                    <h3 className="text-white text-sm font-semibold">Sécurité &amp; Mot de passe</h3>
                   </div>
-                  <button
-                    onClick={() => setShowPasswordForm(!showPasswordForm)}
-                    className="px-3 py-1 liquid-glass hover:bg-white/15 text-xs text-zinc-300 hover:text-white rounded-xl font-medium transition-all"
-                  >
-                    {showPasswordForm ? "Fermer" : "Modifier"}
-                  </button>
+                  {isPasswordAccount && (
+                    <button
+                      onClick={() => setShowPasswordForm(!showPasswordForm)}
+                      className="px-3 py-1 liquid-glass hover:bg-white/15 text-xs text-zinc-300 hover:text-white rounded-xl font-medium transition-all"
+                    >
+                      {showPasswordForm ? "Fermer" : "Réinitialiser"}
+                    </button>
+                  )}
                 </div>
 
                 {firebaseUser ? (
-                  <p className="text-zinc-400 text-xs leading-relaxed">
-                    Votre compte est authentifié via <span className="text-white font-semibold">Google / Apple Sign-In</span>. La sécurité de vos identifiants et le renouvellement de mot de passe s'effectuent directement sur votre compte Google ou Apple.
-                  </p>
+                  isPasswordAccount ? (
+                    <p className="text-zinc-400 text-xs leading-relaxed">
+                      Votre compte utilise une authentification par email ({firebaseUser.email}). Pour des raisons de sécurité, la modification du mot de passe passe par un lien officiel envoyé à votre adresse.
+                    </p>
+                  ) : (
+                    <p className="text-zinc-400 text-xs leading-relaxed">
+                      Votre compte est authentifié via <span className="text-white font-semibold">Google / Apple Sign-In</span>. La sécurité de vos identifiants s&apos;effectue directement sur votre compte Google ou Apple.
+                    </p>
+                  )
                 ) : (
                   <p className="text-zinc-400 text-xs leading-relaxed">
-                    Définissez un mot de passe fort pour sécuriser vos profils et empêcher les accès non autorisés.
+                    Vous naviguez actuellement en <span className="text-amber-300 font-semibold">Mode d&apos;invitation</span> isolé. Aucune donnée de compte tiers n&apos;est accessible dans cette session.
                   </p>
                 )}
 
-                {showPasswordForm && (
+                {showPasswordForm && isPasswordAccount && (
                   <motion.form
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -1042,54 +1073,11 @@ export default function AccountSettingsModal({
                       </div>
                     )}
 
-                    <div>
-                      <label className="text-zinc-300 text-xs block mb-1">Mot de passe actuel</label>
-                      <div className="relative">
-                        <input
-                          type={showPassText ? "text" : "password"}
-                          value={oldPassword}
-                          onChange={(e) => setOldPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full bg-black/40 border border-white/15 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-400"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassText(!showPassText)}
-                          className="absolute right-3 top-2.5 text-zinc-400 hover:text-white"
-                        >
-                          {showPassText ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-zinc-300 text-xs block mb-1">Nouveau mot de passe</label>
-                        <input
-                          type={showPassText ? "text" : "password"}
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Min. 6 caractères"
-                          className="w-full bg-black/40 border border-white/15 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-400"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-zinc-300 text-xs block mb-1">Confirmer le mot de passe</label>
-                        <input
-                          type={showPassText ? "text" : "password"}
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Répéter"
-                          className="w-full bg-black/40 border border-white/15 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-400"
-                        />
-                      </div>
-                    </div>
-
                     <button
                       type="submit"
                       className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl text-xs transition-all shadow-md active:scale-95"
                     >
-                      Enregistrer le nouveau mot de passe
+                      Envoyer le lien de réinitialisation à {firebaseUser?.email}
                     </button>
                   </motion.form>
                 )}
@@ -2122,12 +2110,24 @@ export default function AccountSettingsModal({
               </div>
 
               <div>
-                <label className="text-zinc-300 text-xs font-semibold block mb-1">Nom du profil</label>
+                <label className="text-zinc-300 text-xs font-semibold flex items-center justify-between gap-2 mb-1">
+                  <span>Nom du profil</span>
+                  {googleDefaultName && (
+                    <span className="text-[11px] font-normal text-emerald-400 truncate max-w-[14rem]">
+                      Par défaut : {googleDefaultName}
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
                   value={newProfileName}
                   onChange={(e) => setNewProfileName(e.target.value)}
-                  placeholder="Ex : Enfants, Sarah, Invité..."
+                  maxLength={32}
+                  placeholder={
+                    googleDefaultName
+                      ? `Laissez vide pour « ${googleDefaultName} » ou écrivez un nom`
+                      : "Ex : Enfants, Sarah, Invité..."
+                  }
                   className="w-full bg-black/50 border border-white/15 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-400"
                   autoFocus
                 />
@@ -2198,7 +2198,7 @@ export default function AccountSettingsModal({
                 <button
                   type="button"
                   onClick={handleCreateProfile}
-                  disabled={!newProfileName.trim()}
+                  disabled={!newProfileName.trim() && !googleDefaultName}
                   className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-zinc-950 font-bold rounded-xl text-xs transition-all shadow-md active:scale-95"
                 >
                   Créer le profil

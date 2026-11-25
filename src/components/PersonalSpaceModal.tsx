@@ -370,12 +370,12 @@ export default function PersonalSpaceModal({
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full liquid-glass text-amber-300 border border-amber-400/30 text-[10px] font-bold">
-                    Mode Invité
+                    Mode d&apos;invitation
                   </span>
                 )}
               </div>
               <p className="text-xs text-zinc-300">
-                {userSpace?.email || firebaseUser?.email || "Connectez votre compte email, Google ou Apple pour synchroniser tous vos appareils"}
+                {firebaseUser?.email || "Session isolée — connectez votre propre compte email, Google ou Apple pour synchroniser tous vos appareils"}
               </p>
             </div>
           </div>

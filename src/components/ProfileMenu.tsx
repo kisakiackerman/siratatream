@@ -137,27 +137,20 @@ export default function ProfileMenu({
               {firebaseUser ? (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold flex items-center gap-1">
                   <ShieldCheck size={10} />
-                  Google
-                </span>
-              ) : userSpace?.provider === "apple" ? (
-                <span className="px-2 py-0.5 rounded-full liquid-glass text-white border border-white/20 text-[9px] font-bold flex items-center gap-1">
-                  <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 170 170">
-                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.68-7.83-11.97-14.35-6.19-9.35-11.04-19.98-14.56-31.9-3.52-11.92-5.28-23.32-5.28-34.2 0-14.35 3.65-26.2 10.96-35.54 7.3-9.35 16.5-14.12 27.59-14.33 4.9 0 10.37 1.25 16.42 3.75 6.04 2.5 10.14 3.79 12.3 3.87 1.63 0 5.92-1.4 12.87-4.22 6.96-2.82 12.92-4.04 17.89-3.66 13.39.87 23.95 5.56 31.67 14.07-11.75 7.18-17.51 16.97-17.29 29.38.22 9.79 4.02 18.06 11.4 24.81 7.39 6.74 16.14 10.45 26.27 11.1-2.28 7.07-5.1 13.92-8.45 20.54zm-28.76-105.7c0 7.39-2.72 14.46-8.15 21.22-5.44 6.75-12.18 10.77-20.24 12.04-.22-1.09-.33-2.18-.33-3.26 0-7.18 2.94-14.36 8.81-21.54 5.87-7.18 12.78-11.2 20.73-12.06.11 1.2.18 2.4.18 3.6z" />
-                  </svg>
-                  Apple
+                  {userSpace?.provider === "apple" ? "Apple" : userSpace?.provider === "email" ? "Email" : "Google"}
                 </span>
               ) : (
-                <span className="px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 text-[9px] font-medium">
-                  Invité
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-semibold">
+                  Mode d&apos;invitation
                 </span>
               )}
             </div>
             <p className="text-white font-bold text-sm truncate mt-0.5">
-              {firebaseUser?.displayName || (userSpace?.provider === "apple" ? userSpace?.displayName : null) || activeProfile.name}
+              {firebaseUser?.displayName || activeProfile.name}
             </p>
-            {(firebaseUser?.email || userSpace?.email) && (
+            {firebaseUser?.email && (
               <p className="text-zinc-400 text-xs truncate mt-0.5">
-                {firebaseUser?.email || userSpace?.email}
+                {firebaseUser.email}
               </p>
             )}
           </div>
@@ -319,7 +312,7 @@ export default function ProfileMenu({
             <MenuItem
               icon={<Settings size={16} className="text-zinc-400" />}
               label="Paramètres du compte"
-              onClick={() => handleAction(onOpenAccountSettings)}
+              onClick={() => handleAction(() => onOpenAccountSettings("account"))}
             />
           </div>
 

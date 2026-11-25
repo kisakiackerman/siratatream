@@ -15,6 +15,7 @@ import { useContentStats } from "@/hooks/useContentStats";
 import { useMyList } from "@/lib/useMyList";
 import { formatYouTubeLikes, getCachedYouTubeMeta, markVideoAsUnplayable } from "@/lib/youtubeApi";
 import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
+import { buildShareUrl } from "@/lib/sharedLink";
 
 type ShortVideoCardProps = {
   item: ContentItem;
@@ -236,7 +237,7 @@ export const ShortVideoCard = memo(function ShortVideoCard({
   // Share button handler
   const handleShareClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareUrl = `${window.location.origin}${window.location.pathname}?v=${item.id}`;
+    const shareUrl = buildShareUrl({ shortId: item.id });
     if (navigator.share) {
       try {
         await navigator.share({

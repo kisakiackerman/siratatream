@@ -27,7 +27,7 @@ const STORAGE_SUGGESTIONS_KEY = "nexstream_video_suggestions_v1";
 const INITIAL_DEMO_SUGGESTIONS: VideoSuggestion[] = [];
 
 export function useVideoSuggestions() {
-  const { user, firebaseUser } = useAuth();
+  const { firebaseUser, isGuest } = useAuth();
   const [suggestions, setSuggestions] = useState<VideoSuggestion[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_SUGGESTIONS_KEY);
@@ -38,8 +38,8 @@ export function useVideoSuggestions() {
   });
   const [loading, setLoading] = useState(false);
 
-  // User identifier for voting
-  const voterId = firebaseUser?.uid || user?.id || (typeof window !== "undefined" ? localStorage.getItem("nexstream_voter_token") || (() => {
+  // User identifier for voting (strictly non-guest Firebase UID or local anonymous token)
+  const voterId = (!isGuest && firebaseUser?.uid) || (typeof window !== "undefined" ? localStorage.getItem("nexstream_voter_token") || (() => {
     const token = "anon_" + Math.random().toString(36).substring(2, 10);
     localStorage.setItem("nexstream_voter_token", token);
     return token;
@@ -133,7 +133,7 @@ export function useVideoSuggestions() {
         return { success: false, error: err.message || "Erreur d'envoi" };
       }
     },
-    [suggestions, voterId, firebaseUser, user]
+    [suggestions, voterId, firebaseUser]
   );
 
   // Upvote / Toggle vote on a suggestion

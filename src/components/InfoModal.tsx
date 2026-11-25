@@ -3,6 +3,7 @@ import { X, Play, Plus, ThumbsUp, Share2, Star, Check, CheckCircle, Tv } from "l
 import { motion } from "motion/react";
 import { ContentItem, catalog, getSeriesEpisodes } from "@/data/catalog";
 import { useMyList } from "@/lib/useMyList";
+import { buildShareUrl } from "@/lib/sharedLink";
 import Card3D from "@/components/3d/Card3D";
 import { useViewerProfile } from "@/hooks/useViewerProfile";
 import { useContentStats } from "@/hooks/useContentStats";
@@ -64,7 +65,7 @@ export default function InfoModal({ item, onClose, onPlay }: InfoModalProps) {
 
   const handleShare = async () => {
     // Generate share link pointing directly to this content
-    const shareUrl = `${window.location.origin}${window.location.pathname}?v=${encodeURIComponent(item.id)}`;
+    const shareUrl = buildShareUrl({ videoId: item.id });
     const shareData = {
       title: `${item.title} | SiratStream`,
       text: item.description ? `${item.title} — ${item.description.slice(0, 140)}...` : item.title,

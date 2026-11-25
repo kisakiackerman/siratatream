@@ -134,7 +134,11 @@ export default function Navbar({
   onOpenShorts,
   onOpenShortsCatalog,
 }: NavbarProps) {
-  const { isCreator } = useAuth();
+  const { isCreator, firebaseUser, userSpace, isGuest } = useAuth();
+  const scopeKey = (!isGuest && firebaseUser?.uid) || userSpace?.userId || "guest";
+  const notifStorageKey = `read_notification_ids_${scopeKey}`;
+  const searchStorageKey = `narro_recent_searches_${scopeKey}`;
+
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -142,28 +146,33 @@ export default function Navbar({
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [notifFilter, setNotifFilter] = useState<"all" | "favorites" | "te" | "prophets" | "miracles" | "sahaba">("all");
 
-  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("read_notification_ids");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [readNotifIds, setReadNotifIds] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-  // Historique des dernières requêtes de recherche sauvegardé dans le localStorage
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+  // Reload per-account notification reads & recent searches whenever active account changes
+  useEffect(() => {
     try {
-      const saved = localStorage.getItem("narro_recent_searches");
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed)
-        ? parsed.filter((q): q is string => typeof q === "string" && q.trim().length > 0)
-        : [];
+      const savedReads = localStorage.getItem(notifStorageKey);
+      setReadNotifIds(savedReads ? JSON.parse(savedReads) : []);
     } catch {
-      return [];
+      setReadNotifIds([]);
     }
-  });
+    try {
+      const savedSearches = localStorage.getItem(searchStorageKey);
+      if (!savedSearches) {
+        setRecentSearches([]);
+      } else {
+        const parsed = JSON.parse(savedSearches);
+        setRecentSearches(
+          Array.isArray(parsed)
+            ? parsed.filter((q): q is string => typeof q === "string" && q.trim().length > 0)
+            : []
+        );
+      }
+    } catch {
+      setRecentSearches([]);
+    }
+  }, [notifStorageKey, searchStorageKey]);
 
   const saveSearchQuery = useCallback((queryToSave: string) => {
     const trimmed = queryToSave.trim();
@@ -172,30 +181,30 @@ export default function Navbar({
       const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
       const next = [trimmed, ...filtered].slice(0, 8);
       try {
-        localStorage.setItem("narro_recent_searches", JSON.stringify(next));
+        localStorage.setItem(searchStorageKey, JSON.stringify(next));
       } catch {}
       return next;
     });
-  }, []);
+  }, [searchStorageKey]);
 
   const removeRecentSearch = useCallback((itemToRemove: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setRecentSearches((prev) => {
       const next = prev.filter((item) => item !== itemToRemove);
       try {
-        localStorage.setItem("narro_recent_searches", JSON.stringify(next));
+        localStorage.setItem(searchStorageKey, JSON.stringify(next));
       } catch {}
       return next;
     });
-  }, []);
+  }, [searchStorageKey]);
 
   const clearAllRecentSearches = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     setRecentSearches([]);
     try {
-      localStorage.removeItem("narro_recent_searches");
+      localStorage.removeItem(searchStorageKey);
     } catch {}
-  }, []);
+  }, [searchStorageKey]);
 
   const { catalog: liveCatalog, customItems } = useCreatorCatalog();
   const { activeProfile } = useViewerProfile();
@@ -317,7 +326,7 @@ export default function Navbar({
     const updated = Array.from(new Set([...readNotifIds, ...allIds]));
     setReadNotifIds(updated);
     try {
-      localStorage.setItem("read_notification_ids", JSON.stringify(updated));
+      localStorage.setItem(notifStorageKey, JSON.stringify(updated));
     } catch {}
 
     if (activeProfile && isValidUuid(activeProfile.id)) {
@@ -339,7 +348,7 @@ export default function Navbar({
       const updated = [...readNotifIds, id];
       setReadNotifIds(updated);
       try {
-        localStorage.setItem("read_notification_ids", JSON.stringify(updated));
+        localStorage.setItem(notifStorageKey, JSON.stringify(updated));
       } catch {}
 
       if (activeProfile && isValidUuid(activeProfile.id)) {
@@ -360,7 +369,7 @@ export default function Navbar({
   const resetNotificationReads = () => {
     setReadNotifIds([]);
     try {
-      localStorage.removeItem("read_notification_ids");
+      localStorage.removeItem(notifStorageKey);
     } catch {}
   };
 
@@ -400,7 +409,7 @@ export default function Navbar({
       const updated = [...readNotifIds, item.id];
       setReadNotifIds(updated);
       try {
-        localStorage.setItem("read_notification_ids", JSON.stringify(updated));
+        localStorage.setItem(notifStorageKey, JSON.stringify(updated));
       } catch {}
 
       if (activeProfile && isValidUuid(activeProfile.id)) {

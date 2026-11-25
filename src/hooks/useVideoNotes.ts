@@ -72,8 +72,8 @@ export function useVideoNotes(contentId: string, contentTitle?: string) {
         // 1. Update Personal Space (updates state, localStorage, and user document in Firestore)
         await updateUserSpace({ notes: nextNotes });
 
-        // 2. Also persist individual document in Firestore subcollection if authenticated user
-        const uid = firebaseUser?.uid || (user && !isGuest ? user.uid : null);
+        // 2. Also persist individual document in Firestore subcollection only if authenticated non-guest Firebase user
+        const uid = !isGuest && firebaseUser?.uid ? firebaseUser.uid : null;
         if (uid) {
           try {
             const noteRef = doc(db, "users", uid, "notes", noteId);
@@ -106,7 +106,7 @@ export function useVideoNotes(contentId: string, contentTitle?: string) {
 
         await updateUserSpace({ notes: nextNotes });
 
-        const uid = firebaseUser?.uid || (user && !isGuest ? user.uid : null);
+        const uid = !isGuest && firebaseUser?.uid ? firebaseUser.uid : null;
         if (uid) {
           try {
             const noteRef = doc(db, "users", uid, "notes", noteId);

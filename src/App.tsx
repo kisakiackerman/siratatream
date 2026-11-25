@@ -53,6 +53,8 @@ import { type HubTab } from "@/components/IslamicHubModal";
 import { useCategoryNotifications } from "@/hooks/useCategoryNotifications";
 import { OPEN_VIDEO_NOTIFICATION_EVENT } from "@/lib/categoryNotifications";
 import { RECITERS_DATA } from "@/lib/reciterData";
+import { getAllShortsItems } from "@/data/shortsCatalog";
+import { parseSharedLinkFromSearch } from "@/lib/sharedLink";
 import {
   catalog as defaultCatalog,
   getFeaturedContent,
@@ -80,6 +82,9 @@ import {
   CheckCircle2,
   ShieldCheck,
   KeyRound,
+  UserCheck,
+  LogOut,
+  Link2,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -99,12 +104,17 @@ function scrollAppToTop() {
 
 function AuthScreen() {
   const {
-    signInDemo,
+    firebaseUser,
+    isGuest,
+    pendingSharedTarget,
+    sharedLinkAuthRequired,
+    enterInvitationMode,
+    confirmCurrentAccountForSharedLink,
+    switchAccountForSharedLink,
     signInWithGoogle,
     signInWithApple,
     signInWithEmail,
     resetPasswordWithEmail,
-    openAppleSyncModal,
     openEmailSyncModal,
     loading,
     authError,
@@ -214,6 +224,75 @@ function AuthScreen() {
           </p>
         </div>
 
+        {/* Shared Link Immediate Authentication Gate */}
+        {pendingSharedTarget && sharedLinkAuthRequired && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-400/35 text-left space-y-3 shadow-lg">
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-400/20 border border-amber-300/30 text-amber-300 flex-shrink-0">
+                <Link2 size={16} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-amber-200">
+                  Lien partagé — Authentification requise
+                </p>
+                <p className="text-[11px] text-zinc-300 leading-relaxed">
+                  Pour protéger votre compte et ceux des autres utilisateurs, chaque accès par lien partagé demande de vous authentifier avec votre propre compte. Si vous ne pouvez pas vous authentifier, utilisez le <span className="text-emerald-300 font-semibold">Mode d&apos;invitation</span> isolé.
+                </p>
+              </div>
+            </div>
+
+            {firebaseUser && !isGuest ? (
+              <div className="pt-1 space-y-2 border-t border-amber-400/20">
+                <p className="text-[11px] text-zinc-300">
+                  Session détectée sur cet appareil :{" "}
+                  <span className="font-semibold text-white">
+                    {firebaseUser.email || firebaseUser.displayName || "Compte connecté"}
+                  </span>
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={confirmCurrentAccountForSharedLink}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-50"
+                  >
+                    <UserCheck size={14} />
+                    <span>C&apos;est mon compte, ouvrir</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={switchAccountForSharedLink}
+                    disabled={loading}
+                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    <LogOut size={14} />
+                    <span>Changer de compte</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => enterInvitationMode()}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 border border-emerald-400/30 font-semibold text-xs transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Sparkles size={14} />
+                  <span>Ne pas utiliser ce compte · Mode d&apos;invitation</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => enterInvitationMode()}
+                disabled={loading || emailLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-400/20 hover:bg-emerald-400/30 text-emerald-200 border border-emerald-300/40 font-bold text-xs transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Sparkles size={14} />
+                <span>Je ne peux pas m&apos;authentifier · Mode d&apos;invitation</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {authError && (
           <div className="p-3 rounded-2xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs text-left flex items-center justify-between gap-3 animate-fadeIn shadow-lg">
             <p className="leading-relaxed flex-1">
@@ -232,20 +311,20 @@ function AuthScreen() {
         )}
 
         <div className="space-y-4 pt-1" style={{ transformStyle: "preserve-3d" }}>
-          {/* Les 4 options d'accès rapides : Invité, Email, Google, Apple avec profondeur 3D */}
+          {/* Les 4 options d'accès rapides : Mode d'invitation, Email, Google, Apple avec profondeur 3D */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {/* 1. Début / Mode Invité */}
+            {/* 1. Mode d'invitation (Session isolée) */}
             <button
-              onClick={signInDemo}
+              onClick={() => enterInvitationMode()}
               disabled={loading || emailLoading}
               className="flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl bg-gradient-to-b from-emerald-300 to-emerald-500 hover:from-emerald-200 hover:to-emerald-400 text-zinc-950 font-bold transition-all shadow-[0_6px_16px_rgba(16,185,129,0.4),inset_0_1.5px_1px_rgba(255,255,255,0.6)] hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(16,185,129,0.5)] active:translate-y-0.5 active:scale-95 disabled:opacity-50 text-center cursor-pointer"
-              title="Démarrer directement en mode invité"
+              title="Accéder sans compte en Mode d'invitation isolé"
             >
               <div className="flex items-center gap-1">
-                <Sparkles size={15} className="text-zinc-950 flex-shrink-0" />
-                <span className="font-extrabold text-xs">Début</span>
+                <Sparkles size={14} className="text-zinc-950 flex-shrink-0" />
+                <span className="font-extrabold text-[11px] leading-tight">Invitation</span>
               </div>
-              <span className="text-[10px] text-zinc-900 font-semibold opacity-90">Invité</span>
+              <span className="text-[10px] text-zinc-900 font-semibold opacity-90">Mode invité</span>
             </button>
 
             {/* 2. Par Email */}
@@ -479,7 +558,7 @@ function AuthScreen() {
 
 function MainStreamingApp() {
   const { activeProfile, switchProfile } = useViewerProfile();
-  const { isCreator } = useAuth();
+  const { isCreator, pendingSharedTarget, clearPendingSharedTarget } = useAuth();
   const { catalog, customItems } = useCreatorCatalog();
 
   const [currentCategoryTab, setCurrentCategoryTab] = useState<string>("all");
@@ -535,6 +614,39 @@ function MainStreamingApp() {
 
   // Background watcher for favorite category publications
   useCategoryNotifications(handlePlay);
+
+  // Open shared content directly once authentication or Mode d'invitation succeeds
+  useEffect(() => {
+    if (!pendingSharedTarget) return;
+    if (pendingSharedTarget.type === "short" && pendingSharedTarget.id) {
+      setInitialShortId(pendingSharedTarget.id);
+      setShowShorts(true);
+      clearPendingSharedTarget();
+      return;
+    }
+    if (pendingSharedTarget.type === "video" && pendingSharedTarget.id) {
+      const targetVideo = catalog.find((c) => c.id === pendingSharedTarget.id);
+      if (targetVideo) {
+        handlePlay(targetVideo.id);
+        clearPendingSharedTarget();
+        return;
+      }
+      const targetShort = getAllShortsItems().find((s) => s.id === pendingSharedTarget.id);
+      if (targetShort) {
+        setInitialShortId(targetShort.id);
+        setShowShorts(true);
+        clearPendingSharedTarget();
+        return;
+      }
+      if (catalog.length > 0) {
+        clearPendingSharedTarget();
+      }
+      return;
+    }
+    if (pendingSharedTarget.type === "app") {
+      clearPendingSharedTarget();
+    }
+  }, [pendingSharedTarget, catalog, handlePlay, clearPendingSharedTarget]);
 
   // Listen for clicks on local browser notifications to automatically launch playback
   useEffect(() => {
@@ -1601,7 +1713,7 @@ function MainStreamingApp() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {shortsEnabled && showShorts && (
+          {(shortsEnabled || Boolean(initialShortId)) && showShorts && (
             <ShortsPage
               key="shorts-page"
               initialShortId={initialShortId}
@@ -1708,7 +1820,7 @@ function MainStreamingApp() {
 }
 
 function RootApp() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, pendingSharedTarget, sharedLinkAuthRequired } = useAuth();
   const { activeProfile, loading: profileLoading } = useViewerProfile();
 
   // Initialisation et veille autonome de l'IA Gardienne 24/7
@@ -1718,12 +1830,22 @@ function RootApp() {
 
   const [showIntro, setShowIntro] = useState(() => {
     if (typeof window === "undefined") return false;
+    // Skip intro splash on shared links so authentication is demanded immediately
+    if (parseSharedLinkFromSearch(window.location.search)) {
+      return false;
+    }
     try {
       return sessionStorage.getItem("intro_played") !== "true";
     } catch {
       return false;
     }
   });
+
+  useEffect(() => {
+    if (pendingSharedTarget && showIntro) {
+      setShowIntro(false);
+    }
+  }, [pendingSharedTarget, showIntro]);
 
   const handleIntroComplete = useCallback(() => {
     try {
@@ -1734,6 +1856,8 @@ function RootApp() {
     setShowIntro(false);
   }, []);
 
+  const requiresAuthentication = !user || (pendingSharedTarget !== null && sharedLinkAuthRequired);
+
   return (
     <>
       <AppUpdateNotifier />
@@ -1743,7 +1867,7 @@ function RootApp() {
         <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
           <Loader2 size={40} className="text-white animate-spin" />
         </div>
-      ) : !user ? (
+      ) : requiresAuthentication ? (
         <AuthScreen />
       ) : profileLoading && !activeProfile ? (
         <div className="min-h-screen bg-zinc-950 flex items-center justify-center">

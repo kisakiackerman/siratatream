@@ -226,7 +226,7 @@
         },
         "accountType": {
           "type": "string",
-          "description": "Type of connected account: guest, google, apple"
+          "description": "Type of connected account: guest, google, apple, email"
         },
         "accountIdentifier": {
           "type": "string",

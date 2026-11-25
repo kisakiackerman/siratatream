@@ -67,6 +67,7 @@ import RatingStars from "@/components/RatingStars";
 import { getLocalVideoUrl } from "@/lib/videoStorage";
 import { getReciterForItem } from "@/lib/reciterData";
 import { getSavedWatchProgress, saveWatchProgress } from "@/lib/watchHistory";
+import { buildShareUrl } from "@/lib/sharedLink";
 import SleepTimerMenu, { SLEEP_TIMER_PRESETS } from "@/components/SleepTimerMenu";
 import {
   detectNetworkSpeed,
@@ -2088,9 +2089,7 @@ export default function PlayerModal({
   };
 
   const handleShare = () => {
-    navigator.clipboard?.writeText(
-      `${window.location.origin}${window.location.pathname}?v=${item.id}`
-    );
+    navigator.clipboard?.writeText(buildShareUrl({ videoId: item.id }));
     showCaptionNotification("Lien copié dans le presse-papiers", true);
     setShowMoreMenu(false);
   };
