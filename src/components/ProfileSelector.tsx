@@ -257,7 +257,7 @@ export default function ProfileSelector({ onSelect }: ProfileSelectorProps) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4 py-12 sm:py-16">
+    <div className="min-h-[100dvh] overflow-y-auto bg-zinc-950 flex flex-col items-center justify-center px-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[max(2rem,env(safe-area-inset-top,0px))] pb-[max(2rem,env(safe-area-inset-bottom,0px))] sm:py-16">
       <h1 className="text-white text-2xl sm:text-5xl font-black mb-2 tracking-tight text-center">
         {isCreateView
           ? mustCreateFirstProfile

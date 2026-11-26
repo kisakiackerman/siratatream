@@ -1,6 +1,6 @@
 {
   "name": "SiratStream",
-  "description": "SiratStream - Plateforme 100% gratuite de streaming musulman avec lecteur interactif, Le Noble Coran, prières et enseignements.",
+  "description": "Regardez et écoutez gratuitement le Noble Coran, les récits des Prophètes, prières des Haramain et enseignements islamiques sur SiratStream, sans abonnement.",
   "requestFramePermissions": ["geolocation", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

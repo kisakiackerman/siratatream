@@ -828,7 +828,11 @@ class AutonomousAIGuardianService {
             return `${prefix}***@${domain || "member"}`;
           })()
         : rawIdentifier;
-      const safeAppUrl = `${window.location.origin}${window.location.pathname}`.slice(0, 300);
+      const rawHost = window.location.hostname.toLowerCase();
+      const safeAppUrl =
+        rawHost === "vercel.app" || rawHost.endsWith(".vercel.app")
+          ? "SiratStream"
+          : `${window.location.origin}${window.location.pathname}`.slice(0, 300);
 
       await setDoc(
         sessRef,

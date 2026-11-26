@@ -138,7 +138,59 @@ app.use(express.json({ limit: "2mb" }));
 // Anti-injection, XSS prevention & prototype pollution mitigation
 app.use(inputSanitizerMiddleware);
 
-// Rate limit protection across all API endpoints
+// Automatic 301 redirect to the active custom domain when PUBLIC_SITE_URL / SITE_URL / VITE_PUBLIC_SITE_URL is set
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  const p = req.path || "/";
+  if (
+    p.startsWith("/api/") ||
+    p.startsWith("/__/auth") ||
+    p.startsWith("/@") ||
+    p.startsWith("/src/") ||
+    p.startsWith("/node_modules/") ||
+    p === "/robots.txt" ||
+    p === "/sitemap.xml" ||
+    p === "/manifest.webmanifest" ||
+    p === "/googlef1e946b6d80588ed.html" ||
+    /\.(js|mjs|css|png|jpg|jpeg|webp|svg|ico|woff|woff2|json|webmanifest|map)$/i.test(p)
+  ) {
+    return next();
+  }
+
+  const targetOrigin = getConfiguredRedirectOrigin();
+  if (!targetOrigin) return next();
+
+  try {
+    const targetHost = new URL(targetOrigin).hostname.toLowerCase();
+    const rawHost =
+      (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ||
+      req.headers.host ||
+      "";
+    const incomingHost = rawHost.toLowerCase().split(":")[0].trim();
+
+    if (
+      !incomingHost ||
+      incomingHost === "localhost" ||
+      incomingHost === "127.0.0.1" ||
+      incomingHost === "0.0.0.0" ||
+      incomingHost === "::1" ||
+      incomingHost.endsWith(".run.app") ||
+      incomingHost === targetHost
+    ) {
+      return next();
+    }
+
+    return res.redirect(301, `${targetOrigin}${req.originalUrl}`);
+  } catch {
+    return next();
+  }
+});
+
+// Rate limit protection and crawler noindex across all API endpoints
+app.use("/api", (_req, res, next) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
 app.use("/api", standardApiLimiter);
 
 // Stricter rate limit protection on heavy computational AI endpoints
@@ -181,13 +233,14 @@ const CURRENT_APP_VERSION = "2.4.3";
 
 app.get("/api/app-version", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
-  const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost:3000";
-  const fullUrl = `${protocol}://${host}`;
+  const liveOrigin = getLiveRequestOrigin(req);
+  const configuredOrigin = getConfiguredPublicOrigin();
+  const rawHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() || req.headers.host || "";
+  const safeCurrentUrl = isVercelHost(rawHost) ? (configuredOrigin || "") : (configuredOrigin || liveOrigin);
   res.json({
     version: CURRENT_APP_VERSION,
     buildTimestamp: SERVER_BOOT_TIMESTAMP,
-    currentUrl: fullUrl,
+    currentUrl: safeCurrentUrl,
     timestamp: Date.now(),
     status: "up-to-date",
   });
@@ -333,23 +386,199 @@ app.post("/api/agent/sync-now", requireCreator, async (_req: AuthRequest, res) =
   }
 });
 
-// SEO & Googlebot indexation routes
-app.get("/googlef1e946b6d80588ed.html", (req, res) => {
+// SEO & Googlebot indexation routes (dynamically resolved to the canonical host, never surfacing *.vercel.app when a custom domain is set)
+function isVercelHost(host: string): boolean {
+  const cleanHost = host.toLowerCase().split(":")[0].trim();
+  return cleanHost === "vercel.app" || cleanHost.endsWith(".vercel.app");
+}
+
+function getConfiguredRedirectOrigin(): string | null {
+  const candidates = [
+    process.env.PUBLIC_SITE_URL,
+    process.env.SITE_URL,
+    process.env.VITE_PUBLIC_SITE_URL,
+  ];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const trimmed = raw.trim().replace(/\/+$/, "");
+    if (!trimmed || trimmed === "MY_APP_URL") continue;
+    try {
+      const parsed = new URL(trimmed);
+      const h = parsed.hostname.toLowerCase();
+      if (
+        (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+        !isVercelHost(h) &&
+        h !== "localhost" &&
+        h !== "127.0.0.1" &&
+        h !== "0.0.0.0"
+      ) {
+        return parsed.origin;
+      }
+    } catch {
+      // ignore invalid URL
+    }
+  }
+  return null;
+}
+
+function getConfiguredPublicOrigin(): string | null {
+  const explicit = getConfiguredRedirectOrigin();
+  if (explicit) return explicit;
+  const raw = process.env.APP_URL;
+  if (!raw) return null;
+  const trimmed = raw.trim().replace(/\/+$/, "");
+  if (!trimmed || trimmed === "MY_APP_URL") return null;
+  try {
+    const parsed = new URL(trimmed);
+    const h = parsed.hostname.toLowerCase();
+    if (
+      (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+      !isVercelHost(h) &&
+      h !== "localhost" &&
+      h !== "127.0.0.1"
+    ) {
+      return parsed.origin;
+    }
+  } catch {
+    // ignore invalid URL
+  }
+  return null;
+}
+
+function getLiveRequestOrigin(req: express.Request): string {
+  const rawProto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() || req.protocol || "https";
+  const proto = rawProto === "http" ? "http" : "https";
+  const rawHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() || req.headers.host || `localhost:${PORT}`;
+  const safeHost = rawHost.replace(/[^a-zA-Z0-9.:-]/g, "");
+  return `${proto}://${safeHost || `localhost:${PORT}`}`;
+}
+
+function getRequestOrigin(req: express.Request): string {
+  return getConfiguredPublicOrigin() || getLiveRequestOrigin(req);
+}
+
+function shouldNoindexVercelHost(req: express.Request): boolean {
+  const rawHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() || req.headers.host || "";
+  return isVercelHost(rawHost) && Boolean(getConfiguredPublicOrigin());
+}
+
+function injectDynamicSeoOrigin(html: string, origin: string, noindex = false): string {
+  const safeOrigin = origin.replace(/\/+$/, "");
+  let result = html
+    .replace(/<link rel="canonical" href="\/" \/>/g, `<link rel="canonical" href="${safeOrigin}/" />`)
+    .replace(/<link rel="alternate" hreflang="fr" href="\/" \/>/g, `<link rel="alternate" hreflang="fr" href="${safeOrigin}/" />`)
+    .replace(/<link rel="alternate" hreflang="x-default" href="\/" \/>/g, `<link rel="alternate" hreflang="x-default" href="${safeOrigin}/" />`)
+    .replace(/<meta name="thumbnail" content="\/og-image\.jpg" \/>/g, `<meta name="thumbnail" content="${safeOrigin}/og-image.jpg" />`)
+    .replace(/<meta property="og:url" content="\/" \/>/g, `<meta property="og:url" content="${safeOrigin}/" />`)
+    .replace(/<meta property="og:image" content="\/og-image\.jpg" \/>/g, `<meta property="og:image" content="${safeOrigin}/og-image.jpg" />`)
+    .replace(/<meta property="og:image:secure_url" content="\/og-image\.jpg" \/>/g, `<meta property="og:image:secure_url" content="${safeOrigin}/og-image.jpg" />`)
+    .replace(/<link rel="image_src" href="\/og-image\.jpg" \/>/g, `<link rel="image_src" href="${safeOrigin}/og-image.jpg" />`)
+    .replace(/<meta name="twitter:image" content="\/og-image\.jpg" \/>/g, `<meta name="twitter:image" content="${safeOrigin}/og-image.jpg" />`)
+    .replace(/"#(organization|logo|primaryimage|website|webapp|faq)"/g, `"${safeOrigin}/#$1"`)
+    .replace(/"url": "\/"/g, `"url": "${safeOrigin}/"`)
+    .replace(/"(url|contentUrl)": "\/icon-512\.png"/g, `"$1": "${safeOrigin}/icon-512.png"`)
+    .replace(/"(url|contentUrl|image|thumbnailUrl)": "\/og-image\.jpg"/g, `"$1": "${safeOrigin}/og-image.jpg"`)
+    .replace(/"target": "\/\?q=\{search_term_string\}"/g, `"target": "${safeOrigin}/?q={search_term_string}"`);
+
+  if (noindex) {
+    result = result
+      .replace(/<meta name="robots" content="[^"]*" \/>/g, `<meta name="robots" content="noindex, nofollow" />`)
+      .replace(/<meta name="googlebot" content="[^"]*" \/>/g, `<meta name="googlebot" content="noindex, nofollow" />`)
+      .replace(/<meta name="bingbot" content="[^"]*" \/>/g, `<meta name="bingbot" content="noindex, nofollow" />`);
+  }
+
+  return result;
+}
+
+app.get("/googlef1e946b6d80588ed.html", (_req, res) => {
   res.type("text/html");
   res.send("google-site-verification: googlef1e946b6d80588ed.html\n");
 });
 
 app.get("/robots.txt", (req, res) => {
+  const origin = getRequestOrigin(req);
+  res.setHeader("Cache-Control", "public, max-age=3600");
   res.type("text/plain");
+  if (shouldNoindexVercelHost(req)) {
+    res.send(
+      [
+        "# Robots.txt for preview/deployment host",
+        "User-agent: *",
+        "Disallow: /",
+        "",
+        `Sitemap: ${origin}/sitemap.xml`,
+        "",
+      ].join("\n")
+    );
+    return;
+  }
   res.send(
-    "User-agent: *\nAllow: /\n\nUser-agent: Googlebot\nAllow: /\n\nSitemap: https://sirat-stream.ai.studio/sitemap.xml\n"
+    [
+      "# Robots.txt for SiratStream",
+      "User-agent: *",
+      "Allow: /",
+      "Disallow: /api/",
+      "",
+      "User-agent: Googlebot",
+      "Allow: /",
+      "Disallow: /api/",
+      "",
+      "User-agent: Googlebot-Image",
+      "Allow: /",
+      "",
+      "User-agent: Googlebot-Video",
+      "Allow: /",
+      "",
+      "User-agent: Bingbot",
+      "Allow: /",
+      "Disallow: /api/",
+      "",
+      "User-agent: Applebot",
+      "Allow: /",
+      "",
+      "User-agent: DuckDuckBot",
+      "Allow: /",
+      "",
+      "User-agent: Twitterbot",
+      "Allow: /",
+      "",
+      "User-agent: facebookexternalhit",
+      "Allow: /",
+      "",
+      `Sitemap: ${origin}/sitemap.xml`,
+      "",
+    ].join("\n")
   );
 });
 
 app.get("/sitemap.xml", (req, res) => {
+  const origin = getRequestOrigin(req);
+  const lastmod = new Date().toISOString().split("T")[0];
+  res.setHeader("Cache-Control", "public, max-age=3600");
   res.type("application/xml");
   res.send(
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://sirat-stream.ai.studio/</loc>\n    <lastmod>2026-09-15</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>`
+    `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>${origin}/</loc>
+    <xhtml:link rel="alternate" hreflang="fr" href="${origin}/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="${origin}/" />
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>${origin}/og-image.jpg</image:loc>
+      <image:title>SiratStream – Streaming Musulman, Coran &amp; Récits</image:title>
+      <image:caption>Plateforme gratuite de streaming musulman : Noble Coran, récits des Prophètes et enseignements.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>${origin}/icon-512.png</image:loc>
+      <image:title>Logo SiratStream</image:title>
+    </image:image>
+  </url>
+</urlset>`
   );
 });
 
@@ -1792,13 +2021,50 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
+    app.get("/", async (req, res, next) => {
+      try {
+        const indexPath = path.join(process.cwd(), "index.html");
+        const rawHtml = fs.readFileSync(indexPath, "utf-8");
+        const transformed = await vite.transformIndexHtml(req.originalUrl, rawHtml);
+        const noindex = shouldNoindexVercelHost(req);
+        const withSeoOrigin = injectDynamicSeoOrigin(transformed, getRequestOrigin(req), noindex);
+        res.status(200);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader(
+          "X-Robots-Tag",
+          noindex
+            ? "noindex, nofollow"
+            : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+        );
+        res.send(withSeoOrigin);
+      } catch (err) {
+        next(err);
+      }
+    });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    const distIndexPath = path.join(distPath, "index.html");
+    const cachedDistHtml = fs.existsSync(distIndexPath)
+      ? fs.readFileSync(distIndexPath, "utf-8")
+      : null;
+
+    app.use(express.static(distPath, { index: false }));
     app.get("*", (req, res) => {
+      const noindex = shouldNoindexVercelHost(req);
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.sendFile(path.join(distPath, "index.html"));
+      res.setHeader(
+        "X-Robots-Tag",
+        noindex
+          ? "noindex, nofollow"
+          : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+      );
+      if (cachedDistHtml) {
+        res.type("text/html; charset=utf-8");
+        res.send(injectDynamicSeoOrigin(cachedDistHtml, getRequestOrigin(req), noindex));
+        return;
+      }
+      res.sendFile(distIndexPath);
     });
   }
 

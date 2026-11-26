@@ -61,6 +61,7 @@ import {
 } from "@/lib/watchHistory";
 import { useConnectedDevices } from "@/hooks/useConnectedDevices";
 import { formatRelativeTime, DeviceType } from "@/lib/deviceSessions";
+import { getPublicDisplayDomain, getPublicOrigin } from "@/lib/publicSite";
 import UserStatsSection from "@/components/UserStatsSection";
 import NotificationsSettingsSection from "@/components/NotificationsSettingsSection";
 import MicrophonePermissionModal from "@/components/MicrophonePermissionModal";
@@ -559,7 +560,7 @@ export default function AccountSettingsModal({
 
   const handleCopyAppUrl = () => {
     if (typeof window !== "undefined") {
-      navigator.clipboard?.writeText(window.location.origin);
+      navigator.clipboard?.writeText(getPublicOrigin());
       setUrlCopied(true);
       showToast("Lien d'accès copié dans le presse-papiers !");
       setTimeout(() => setUrlCopied(false), 2500);
@@ -1978,7 +1979,7 @@ export default function AccountSettingsModal({
                       </span>
                     </div>
                     <p className="text-emerald-200 text-xs font-mono truncate mt-0.5 select-all font-semibold">
-                      {typeof window !== "undefined" ? window.location.origin : ""}
+                      {getPublicDisplayDomain()}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">

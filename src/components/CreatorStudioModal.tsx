@@ -94,6 +94,15 @@ import LiveAppPreview from "@/components/LiveAppPreview";
 import StudioMediaPreview from "@/components/StudioMediaPreview";
 import { saveLocalVideoFile, extractVideoMetadata } from "@/lib/videoStorage";
 import { sanitizeHttpUrl } from "@/lib/safeUrl";
+import {
+  db,
+  doc,
+  onSnapshot,
+  setDoc,
+  handleFirestoreError,
+  OperationType,
+} from "@/lib/firebase";
+import { checkDomainReachable, normalizeDomainOrigin } from "@/lib/publicSite";
 
 interface CreatorStudioModalProps {
   onClose: () => void;
@@ -378,6 +387,112 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
       }
     } catch (e) {
       console.warn("Failed to fetch agent status:", e);
+    }
+  };
+
+  // Domain Redirect Configuration (Creator-only live redirect across all visitors)
+  const [redirectDomainInput, setRedirectDomainInput] = useState("");
+  const [redirectEnabled, setRedirectEnabled] = useState(false);
+  const [redirectSaving, setRedirectSaving] = useState(false);
+  const [redirectTesting, setRedirectTesting] = useState(false);
+  const [redirectFeedback, setRedirectFeedback] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isCreator) return;
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const ref = doc(db, "app_config", "domain_redirect");
+      unsubscribe = onSnapshot(
+        ref,
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as { enabled?: boolean; targetOrigin?: string };
+            setRedirectEnabled(Boolean(data?.enabled));
+            if (typeof data?.targetOrigin === "string") {
+              setRedirectDomainInput(data.targetOrigin);
+            }
+          }
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, "app_config/domain_redirect");
+        }
+      );
+    } catch {
+      // ignore offline listener errors
+    }
+    return () => {
+      unsubscribe?.();
+    };
+  }, [isCreator]);
+
+  const handleTestRedirectDomain = async () => {
+    const normalized = normalizeDomainOrigin(redirectDomainInput);
+    if (!normalized) {
+      setRedirectFeedback({
+        type: "error",
+        message: "Veuillez saisir un nom de domaine valide (ex: https://votredomaine.com).",
+      });
+      return;
+    }
+    setRedirectTesting(true);
+    setRedirectFeedback(null);
+    const reachable = await checkDomainReachable(normalized);
+    setRedirectTesting(false);
+    if (reachable) {
+      setRedirectFeedback({
+        type: "success",
+        message: `Le domaine ${normalized} répond correctement ! Vous pouvez activer la redirection.`,
+      });
+    } else {
+      setRedirectFeedback({
+        type: "error",
+        message: `Le domaine ${normalized} ne répond pas encore (DNS / NXDOMAIN). Reliez-le d'abord chez votre registrar et Vercel.`,
+      });
+    }
+  };
+
+  const handleSaveDomainRedirect = async (enable: boolean) => {
+    if (!isCreator) return;
+    const normalized = normalizeDomainOrigin(redirectDomainInput);
+    if (enable && !normalized) {
+      setRedirectFeedback({
+        type: "error",
+        message: "Veuillez saisir un nom de domaine valide avant d'activer la redirection.",
+      });
+      return;
+    }
+    setRedirectSaving(true);
+    setRedirectFeedback(null);
+    try {
+      await setDoc(
+        doc(db, "app_config", "domain_redirect"),
+        {
+          enabled: enable,
+          targetOrigin: normalized || "",
+          updatedAt: new Date().toISOString(),
+          updatedBy: firebaseUser?.email || user?.email || "creator",
+        },
+        { merge: true }
+      );
+      setRedirectEnabled(enable);
+      if (normalized) setRedirectDomainInput(normalized);
+      setRedirectFeedback({
+        type: enable ? "success" : "info",
+        message: enable
+          ? `Redirection enregistrée vers ${normalized}. Tous les utilisateurs seront redirigés automatiquement dès que le domaine répond.`
+          : "La redirection automatique vers un autre domaine a été désactivée.",
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, "app_config/domain_redirect");
+      setRedirectFeedback({
+        type: "error",
+        message: "Impossible d'enregistrer la redirection. Vérifiez votre connexion créateur.",
+      });
+    } finally {
+      setRedirectSaving(false);
     }
   };
 
@@ -2587,6 +2702,87 @@ export default function CreatorStudioModal({ onClose, onPlayVideo, initialTab }:
           {/* TAB 8: BACKUP & PLATFORM MODULES */}
           {activeTab === "cloud-sync" && (
             <div className="space-y-6 max-w-3xl mx-auto">
+              {/* Redirection Automatique vers Nouveau Nom de Domaine (Strictement Créateur) */}
+              {isCreator && (
+                <div className="bg-gradient-to-br from-emerald-950/40 via-zinc-900/90 to-zinc-900 p-6 rounded-3xl border border-emerald-500/35 space-y-4 shadow-xl shadow-emerald-950/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Globe size={18} className="text-emerald-400" />
+                        <h3 className="font-bold text-white text-base">
+                          Changement de Domaine &amp; Redirection Globale
+                        </h3>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            redirectEnabled
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
+                              : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                          }`}
+                        >
+                          {redirectEnabled ? "Redirection Active" : "Désactivée"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        Lorsque vous changez de nom de domaine, indiquez la nouvelle adresse ci-dessous : tous les utilisateurs (y compris ceux déjà connectés sur l&apos;ancien site) seront automatiquement redirigés vers le nouveau domaine dès qu&apos;il est accessible en ligne.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <input
+                      type="text"
+                      value={redirectDomainInput}
+                      onChange={(e) => setRedirectDomainInput(e.target.value)}
+                      placeholder="https://nouveau-domaine.com"
+                      className="flex-1 bg-zinc-950/90 border border-zinc-700 focus:border-emerald-400 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTestRedirectDomain}
+                      disabled={redirectTesting || redirectSaving}
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-all disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {redirectTesting ? "Test en cours..." : "Tester le domaine"}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveDomainRedirect(true)}
+                      disabled={redirectSaving || redirectTesting}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold transition-all shadow-md shadow-emerald-950/40 disabled:opacity-50"
+                    >
+                      {redirectSaving ? "Enregistrement..." : "Activer & rediriger tous les utilisateurs"}
+                    </button>
+                    {redirectEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveDomainRedirect(false)}
+                        disabled={redirectSaving}
+                        className="px-4 py-2.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 text-red-200 border border-red-500/30 text-xs font-bold transition-all disabled:opacity-50"
+                      >
+                        Désactiver la redirection
+                      </button>
+                    )}
+                  </div>
+
+                  {redirectFeedback && (
+                    <div
+                      className={`p-3 rounded-xl text-xs border ${
+                        redirectFeedback.type === "success"
+                          ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
+                          : redirectFeedback.type === "error"
+                          ? "bg-red-950/40 border-red-500/40 text-red-200"
+                          : "bg-zinc-950/60 border-zinc-700 text-zinc-300"
+                      }`}
+                    >
+                      {redirectFeedback.message}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Module Shorts & Formats Courts Configuration */}
               <div className="bg-zinc-900/80 p-6 rounded-3xl border border-zinc-800 space-y-4">
                 <div className="flex items-center justify-between gap-4">

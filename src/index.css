@@ -6,12 +6,20 @@
    Mise à l'échelle fluide automatique, netteté vectorielle & typographique
    ═══════════════════════════════════════════════════════════════════════════ */
 
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-optical-sizing: auto;
   font-kerning: normal;
+  -webkit-text-size-adjust: 100%;
 }
 
 svg {
@@ -24,13 +32,38 @@ iframe {
   image-rendering: high-quality;
 }
 
-/* Mise à l'échelle automatique transparente sur écrans 2K / 4K / 5K / 8K+ */
+/* Visibilité garantie des contrôles interactifs sur appareils tactiles (sans survol) */
+@media (hover: none), (pointer: coarse) {
+  .touch-reveal {
+    opacity: 0.92 !important;
+  }
+}
+
+/* Adaptation pour écrans horizontaux courts (mobiles en mode paysage) */
+@media (max-height: 520px) and (orientation: landscape) {
+  .hero-section {
+    min-height: 360px !important;
+    height: auto !important;
+  }
+  .hero-content-wrap {
+    padding-top: 4.5rem !important;
+    padding-bottom: 2.25rem !important;
+  }
+}
+
+/* Mise à l'échelle automatique transparente sur écrans Full HD / 2K / 4K / 5K / 8K+ */
+@media (min-width: 1920px) {
+  .max-w-screen-2xl {
+    max-width: min(94vw, 108rem) !important;
+  }
+}
+
 @media (min-width: 2400px) {
   html {
     font-size: clamp(18px, 0.78vw, 24px);
   }
   .max-w-screen-2xl {
-    max-width: min(94vw, 108rem) !important;
+    max-width: min(94vw, 112rem) !important;
   }
 }
 
@@ -39,7 +72,7 @@ iframe {
     font-size: clamp(24px, 0.78vw, 34px);
   }
   .max-w-screen-2xl {
-    max-width: min(94vw, 112rem) !important;
+    max-width: min(94vw, 116rem) !important;
   }
 }
 
@@ -48,7 +81,7 @@ iframe {
     font-size: clamp(42px, 0.78vw, 64px);
   }
   .max-w-screen-2xl {
-    max-width: min(94vw, 118rem) !important;
+    max-width: min(94vw, 120rem) !important;
   }
 }
 

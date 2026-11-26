@@ -458,13 +458,13 @@ export default function Navbar({
 
   return (
     <nav
-      className={`sticky top-0 z-40 rounded-t-3xl transition-all duration-500 ${
+      className={`sticky top-0 z-40 rounded-t-3xl pt-[env(safe-area-inset-top,0px)] transition-all duration-500 ${
         scrolled
           ? "bg-zinc-950/92 backdrop-blur-2xl border-b border-emerald-300/30 shadow-[0_16px_36px_-6px_rgba(0,0,0,0.7),inset_0_1px_1px_rgba(255,255,255,0.22)]"
           : "bg-gradient-to-b from-zinc-950/95 via-zinc-950/50 to-transparent"
       }`}
     >
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-12 h-16 flex items-center justify-between gap-3">
+      <div className="max-w-screen-2xl mx-auto px-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:px-6 lg:px-12 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
         {/* Logo */}
         <div className="relative group/logo flex-shrink-0">
           <div
@@ -480,7 +480,11 @@ export default function Navbar({
               <div className="w-1.5 h-4 bg-emerald-200/50 rounded-sm" />
               <div className="w-1.5 h-7 bg-white rounded-sm group-hover/logo:scale-y-110 transition-transform" />
             </div>
-            <span className="text-white font-black text-lg sm:text-xl tracking-tight ml-1 whitespace-nowrap">
+            <span
+              className={`text-white font-black text-base sm:text-xl tracking-tight ml-1 whitespace-nowrap ${
+                searchOpen ? "hidden sm:inline" : ""
+              }`}
+            >
               SiratStream
             </span>
           </div>
@@ -488,11 +492,11 @@ export default function Navbar({
         </div>
 
         {/* Bouton Quick Plays Mobile Rapide - Liquid Glass */}
-        {onOpenShorts && (
+        {onOpenShorts && !searchOpen && (
           <button
             type="button"
             onClick={onOpenShorts}
-            className="md:hidden flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.12] hover:bg-white/[0.22] border border-white/30 text-emerald-300 text-xs font-bold backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95"
+            className="md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.12] hover:bg-white/[0.22] border border-white/30 text-emerald-300 text-xs font-bold backdrop-blur-2xl shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_4px_16px_rgba(0,0,0,0.3)] transition-all active:scale-95 flex-shrink-0"
             aria-label="Ouvrir le flux Quick Plays (TikTok)"
           >
             <Zap size={12} className="text-emerald-400 fill-emerald-400" />
@@ -702,7 +706,7 @@ export default function Navbar({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  className="bg-transparent text-white text-sm px-3 py-2 w-44 sm:w-72 outline-none placeholder-zinc-500"
+                  className="bg-transparent text-white text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 w-28 xs:w-40 sm:w-64 md:w-72 outline-none placeholder-zinc-500 min-w-0"
                 />
                 {searchQuery && (
                   <button
@@ -1264,6 +1268,131 @@ export default function Navbar({
           />
         </div>
       </div>
+
+      {/* Barre de navigation rapide Mobile (< md) pour garantir l'accès visible à toutes les rubriques */}
+      <div
+        className="md:hidden relative border-t border-white/10 bg-zinc-950/70 backdrop-blur-xl px-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] py-1.5 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-cat-dropdown
+      >
+        <button
+          type="button"
+          onClick={onOpenCatalog}
+          className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors ${
+            isCatalogOpen
+              ? "text-emerald-400 bg-emerald-400/15 font-bold"
+              : "text-zinc-300 hover:text-white hover:bg-white/10 font-medium"
+          }`}
+        >
+          <Film size={13} className={isCatalogOpen ? "text-emerald-400" : "text-zinc-400"} />
+          <span>Catalogue</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setCatDropdownOpen((prev) => !prev);
+          }}
+          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors ${
+            isThematicActive || catDropdownOpen
+              ? "text-emerald-400 bg-emerald-400/15 font-bold"
+              : "text-zinc-300 hover:text-white hover:bg-white/10 font-medium"
+          }`}
+        >
+          <Compass size={13} className={isThematicActive ? "text-emerald-400" : "text-zinc-400"} />
+          <span>{isThematicActive ? activeGenreLabel?.split(" ")[0] || "Genre" : "Genres"}</span>
+          <ChevronDown
+            size={12}
+            className={`transition-transform duration-200 ${catDropdownOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {onOpenRandom && (
+          <button
+            type="button"
+            onClick={onOpenRandom}
+            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Dices size={13} className="text-zinc-400" />
+            <span>Aléatoire</span>
+          </button>
+        )}
+
+        {onOpenGoogleMaps && (
+          <button
+            type="button"
+            onClick={onOpenGoogleMaps}
+            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <MapPin size={13} className="text-zinc-400" />
+            <span>Carte</span>
+          </button>
+        )}
+
+        {onOpenSuggestions && (
+          <button
+            type="button"
+            onClick={onOpenSuggestions}
+            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Sparkles size={13} className="text-zinc-400" />
+            <span>Suggestions</span>
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown mobile des genres */}
+      {catDropdownOpen && (
+        <div
+          data-cat-dropdown
+          className="md:hidden fixed left-3 right-3 top-[calc(env(safe-area-inset-top,0px)+5.75rem)] max-w-md mx-auto bg-zinc-950/95 border border-emerald-300/40 backdrop-blur-2xl rounded-2xl shadow-[0_24px_50px_rgba(0,0,0,0.85)] overflow-hidden py-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div className="px-3.5 py-2 border-b border-emerald-300/20 mb-1 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider">
+              Catalogues &amp; Thématiques
+            </span>
+            <button
+              type="button"
+              onClick={() => setCatDropdownOpen(false)}
+              className="p-1 text-zinc-400 hover:text-white rounded-lg"
+              aria-label="Fermer les genres"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="max-h-[60dvh] overflow-y-auto py-1">
+            {CATALOG_MENU.map((entry) => {
+              const isSelected = currentCategoryTab === entry.id;
+              return (
+                <button
+                  key={`mob-${entry.id}`}
+                  type="button"
+                  onClick={() => {
+                    onSelectCategoryTab?.(entry.id);
+                    setCatDropdownOpen(false);
+                    scrollAppToTop();
+                  }}
+                  className={`w-full text-left px-3.5 py-2.5 text-xs transition-colors flex items-center justify-between ${
+                    isSelected
+                      ? "bg-emerald-400/20 text-emerald-200 font-semibold"
+                      : "text-zinc-300 hover:text-white hover:bg-emerald-400/10"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <span className="text-sm flex-shrink-0">{entry.icon}</span>
+                    <span className="truncate">{entry.label}</span>
+                  </div>
+                  {entry.tag && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-300/20 text-emerald-300 flex-shrink-0">
+                      {entry.tag}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Modal de demande et gestion de permission microphone */}
       <MicrophonePermissionModal

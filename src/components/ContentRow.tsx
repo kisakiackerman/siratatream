@@ -43,7 +43,7 @@ export default function ContentRow({ label, items, onPlay, onInfo, limit }: Cont
         <button
           onClick={() => scrollBy(-1)}
           aria-label="Précédent"
-          className="hidden md:flex absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 items-center justify-center liquid-glass hover:bg-emerald-400/25 text-emerald-200 border border-emerald-300/30 rounded-full opacity-0 group-hover/row:opacity-100 transition-all shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95"
+          className="hidden md:flex touch-reveal absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 items-center justify-center liquid-glass hover:bg-emerald-400/25 text-emerald-200 border border-emerald-300/30 rounded-full opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-all shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95"
         >
           <ChevronLeft size={24} className="text-emerald-200 mr-0.5" />
         </button>
@@ -61,7 +61,7 @@ export default function ContentRow({ label, items, onPlay, onInfo, limit }: Cont
         <button
           onClick={() => scrollBy(1)}
           aria-label="Suivant"
-          className="hidden md:flex absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 items-center justify-center liquid-glass hover:bg-emerald-400/25 text-emerald-200 border border-emerald-300/30 rounded-full opacity-0 group-hover/row:opacity-100 transition-all shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95"
+          className="hidden md:flex touch-reveal absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 items-center justify-center liquid-glass hover:bg-emerald-400/25 text-emerald-200 border border-emerald-300/30 rounded-full opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-all shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] hover:scale-105 active:scale-95"
         >
           <ChevronRight size={24} className="text-emerald-200 ml-0.5" />
         </button>

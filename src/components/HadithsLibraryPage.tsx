@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { getPublicOrigin } from "@/lib/publicSite";
 import {
   BookOpenCheck,
   Search,
@@ -64,10 +65,12 @@ export default function HadithsLibraryPage({ onClose }: HadithsLibraryPageProps)
   const handleShare = async (hadith: HadithItem) => {
     if (navigator.share) {
       try {
+        const shareUrl =
+          typeof window !== "undefined" ? `${getPublicOrigin()}${window.location.pathname}` : "";
         await navigator.share({
           title: `Hadith — ${hadith.category}`,
           text: `« ${hadith.textFr} » — Rapporté par ${hadith.narrator} (${hadith.source})`,
-          url: window.location.href,
+          url: shareUrl,
         });
       } catch {}
     } else {

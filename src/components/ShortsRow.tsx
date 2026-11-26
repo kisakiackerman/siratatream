@@ -28,13 +28,13 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
   return (
     <div className="group/row max-w-screen-2xl mx-auto my-6">
       {/* Header */}
-      <div className="px-4 sm:px-6 lg:px-12 flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-sm">
+      <div className="px-4 sm:px-6 lg:px-12 flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-sm flex-shrink-0">
             <Zap size={18} className="fill-emerald-400" />
           </div>
-          <div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2 flex-wrap">
               <span>Lancement rapide (Quick Plays)</span>
               <span className="hidden sm:inline text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-300">
                 Flux TikTok
@@ -46,7 +46,7 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {onOpenCatalog && (
             <button
               type="button"
@@ -75,7 +75,7 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
         <button
           onClick={() => scrollBy(-1)}
           aria-label="Faire défiler vers la gauche"
-          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/[0.12] hover:bg-white/[0.25] text-white flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-all backdrop-blur-2xl border border-white/30 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_6px_20px_rgba(0,0,0,0.5)] active:scale-95"
+          className="hidden sm:flex touch-reveal absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/[0.12] hover:bg-white/[0.25] text-white items-center justify-center opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-all backdrop-blur-2xl border border-white/30 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_6px_20px_rgba(0,0,0,0.5)] active:scale-95"
         >
           <ChevronLeft size={20} />
         </button>
@@ -147,7 +147,7 @@ export default function ShortsRow({ onOpenShorts, onOpenCatalog }: ShortsRowProp
         <button
           onClick={() => scrollBy(1)}
           aria-label="Faire défiler vers la droite"
-          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/[0.12] hover:bg-white/[0.25] text-white flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-all backdrop-blur-2xl border border-white/30 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_6px_20px_rgba(0,0,0,0.5)] active:scale-95"
+          className="hidden sm:flex touch-reveal absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/[0.12] hover:bg-white/[0.25] text-white items-center justify-center opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-all backdrop-blur-2xl border border-white/30 shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.4),0_6px_20px_rgba(0,0,0,0.5)] active:scale-95"
         >
           <ChevronRight size={20} />
         </button>

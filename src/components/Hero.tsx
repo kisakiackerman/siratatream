@@ -365,7 +365,7 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
   return (
     <section
       data-theme="dark"
-      className="relative z-10 h-[80vh] min-h-[520px] sm:min-h-[560px] max-h-[760px] w-full overflow-hidden bg-zinc-950 hero-section player-cinema-modal dark group"
+      className="relative z-10 h-[72dvh] sm:h-[78dvh] min-h-[400px] sm:min-h-[500px] lg:min-h-[560px] max-h-[820px] w-full overflow-hidden bg-zinc-950 hero-section player-cinema-modal dark group"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={handleMouseLeave}
     >
@@ -391,7 +391,7 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
             type="button"
             onClick={handlePrev}
             aria-label="Vidéo à la une précédente"
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+            className="touch-reveal absolute left-2 sm:left-4 top-[36%] sm:top-1/2 -translate-y-1/2 z-30 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-all opacity-75 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 cursor-pointer"
           >
             <ChevronLeft size={22} />
           </button>
@@ -399,7 +399,7 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
             type="button"
             onClick={handleNext}
             aria-label="Vidéo à la une suivante"
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+            className="touch-reveal absolute right-2 sm:right-4 top-[36%] sm:top-1/2 -translate-y-1/2 z-30 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-emerald-400/15 hover:bg-emerald-400/25 text-emerald-200 backdrop-blur-xl border border-emerald-300/30 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)] flex items-center justify-center transition-all opacity-75 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 cursor-pointer"
           >
             <ChevronRight size={22} />
           </button>
@@ -407,7 +407,7 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
       )}
 
       {/* Content Info Container */}
-      <div className="relative z-20 h-full flex flex-col justify-end px-4 sm:px-6 lg:px-12 pb-32 sm:pb-36 lg:pb-40 max-w-2xl">
+      <div className="hero-content-wrap relative z-20 h-full flex flex-col justify-end pt-20 sm:pt-24 px-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] sm:px-6 lg:px-12 pb-14 sm:pb-28 lg:pb-36 max-w-2xl xl:max-w-3xl 2xl:max-w-4xl">
         {/* Animated text block (badges, title, description) */}
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -483,7 +483,7 @@ export default function Hero({ onPlay, onInfo, onOpenAI, categoryTab = "all" }: 
 
           {/* Mini carousel indicators with smooth morphing animation (up to 8 dots) */}
           {pool.length > 1 && (
-            <div className="flex items-center gap-1.5 ml-auto hidden sm:flex bg-emerald-400/10 px-3 py-1.5 rounded-full backdrop-blur-xl border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
+            <div className="flex items-center gap-1.5 sm:ml-auto bg-emerald-400/10 px-2.5 sm:px-3 py-1.5 rounded-full backdrop-blur-xl border border-emerald-300/25 shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
               {pool.slice(0, Math.min(pool.length, 8)).map((item, idx) => {
                 const isSelected = idx === currentIndex % Math.min(pool.length, 8);
                 return (

@@ -1,3 +1,5 @@
+import { getPublicOrigin } from "@/lib/publicSite";
+
 export type SharedLinkTarget =
   | { type: "video"; id: string }
   | { type: "short"; id: string }
@@ -11,7 +13,7 @@ const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
  */
 export function buildShareUrl(params: { videoId?: string; shortId?: string }): string {
   if (typeof window === "undefined") return "";
-  const url = new URL(window.location.origin + window.location.pathname);
+  const url = new URL(getPublicOrigin() + window.location.pathname);
   if (params.shortId) {
     url.searchParams.set("short", params.shortId);
   } else if (params.videoId) {

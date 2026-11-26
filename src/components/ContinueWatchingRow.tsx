@@ -102,9 +102,9 @@ export default function ContinueWatchingRow({ onPlay }: ContinueWatchingRowProps
   if (items.length === 0) return null;
 
   return (
-    <div className="mb-10 animate-in fade-in duration-300">
-      <div className="flex items-center justify-between px-6 lg:px-12 mb-4">
-        <h2 className="text-white text-xl font-bold tracking-tight flex items-center gap-2">
+    <div className="max-w-screen-2xl mx-auto mb-10 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-12 mb-4">
+        <h2 className="text-white text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2">
           <span>Continuer à regarder</span>
           <span className="text-xs bg-emerald-400/15 border border-emerald-300/30 text-emerald-200 font-semibold px-2 py-0.5 rounded-full shadow-[inset_0_1px_1px_rgba(167,243,208,0.35),inset_0_-2px_4px_rgba(0,0,0,0.25)]">
             {items.length}
@@ -112,7 +112,7 @@ export default function ContinueWatchingRow({ onPlay }: ContinueWatchingRowProps
         </h2>
       </div>
 
-      <div className="flex gap-3 sm:gap-4 overflow-x-auto px-6 lg:px-12 pt-2 pb-5 scrollbar-none">
+      <div className="flex gap-3 sm:gap-4 overflow-x-auto px-4 sm:px-6 lg:px-12 pt-2 pb-5 scrollbar-none">
         {items.map((item) => {
           const remainingLabel = fmtRemainingTime(item.remainingSec);
 

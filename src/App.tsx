@@ -56,6 +56,22 @@ import { RECITERS_DATA } from "@/lib/reciterData";
 import { getAllShortsItems } from "@/data/shortsCatalog";
 import { parseSharedLinkFromSearch } from "@/lib/sharedLink";
 import {
+  db,
+  doc,
+  onSnapshot,
+  handleFirestoreError,
+  OperationType,
+} from "@/lib/firebase";
+import {
+  getEnvPublicOrigin,
+  getPublicOrigin,
+  isUsingConfiguredCustomOrigin,
+  isVercelHostname,
+  normalizeDomainOrigin,
+  redirectAllUsersToDomain,
+  setLiveDomainRedirectOrigin,
+} from "@/lib/publicSite";
+import {
   catalog as defaultCatalog,
   getFeaturedContent,
   getContentByCategory,
@@ -180,7 +196,7 @@ function AuthScreen() {
 
   return (
     <div
-      className="min-h-screen bg-[#070b09] flex flex-col items-center justify-center px-4 relative overflow-hidden"
+      className="min-h-[100dvh] bg-[#070b09] flex flex-col items-center justify-center px-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[max(1.75rem,env(safe-area-inset-top,0px))] pb-[max(1.75rem,env(safe-area-inset-bottom,0px))] relative overflow-y-auto overflow-x-hidden"
       style={{ perspective: "1200px" }}
     >
       {/* Three.js 3D Floating Golden Lanterns & Nocturnal Sky */}
@@ -191,7 +207,7 @@ function AuthScreen() {
       <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div
-        className="relative z-10 max-w-lg w-full text-center space-y-7 liquid-glass-card p-6 sm:p-9 rounded-3xl border border-amber-400/30 backdrop-blur-2xl shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_36px_rgba(245,158,11,0.18),inset_0_1.5px_1px_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(0,0,0,0.4)]"
+        className="relative z-10 my-auto max-w-lg w-full text-center space-y-7 liquid-glass-card p-5 sm:p-9 rounded-3xl border border-amber-400/30 backdrop-blur-2xl shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_36px_rgba(245,158,11,0.18),inset_0_1.5px_1px_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(0,0,0,0.4)]"
         style={{ transformStyle: "preserve-3d" }}
       >
         {/* 3D Embossed Logo */}
@@ -604,6 +620,18 @@ function MainStreamingApp() {
     enrichCatalogWithYouTubeAPI(catalog).catch(() => {});
   }, [catalog]);
 
+  useEffect(() => {
+    if (currentCategoryTab === "all") {
+      document.title = "SiratStream – Streaming Musulman, Coran & Récits";
+    } else if (currentCategoryTab === "savants-sunnah") {
+      document.title = "Les Savants de la Sunnah – SiratStream";
+    } else if (currentCategoryTab === "creators") {
+      document.title = "Créateurs & Lieux Saints – SiratStream";
+    } else {
+      document.title = `${currentCategoryTab} – SiratStream`;
+    }
+  }, [currentCategoryTab]);
+
   const handlePlay = useCallback((id: string, startSec?: number, audioMode = false) => {
     setInfoId(null);
     setMinimizedItem(null);
@@ -891,7 +919,7 @@ function MainStreamingApp() {
           {/* VIEW 2: CATEGORY CATALOGUE */}
           {currentCategoryTab !== "all" && currentCategoryTab !== "creators" && currentCategoryTab !== "savants-sunnah" && (
             <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-12 space-y-8">
-              <div className="border-b border-zinc-800/80 pb-4 flex items-center justify-between">
+              <div className="border-b border-zinc-800/80 pb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                     <span>Catalogue : {currentCategoryTab}</span>
@@ -1105,7 +1133,7 @@ function MainStreamingApp() {
           {/* VIEW 2.5: LES SAVANTS DE LA SUNNAH DEDICATED HUB */}
           {currentCategoryTab === "savants-sunnah" && (
             <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-12 space-y-8">
-              <div className="border-b border-zinc-800/80 pb-4 flex items-center justify-between">
+              <div className="border-b border-zinc-800/80 pb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                     <span>💎 Les Savants de la Sunnah</span>
@@ -1245,7 +1273,7 @@ function MainStreamingApp() {
           {/* VIEW 3: CREATORS CATALOGUE */}
           {currentCategoryTab === "creators" && (
             <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-12 space-y-8">
-              <div className="border-b border-zinc-800/80 pb-4 flex items-center justify-between">
+              <div className="border-b border-zinc-800/80 pb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-bold text-white">
                     Catalogue par Créateurs & Lieux Saints
@@ -1381,7 +1409,7 @@ function MainStreamingApp() {
         </main>
 
         {/* Clean Structured Footer */}
-        <footer className="mt-auto border-t border-zinc-900 bg-zinc-950 px-6 pt-12 pb-28 sm:pb-16 text-zinc-500 text-sm">
+        <footer className="mt-auto border-t border-zinc-900 bg-zinc-950 px-[max(1.25rem,env(safe-area-inset-left,0px))] pr-[max(1.25rem,env(safe-area-inset-right,0px))] pt-12 pb-[max(6.5rem,calc(env(safe-area-inset-bottom,0px)+5rem))] sm:pb-[max(4rem,env(safe-area-inset-bottom,0px))] text-zinc-500 text-sm">
           <div className="max-w-screen-2xl mx-auto space-y-8">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-xs sm:text-sm">
               <div className="space-y-2.5">
@@ -1790,7 +1818,7 @@ function MainStreamingApp() {
       {isCreator && (
         <button
           onClick={() => setShowCreatorStudio(true)}
-          className="fixed bottom-6 left-6 z-30 hidden md:flex items-center gap-2 px-3.5 py-2 bg-zinc-900/90 hover:bg-zinc-800 text-amber-300 hover:text-white rounded-full shadow-2xl border border-amber-500/40 hover:scale-105 active:scale-95 transition-all group backdrop-blur-md"
+          className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))] left-[max(1.5rem,env(safe-area-inset-left,0px))] z-30 hidden md:flex items-center gap-2 px-3.5 py-2 bg-zinc-900/90 hover:bg-zinc-800 text-amber-300 hover:text-white rounded-full shadow-2xl border border-amber-500/40 hover:scale-105 active:scale-95 transition-all group backdrop-blur-md"
           title="Ouvrir le Studio Créateur (IA Studio)"
         >
           <Wand2 size={15} className="text-amber-400 group-hover:rotate-12 transition-transform" />
@@ -1805,7 +1833,7 @@ function MainStreamingApp() {
       {!miniItem && (
         <button
           onClick={() => setShowAIAssistant(true)}
-          className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-30 flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-full shadow-2xl shadow-emerald-950/80 border border-emerald-400/40 hover:scale-105 active:scale-95 transition-all group backdrop-blur-md"
+          className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] sm:bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:right-[max(1.5rem,env(safe-area-inset-right,0px))] z-30 flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-full shadow-2xl shadow-emerald-950/80 border border-emerald-400/40 hover:scale-105 active:scale-95 transition-all group backdrop-blur-md"
           title="Discuter avec Noor IA (Assistant Universel)"
         >
           <div className="relative">
@@ -1895,6 +1923,88 @@ export default function App() {
     const handleQuotaExceeded = () => setGmpQuotaExceeded(true);
     window.addEventListener("gmp-quota-exceeded", handleQuotaExceeded);
     return () => window.removeEventListener("gmp-quota-exceeded", handleQuotaExceeded);
+  }, []);
+
+  // Synchronize canonical, hreflang, OpenGraph, and redirect all visitors automatically when a new domain is configured
+  useEffect(() => {
+    const syncHeadMetadata = () => {
+      try {
+        const origin = getPublicOrigin();
+        const canonicalUrl = origin + window.location.pathname;
+        const ogImageUrl = `${origin}/og-image.jpg`;
+
+        const canonicalEl = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+        if (canonicalEl) canonicalEl.href = canonicalUrl;
+
+        document.querySelectorAll<HTMLLinkElement>('link[rel="alternate"][hreflang]').forEach((el) => {
+          el.href = canonicalUrl;
+        });
+
+        const imageSrcEl = document.querySelector<HTMLLinkElement>('link[rel="image_src"]');
+        if (imageSrcEl) imageSrcEl.href = ogImageUrl;
+
+        const ogUrlEl = document.querySelector<HTMLMetaElement>('meta[property="og:url"]');
+        if (ogUrlEl) ogUrlEl.content = canonicalUrl;
+
+        const ogImageEl = document.querySelector<HTMLMetaElement>('meta[property="og:image"]');
+        if (ogImageEl) ogImageEl.content = ogImageUrl;
+
+        const ogImageSecureEl = document.querySelector<HTMLMetaElement>('meta[property="og:image:secure_url"]');
+        if (ogImageSecureEl) ogImageSecureEl.content = ogImageUrl;
+
+        const twitterImageEl = document.querySelector<HTMLMetaElement>('meta[name="twitter:image"]');
+        if (twitterImageEl) twitterImageEl.content = ogImageUrl;
+
+        const thumbnailEl = document.querySelector<HTMLMetaElement>('meta[name="thumbnail"]');
+        if (thumbnailEl) thumbnailEl.content = ogImageUrl;
+
+        if (isVercelHostname(window.location.hostname) && isUsingConfiguredCustomOrigin()) {
+          document.querySelectorAll<HTMLMetaElement>('meta[name="robots"], meta[name="googlebot"], meta[name="bingbot"]').forEach((el) => {
+            el.content = "noindex, nofollow";
+          });
+        }
+      } catch {
+        // Ignore DOM sync errors in restricted contexts
+      }
+    };
+
+    syncHeadMetadata();
+
+    const envOrigin = getEnvPublicOrigin();
+    if (envOrigin) {
+      void redirectAllUsersToDomain(envOrigin);
+    }
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const redirectRef = doc(db, "app_config", "domain_redirect");
+      unsubscribe = onSnapshot(
+        redirectRef,
+        (snap) => {
+          if (!snap.exists()) {
+            setLiveDomainRedirectOrigin(null);
+            syncHeadMetadata();
+            return;
+          }
+          const data = snap.data() as { enabled?: boolean; targetOrigin?: string } | undefined;
+          const normalized = data?.enabled ? normalizeDomainOrigin(data?.targetOrigin) : null;
+          setLiveDomainRedirectOrigin(normalized);
+          syncHeadMetadata();
+          if (normalized) {
+            void redirectAllUsersToDomain(normalized);
+          }
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, "app_config/domain_redirect");
+        }
+      );
+    } catch {
+      // Ignore listener setup errors if offline
+    }
+
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 
   return (

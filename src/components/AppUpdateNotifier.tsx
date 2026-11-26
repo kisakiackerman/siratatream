@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 type VersionResponse = {
   version: string;
   buildTimestamp: number;
-  currentUrl: string;
+  currentUrl?: string;
   timestamp: number;
   status: string;
 };
