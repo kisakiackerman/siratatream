@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, CheckCircle2, ShieldCheck, X } from "lucide-react";
+import { ShieldCheck, X } from "lucide-react";
 import { autonomousAIGuardian } from "@/lib/autonomousAIGuardian";
+import { useAuth } from "@/hooks/useAuth";
 
 type VersionResponse = {
   version: string;
@@ -12,6 +13,7 @@ type VersionResponse = {
 };
 
 export default function AppUpdateNotifier() {
+  const { isCreator } = useAuth();
   const [autoUpdatedNotification, setAutoUpdatedNotification] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
 
@@ -120,7 +122,7 @@ export default function AppUpdateNotifier() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 font-mono">
-                  IA Gardienne Active
+                  {isCreator ? "IA Gardienne Active" : "Mise à jour automatique"}
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               </div>

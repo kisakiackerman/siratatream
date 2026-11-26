@@ -121,7 +121,15 @@ export default function AccountSettingsModal({
     deleteProfile,
   } = useViewerProfile();
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    initialTab === "guardian" && !isCreator ? "account" : initialTab
+  );
+
+  useEffect(() => {
+    if (activeTab === "guardian" && !isCreator) {
+      setActiveTab("account");
+    }
+  }, [activeTab, isCreator]);
   const [notice, setNotice] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
 
@@ -666,18 +674,20 @@ export default function AccountSettingsModal({
             <span>Compte</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab("guardian")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-              activeTab === "guardian"
-                ? "liquid-glass-emerald text-emerald-200 border border-emerald-300/40 font-bold shadow-md"
-                : "liquid-glass text-zinc-300 hover:text-white hover:bg-white/15 border border-white/15"
-            }`}
-          >
-            <Shield size={14} className={activeTab === "guardian" ? "text-emerald-300" : "text-emerald-400"} />
-            <span>IA Gardienne</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          </button>
+          {isCreator && (
+            <button
+              onClick={() => setActiveTab("guardian")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === "guardian"
+                  ? "liquid-glass-emerald text-emerald-200 border border-emerald-300/40 font-bold shadow-md"
+                  : "liquid-glass text-zinc-300 hover:text-white hover:bg-white/15 border border-white/15"
+              }`}
+            >
+              <Shield size={14} className={activeTab === "guardian" ? "text-emerald-300" : "text-emerald-400"} />
+              <span>IA Gardienne</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab("notifications")}
@@ -762,31 +772,33 @@ export default function AccountSettingsModal({
           {/* ============================================================ */}
           {activeTab === "account" && (
             <div className="space-y-6">
-              {/* Carte IA Gardienne Active - Surveillance du compte */}
-              <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/25 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 flex-shrink-0">
-                    <Shield size={16} />
+              {/* Carte IA Gardienne Active - Strictement réservée au Créateur */}
+              {isCreator && (
+                <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/25 flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 flex-shrink-0">
+                      <Shield size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-white flex items-center gap-1.5 truncate">
+                        <span>IA Gardienne Active</span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-400/30">
+                          100% Opérationnel
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-zinc-300 truncate">
+                        Ajustement des profils et fonctionnalités surveillés chaque jour sans erreur.
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-white flex items-center gap-1.5 truncate">
-                      <span>IA Gardienne Active</span>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-400/30">
-                        100% Opérationnel
-                      </span>
-                    </p>
-                    <p className="text-[11px] text-zinc-300 truncate">
-                      Ajustement des profils et fonctionnalités surveillés chaque jour sans erreur.
-                    </p>
-                  </div>
+                  <button
+                    onClick={() => setActiveTab("guardian")}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-semibold text-[11px] flex-shrink-0 transition-colors"
+                  >
+                    Voir l'état complet
+                  </button>
                 </div>
-                <button
-                  onClick={() => setActiveTab("guardian")}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-semibold text-[11px] flex-shrink-0 transition-colors"
-                >
-                  Voir l'état complet
-                </button>
-              </div>
+              )}
 
               {/* 1. Informations du profil actif */}
               <GlassPanel variant="card" className="p-5 border border-white/15 space-y-4">
@@ -1362,9 +1374,9 @@ export default function AccountSettingsModal({
           )}
 
           {/* ============================================================ */}
-          {/* TAB: IA GARDIENNE & MAINTENANCE */}
+          {/* TAB: IA GARDIENNE & MAINTENANCE (CRÉATEUR UNIQUEMENT) */}
           {/* ============================================================ */}
-          {activeTab === "guardian" && (
+          {isCreator && activeTab === "guardian" && (
             <div className="space-y-6">
               <AIGuardianStatusSection />
             </div>

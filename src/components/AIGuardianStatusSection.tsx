@@ -38,10 +38,14 @@ export default function AIGuardianStatusSection({
     runCreatorGlobalSweep,
   } = useAIGuardian();
 
-  const { user, firebaseUser } = useAuth();
+  const { user, firebaseUser, isCreator } = useAuth();
   const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
 
-  const creatorEmail = firebaseUser?.email || user?.email || "kisakiackerman744@gmail.com";
+  if (!isCreator) {
+    return null;
+  }
+
+  const creatorEmail = firebaseUser?.email || user?.email || "";
 
   const handleManualCheck = async () => {
     await triggerVerification();

@@ -303,12 +303,14 @@ export default function ProfileMenu({
               badge="Nouveau"
               onClick={() => handleAction(() => onOpenAccountSettings("notifications"))}
             />
-            <MenuItem
-              icon={<ShieldCheck size={16} className="text-emerald-400" />}
-              label="IA Gardienne Active"
-              badge="24/7"
-              onClick={() => handleAction(() => onOpenAccountSettings("guardian"))}
-            />
+            {isCreator && (
+              <MenuItem
+                icon={<ShieldCheck size={16} className="text-emerald-400" />}
+                label="IA Gardienne Active"
+                badge="24/7"
+                onClick={() => handleAction(() => onOpenAccountSettings("guardian"))}
+              />
+            )}
             <MenuItem
               icon={<Settings size={16} className="text-zinc-400" />}
               label="Paramètres du compte"
