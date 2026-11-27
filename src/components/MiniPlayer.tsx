@@ -20,8 +20,15 @@ import { getReciterForItem } from "@/lib/reciterData";
 import {
   detectNetworkSpeed,
   applyAdaptiveConnectionQuality,
+  probeConnectionBandwidth,
+  resetBufferingStepDownIfStable,
+  stepDownQualityOnBuffering,
   subscribeToNetworkQualityChanges,
 } from "@/lib/adaptiveConnectionQuality";
+import {
+  attachAutomaticInstrumentRemoval,
+  getInstrumentRemovalPlayableUrl,
+} from "@/lib/vocalIsolationEngine";
 
 type MiniPlayerProps = {
   item: ContentItem;
@@ -47,6 +54,7 @@ export default function MiniPlayer({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(initialTime);
   const [directStreamUrl, setDirectStreamUrl] = useState<string | null>(null);
+  const [useRawDirectStreamFallback, setUseRawDirectStreamFallback] = useState(false);
   const [useIframe, setUseIframe] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
@@ -193,6 +201,27 @@ export default function MiniPlayer({
     };
   }, [item.youtubeId, customEmbedUrl]);
 
+  useEffect(() => {
+    setUseRawDirectStreamFallback(false);
+  }, [directStreamUrl]);
+
+  const playableDirectStreamUrl = useMemo(() => {
+    if (!directStreamUrl) return null;
+    return useRawDirectStreamFallback
+      ? directStreamUrl
+      : getInstrumentRemovalPlayableUrl(directStreamUrl);
+  }, [directStreamUrl, useRawDirectStreamFallback]);
+
+  useEffect(() => {
+    if (!playableDirectStreamUrl || !videoRef.current) return;
+    return attachAutomaticInstrumentRemoval(videoRef.current, {
+      title: item.title,
+      description: item.description,
+      channel: item.channel,
+      categories: item.categories,
+    });
+  }, [playableDirectStreamUrl, item.id, item.title, item.description, item.channel, item.categories]);
+
   // Initialize YouTube API player if no direct video stream
   useEffect(() => {
     if (directStreamUrl || customEmbedUrl) return;
@@ -215,7 +244,7 @@ export default function MiniPlayer({
               iv_load_policy: 3,
               disablekb: 1,
               fs: 0,
-              vq: "highres",
+              vq: detectNetworkSpeed().suggestedQuality,
               hd: 1,
               loop: 1,
               playlist: item.youtubeId,
@@ -233,6 +262,11 @@ export default function MiniPlayer({
                     e.target.seekTo(initialTime, true);
                   }
                   applyAdaptiveConnectionQuality(e.target);
+                  void probeConnectionBandwidth().then(() => {
+                    if (!cancelled && playerRef.current) {
+                      applyAdaptiveConnectionQuality(playerRef.current);
+                    }
+                  });
                   e.target.playVideo();
                 } catch {
                   // ignore
@@ -255,7 +289,7 @@ export default function MiniPlayer({
               onStateChange: (e: any) => {
                 if (cancelled) return;
                 if (e.data === 1) {
-                  // Playing - vérifie et force Full HD minimum 1080p
+                  resetBufferingStepDownIfStable();
                   applyAdaptiveConnectionQuality(e.target);
                   setPlaying(true);
                   setIsBuffering(false);
@@ -263,6 +297,17 @@ export default function MiniPlayer({
                   // Paused
                   setPlaying(false);
                 } else if (e.data === 3) {
+                  // Buffering: if connection struggles, step down gracefully
+                  setTimeout(() => {
+                    try {
+                      if (!cancelled && playerRef.current?.getPlayerState?.() === 3) {
+                        stepDownQualityOnBuffering();
+                        applyAdaptiveConnectionQuality(playerRef.current);
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }, 4000);
                   // Buffering
                   setIsBuffering(true);
                 }
@@ -519,14 +564,20 @@ export default function MiniPlayer({
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
             allowFullScreen
           />
-        ) : directStreamUrl ? (
+        ) : playableDirectStreamUrl ? (
           <video
+            key={`${useRawDirectStreamFallback ? "raw" : "clean"}-${playableDirectStreamUrl}`}
             ref={videoRef}
-            src={directStreamUrl}
+            src={playableDirectStreamUrl}
             autoPlay
             playsInline
             muted={muted}
             className={`w-full h-full object-cover scale-[1.03] ${isAudio ? "opacity-0 pointer-events-none" : ""}`}
+            onError={() => {
+              if (!useRawDirectStreamFallback && directStreamUrl && playableDirectStreamUrl !== directStreamUrl) {
+                setUseRawDirectStreamFallback(true);
+              }
+            }}
             onWaiting={() => setIsBuffering(true)}
             onPlaying={() => {
               setIsBuffering(false);
@@ -547,7 +598,7 @@ export default function MiniPlayer({
           <iframe
             src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&start=${Math.floor(
               initialTime
-            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&vq=highres&hd=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+            )}&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&playsinline=1&vq=${detectNetworkSpeed().suggestedQuality}&hd=1&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
               typeof window !== "undefined" ? window.location.origin : ""
             )}`}
             title={item.title}

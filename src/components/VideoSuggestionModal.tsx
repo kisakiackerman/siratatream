@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   X,
   Sparkles,
@@ -28,6 +28,11 @@ import { categories, Category } from "@/data/catalog";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreatorMessages, MessageCategory } from "@/hooks/useCreatorMessages";
 import { sanitizeHttpUrl, sanitizeEmbedUrl, isValidYouTubeId } from "@/lib/safeUrl";
+import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
+import {
+  attachAutomaticInstrumentRemoval,
+  getInstrumentRemovalPlayableUrl,
+} from "@/lib/vocalIsolationEngine";
 
 interface VideoSuggestionModalProps {
   onClose: () => void;
@@ -50,6 +55,17 @@ export default function VideoSuggestionModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [useRawPreviewFallback, setUseRawPreviewFallback] = useState(false);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    setUseRawPreviewFallback(false);
+  }, [previewVideoUrl]);
+
+  useEffect(() => {
+    if (!previewVideoUrl || !previewVideoRef.current) return;
+    return attachAutomaticInstrumentRemoval(previewVideoRef.current);
+  }, [previewVideoUrl, useRawPreviewFallback]);
 
   // Suggest video form state
   const [url, setUrl] = useState("");
@@ -720,7 +736,24 @@ export default function VideoSuggestionModal({
                 {(() => {
                   const safeDirect = sanitizeHttpUrl(previewVideoUrl, { allowBlob: true });
                   if (safeDirect && (safeDirect.endsWith(".mp4") || safeDirect.endsWith(".webm"))) {
-                    return <video src={safeDirect} controls autoPlay className="w-full h-full object-contain" />;
+                    const playable = useRawPreviewFallback
+                      ? safeDirect
+                      : getInstrumentRemovalPlayableUrl(safeDirect);
+                    return (
+                      <video
+                        key={`${useRawPreviewFallback ? "raw" : "clean"}-${playable}`}
+                        ref={previewVideoRef}
+                        src={playable}
+                        controls
+                        autoPlay
+                        onError={() => {
+                          if (!useRawPreviewFallback && playable !== safeDirect) {
+                            setUseRawPreviewFallback(true);
+                          }
+                        }}
+                        className="w-full h-full object-contain"
+                      />
+                    );
                   }
                   const cleanUrl = sanitizeEmbedUrl(previewVideoUrl);
                   const rawYtId = cleanUrl.includes("watch?v=")
@@ -729,7 +762,7 @@ export default function VideoSuggestionModal({
                     ? cleanUrl.split("youtu.be/")[1]?.split("?")[0]
                     : "";
                   const safeSrc = isValidYouTubeId(rawYtId)
-                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&vq=highres&hd=1&loop=1&playlist=${rawYtId}&origin=${encodeURIComponent(
+                    ? `https://www.youtube-nocookie.com/embed/${rawYtId}?autoplay=1&rel=0&iv_load_policy=3&modestbranding=1&vq=${detectNetworkSpeed().suggestedQuality}&hd=1&loop=1&playlist=${rawYtId}&origin=${encodeURIComponent(
                         typeof window !== "undefined" ? window.location.origin : ""
                       )}`
                     : cleanUrl;

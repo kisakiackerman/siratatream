@@ -13,6 +13,7 @@ import {
   updateProfile,
   fbSignOut,
   onAuthStateChanged,
+  getAdditionalUserInfo,
   db,
   doc,
   setDoc,
@@ -34,19 +35,50 @@ const APPLE_USER_STORAGE_KEY = "nexstream_apple_session";
 const GOOGLE_USER_STORAGE_KEY = "nexstream_google_session";
 const EMAIL_USER_STORAGE_KEY = "nexstream_email_session";
 const INVITATION_SESSION_KEY = "sirat_invitation_uid";
+const PENDING_SIGNUP_PROFILE_PREFIX = "sirat_pending_signup_profile_";
+export const SIGNUP_PROFILE_REQUIRED_EVENT = "sirat-signup-profile-required";
 
-function clearAllProfileSelectionKeys() {
+export function markPendingSignupProfile(userId: string) {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    localStorage.setItem(`${PENDING_SIGNUP_PROFILE_PREFIX}${userId}`, "1");
+    localStorage.removeItem(`nexstream_active_profile_${userId}`);
+    window.dispatchEvent(new CustomEvent(SIGNUP_PROFILE_REQUIRED_EVENT, { detail: { uid: userId } }));
+  } catch {
+    // ignore
+  }
+}
+
+export function hasPendingSignupProfile(userId: string): boolean {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    return localStorage.getItem(`${PENDING_SIGNUP_PROFILE_PREFIX}${userId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function clearPendingSignupProfile(userId: string) {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    localStorage.removeItem(`${PENDING_SIGNUP_PROFILE_PREFIX}${userId}`);
+  } catch {
+    // ignore
+  }
+}
+
+function clearEphemeralProfileSelectionKeys() {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem("nexstream_active_profile");
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
+    const sessionKeysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
       if (k && k.startsWith("nexstream_active_profile_")) {
-        keysToRemove.push(k);
+        sessionKeysToRemove.push(k);
       }
     }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    sessionKeysToRemove.forEach((k) => sessionStorage.removeItem(k));
   } catch {
     // ignore
   }
@@ -396,7 +428,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       getRedirectResult(auth)
         .then(async (result) => {
           if (result?.user) {
-            clearAllProfileSelectionKeys();
+            if (getAdditionalUserInfo(result)?.isNewUser) {
+              markPendingSignupProfile(result.user.uid);
+            }
             localStorage.removeItem(GUEST_STORAGE_KEY);
             localStorage.removeItem(APPLE_USER_STORAGE_KEY);
             localStorage.removeItem(EMAIL_USER_STORAGE_KEY);
@@ -596,9 +630,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setAuthError(null);
       try {
-        clearAllProfileSelectionKeys();
         const res = await signInWithPopup(auth, googleProvider);
         if (res.user) {
+          if (getAdditionalUserInfo(res)?.isNewUser) {
+            markPendingSignupProfile(res.user.uid);
+          }
           const googleUserObj = {
             uid: res.user.uid,
             email: res.user.email,
@@ -656,7 +692,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setAuthError(null);
     try {
-      clearAllProfileSelectionKeys();
       await signInWithRedirect(auth, googleProvider);
     } catch (err: any) {
       console.error("Google redirect sign-in error:", err);
@@ -671,9 +706,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setAuthError(null);
       try {
-        clearAllProfileSelectionKeys();
         const res = await signInWithPopup(auth, appleProvider);
         if (res.user) {
+          if (getAdditionalUserInfo(res)?.isNewUser) {
+            markPendingSignupProfile(res.user.uid);
+          }
           const appleUserObj = {
             uid: res.user.uid,
             email: res.user.email,
@@ -745,11 +782,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (auth.currentUser && (auth.currentUser.email || "").toLowerCase() !== cleanEmail) {
           await fbSignOut(auth);
         }
-        clearAllProfileSelectionKeys();
 
         if (isSignUp) {
           try {
             const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+            markPendingSignupProfile(res.user.uid);
             if (customDisplayName || cleanEmail.split("@")[0]) {
               const name = customDisplayName || cleanEmail.split("@")[0];
               try {
@@ -931,7 +968,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(APPLE_USER_STORAGE_KEY);
     localStorage.removeItem(EMAIL_USER_STORAGE_KEY);
     localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
-    clearAllProfileSelectionKeys();
 
     const invUid = getOrCreateInvitationUid();
     const inviteSpaceKey = `nexstream_invitation_space_${invUid}`;
@@ -986,7 +1022,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(APPLE_USER_STORAGE_KEY);
     localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
     localStorage.removeItem(EMAIL_USER_STORAGE_KEY);
-    clearAllProfileSelectionKeys();
+    clearEphemeralProfileSelectionKeys();
     try {
       sessionStorage.removeItem(INVITATION_SESSION_KEY);
     } catch {
@@ -1014,7 +1050,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(APPLE_USER_STORAGE_KEY);
     localStorage.removeItem(GOOGLE_USER_STORAGE_KEY);
     localStorage.removeItem(EMAIL_USER_STORAGE_KEY);
-    clearAllProfileSelectionKeys();
+    clearEphemeralProfileSelectionKeys();
     try {
       const invUid = sessionStorage.getItem(INVITATION_SESSION_KEY);
       if (invUid) {

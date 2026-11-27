@@ -14,7 +14,11 @@ import { type ContentItem } from "@/data/catalog";
 import { useContentStats } from "@/hooks/useContentStats";
 import { useMyList } from "@/lib/useMyList";
 import { formatYouTubeLikes, getCachedYouTubeMeta, markVideoAsUnplayable } from "@/lib/youtubeApi";
-import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
+import {
+  detectNetworkSpeed,
+  probeConnectionBandwidth,
+  subscribeToNetworkQualityChanges,
+} from "@/lib/adaptiveConnectionQuality";
 import { buildShareUrl } from "@/lib/sharedLink";
 
 type ShortVideoCardProps = {
@@ -114,6 +118,28 @@ export const ShortVideoCard = memo(function ShortVideoCard({
     return () => window.removeEventListener("message", handleMessage);
   }, [shouldRenderIframe, item.youtubeId]);
 
+  const applyShortAdaptiveQuality = useCallback(() => {
+    const q = detectNetworkSpeed().suggestedQuality;
+    const maxBound = q === "hd2160" ? "highres" : q;
+    postCommand("setPlaybackQuality", [q]);
+    postCommand("setPlaybackQualityRange", [q, maxBound]);
+  }, [postCommand]);
+
+  useEffect(() => {
+    if (!shouldRenderIframe) return;
+    let mounted = true;
+    void probeConnectionBandwidth().then(() => {
+      if (mounted && iframeLoaded) applyShortAdaptiveQuality();
+    });
+    const unsubscribe = subscribeToNetworkQualityChanges(() => {
+      if (iframeLoaded) applyShortAdaptiveQuality();
+    });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [shouldRenderIframe, iframeLoaded, applyShortAdaptiveQuality]);
+
   // Handle iframe load: starts playback if active, or primes and pauses if preloading
   const handleIframeLoad = useCallback(() => {
     setIframeLoaded(true);
@@ -125,6 +151,7 @@ export const ShortVideoCard = memo(function ShortVideoCard({
     } catch {
       // ignore
     }
+    applyShortAdaptiveQuality();
     if (isActive) {
       postCommand("playVideo");
       if (isMuted) {
@@ -137,7 +164,7 @@ export const ShortVideoCard = memo(function ShortVideoCard({
       postCommand("pauseVideo");
       postCommand("mute");
     }
-  }, [isActive, isMuted, postCommand]);
+  }, [isActive, isMuted, postCommand, applyShortAdaptiveQuality]);
 
   // When active changes, auto-play or pause
   useEffect(() => {

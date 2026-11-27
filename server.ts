@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import dns from "node:dns/promises";
+import net from "node:net";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -17,6 +19,7 @@ import {
   securityHeadersMiddleware,
   standardApiLimiter,
   aiEndpointLimiter,
+  createRateLimiter,
   inputSanitizerMiddleware,
 } from "./src/middleware/security.ts";
 import { dailyChannelSyncAgent } from "./src/server/dailyChannelSyncAgent.ts";
@@ -191,7 +194,10 @@ app.use("/api", (_req, res, next) => {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   next();
 });
-app.use("/api", standardApiLimiter);
+app.use("/api", (req, res, next) => {
+  if (req.path === "/media/stream-proxy") return next();
+  return standardApiLimiter(req, res, next);
+});
 
 // Stricter rate limit protection on heavy computational AI endpoints
 app.use("/api/ai", aiEndpointLimiter);
@@ -1823,6 +1829,159 @@ app.delete("/api/locations/:id", requireAuth, async (req: AuthRequest, res) => {
   } catch (error: any) {
     console.error("Failed to delete location:", error);
     res.status(500).json({ error: "Failed to delete location from database" });
+  }
+});
+
+// ============================================================
+// CORS-Safe Media Stream Proxy (enables Web Audio instrument removal on direct HTTP streams)
+// ============================================================
+const mediaProxyLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 240,
+});
+
+function isPrivateOrRestrictedIp(ip: string): boolean {
+  const clean = ip.replace(/^\[|\]$/g, "").toLowerCase();
+  if (clean.startsWith("::ffff:")) {
+    return isPrivateOrRestrictedIp(clean.slice(7));
+  }
+  const ipVer = net.isIP(clean);
+  if (ipVer === 4) {
+    const parts = clean.split(".").map((n) => parseInt(n, 10));
+    if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return true;
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+  if (ipVer === 6) {
+    if (clean === "::" || clean === "::1") return true;
+    if (clean.startsWith("fc") || clean.startsWith("fd") || clean.startsWith("fe80") || clean.startsWith("ff")) {
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
+async function validatePublicMediaUrl(rawUrl: string): Promise<URL | null> {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    if (parsed.username || parsed.password) return null;
+    if (parsed.port && parsed.port !== "80" && parsed.port !== "443") return null;
+
+    const host = parsed.hostname.toLowerCase();
+    if (!host || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) {
+      return null;
+    }
+
+    if (net.isIP(host)) {
+      if (isPrivateOrRestrictedIp(host)) return null;
+      return parsed;
+    }
+
+    const records = await dns.lookup(host, { all: true });
+    if (!records || records.length === 0) return null;
+    if (records.some((r) => isPrivateOrRestrictedIp(r.address))) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+app.get("/api/media/stream-proxy", mediaProxyLimiter, async (req, res) => {
+  try {
+    const rawUrl = typeof req.query.url === "string" ? req.query.url.trim() : "";
+    if (!rawUrl || rawUrl.length > 2048) {
+      return res.status(400).json({ error: "Valid media URL is required" });
+    }
+
+    let currentUrl = await validatePublicMediaUrl(rawUrl);
+    if (!currentUrl) {
+      return res.status(403).json({ error: "Media URL is not permitted" });
+    }
+
+    const reqHeaders: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    };
+    if (typeof req.headers.range === "string") {
+      reqHeaders["Range"] = req.headers.range;
+    }
+
+    let upstream: Response | null = null;
+    for (let hop = 0; hop < 4; hop++) {
+      const candidate = await fetch(currentUrl.toString(), {
+        headers: reqHeaders,
+        redirect: "manual",
+        signal: AbortSignal.timeout(25000),
+      });
+
+      if ([301, 302, 303, 307, 308].includes(candidate.status)) {
+        const location = candidate.headers.get("location");
+        if (!location) break;
+        const nextParsed = new URL(location, currentUrl);
+        const validatedNext = await validatePublicMediaUrl(nextParsed.toString());
+        if (!validatedNext) {
+          return res.status(403).json({ error: "Redirect target not permitted" });
+        }
+        currentUrl = validatedNext;
+        continue;
+      }
+
+      upstream = candidate;
+      break;
+    }
+
+    if (!upstream || (!upstream.ok && upstream.status !== 206)) {
+      return res.status(upstream?.status || 502).send("Media stream unavailable");
+    }
+
+    const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
+    const isAllowedMime =
+      contentType.startsWith("video/") ||
+      contentType.startsWith("audio/") ||
+      contentType.startsWith("application/octet-stream") ||
+      contentType.startsWith("binary/octet-stream");
+    if (!isAllowedMime) {
+      return res.status(415).json({ error: "Unsupported media content type" });
+    }
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Accept-Ranges", upstream.headers.get("accept-ranges") || "bytes");
+    res.setHeader("Content-Type", contentType || "video/mp4");
+    if (upstream.headers.get("content-length")) {
+      res.setHeader("Content-Length", upstream.headers.get("content-length")!);
+    }
+    if (upstream.headers.get("content-range")) {
+      res.setHeader("Content-Range", upstream.headers.get("content-range")!);
+    }
+    res.status(upstream.status);
+
+    if (!upstream.body) {
+      return res.end();
+    }
+
+    const reader = upstream.body.getReader();
+    req.on("close", () => {
+      reader.cancel().catch(() => {});
+    });
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+    res.end();
+  } catch (err) {
+    console.debug("Media stream proxy notice:", err);
+    if (!res.headersSent) {
+      res.status(502).json({ error: "Media stream proxy error" });
+    }
   }
 });
 

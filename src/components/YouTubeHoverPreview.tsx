@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { isKnownUnplayableVideo } from "@/lib/youtubeApi";
+import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
 
 type YouTubeHoverPreviewProps = {
   youtubeId: string;
@@ -191,7 +192,7 @@ export default function YouTubeHoverPreview({
             />
           ) : cleanYtId ? (
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${cleanYtId}?autoplay=1&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0&vq=highres&hd=1&loop=1&playlist=${cleanYtId}&start=10&origin=${encodeURIComponent(
+              src={`https://www.youtube-nocookie.com/embed/${cleanYtId}?autoplay=1&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}&hd=1&loop=1&playlist=${cleanYtId}&start=10&origin=${encodeURIComponent(
                 typeof window !== "undefined" ? window.location.origin : ""
               )}`}
               title={`Aperçu ${alt}`}

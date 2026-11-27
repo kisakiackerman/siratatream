@@ -70,10 +70,18 @@ import { getSavedWatchProgress, saveWatchProgress } from "@/lib/watchHistory";
 import { buildShareUrl } from "@/lib/sharedLink";
 import SleepTimerMenu, { SLEEP_TIMER_PRESETS } from "@/components/SleepTimerMenu";
 import {
+  applyAdaptiveConnectionQuality,
   detectNetworkSpeed,
+  probeConnectionBandwidth,
+  resetBufferingStepDownIfStable,
   selectAdaptiveQuality,
+  stepDownQualityOnBuffering,
   subscribeToNetworkQualityChanges,
 } from "@/lib/adaptiveConnectionQuality";
+import {
+  attachAutomaticInstrumentRemoval,
+  getInstrumentRemovalPlayableUrl,
+} from "@/lib/vocalIsolationEngine";
 
 type PlayerModalProps = {
   item: ContentItem;
@@ -187,6 +195,7 @@ export default function PlayerModal({
   const [playbackRate, setPlaybackRate] = useState(() => getStoredPlaybackSpeed());
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [directStreamUrl, setDirectStreamUrl] = useState<string | null>(null);
+  const [useRawDirectStreamFallback, setUseRawDirectStreamFallback] = useState(false);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
   const [isAudioMode, setIsAudioMode] = useState(Boolean(initialAudioMode));
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
@@ -812,6 +821,37 @@ export default function PlayerModal({
     };
   }, [item.id, item.youtubeId, item.videoUrl, item.videoSourceType]);
 
+  useEffect(() => {
+    setUseRawDirectStreamFallback(false);
+  }, [directStreamUrl]);
+
+  const playableDirectStreamUrl = useMemo(() => {
+    if (!directStreamUrl) return null;
+    return useRawDirectStreamFallback
+      ? directStreamUrl
+      : getInstrumentRemovalPlayableUrl(directStreamUrl);
+  }, [directStreamUrl, useRawDirectStreamFallback]);
+
+  useEffect(() => {
+    if (!playableDirectStreamUrl || !videoRef.current) return;
+    return attachAutomaticInstrumentRemoval(videoRef.current, {
+      title: item.title,
+      description: item.description,
+      channel: item.channel,
+      categories: item.categories,
+    });
+  }, [playableDirectStreamUrl, item.id, item.title, item.description, item.channel, item.categories]);
+
+  useEffect(() => {
+    if (!dubAudioRef.current) return;
+    return attachAutomaticInstrumentRemoval(dubAudioRef.current, {
+      title: item.title,
+      description: item.description,
+      channel: item.channel,
+      categories: item.categories,
+    });
+  }, [item.id, item.title, item.description, item.channel, item.categories]);
+
   // ─────────────────────────────────────────────────────────────
   // Doublage audio : bascule entre la piste originale (celle intégrée
   // à la vidéo) et une piste de doublage externe synchronisée.
@@ -866,57 +906,49 @@ export default function PlayerModal({
     [availableAudioTracks, muted, volume, playing]
   );
 
-  // Forçage automatique de la résolution maximale disponible (8K 4320p / highres / 4K 2160p / 2K / 1080p)
-  const applyForcedHDQuality = useCallback((player: any) => {
+  // Ajustement silencieux et automatique de la qualité vidéo YouTube selon la connexion (240p -> 4K)
+  const bufferingTimestampsRef = useRef<number[]>([]);
+  const bufferingStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasStartedPlaybackRef = useRef(false);
+
+  const applyAdaptiveQualityToPlayer = useCallback((player: any) => {
     if (!player) return;
-    try {
-      const levels: string[] = player.getAvailableQualityLevels?.() || [];
-      let chosen = "highres";
-      if (levels.length > 0) {
-        if (levels.includes("hd4320")) {
-          chosen = "hd4320";
-        } else if (levels.includes("highres")) {
-          chosen = "highres";
-        } else if (levels.includes("hd2160")) {
-          chosen = "hd2160";
-        } else if (levels.includes("hd1440")) {
-          chosen = "hd1440";
-        } else if (levels.includes("hd1080")) {
-          chosen = "hd1080";
-        } else {
-          chosen = levels[0];
-        }
-      }
-
-      player.setPlaybackQuality?.(chosen);
-      player.setSuggestedQuality?.(chosen);
-      player.setPlaybackQualityRange?.(chosen, "highres");
-
-      const iframe = player.getIframe?.() || containerRef.current?.querySelector("iframe");
-      if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(
-          JSON.stringify({ event: "command", func: "setPlaybackQuality", args: [chosen] }),
-          "*"
-        );
-        iframe.contentWindow.postMessage(
-          JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: [chosen, "highres"] }),
-          "*"
-        );
-      }
-    } catch (err) {
-      console.warn("Quality forcing error:", err);
-    }
+    applyAdaptiveConnectionQuality(player);
   }, []);
 
-  // Surveillance en temps réel pour maintenir systématiquement le Full HD sans interruption
+  // Mesure silencieuse du débit réel + écoute des changements réseau (Wi-Fi <-> 4G/5G)
   useEffect(() => {
-    const unsubscribe = subscribeToNetworkQualityChanges(() => {
-      if (playerRef.current) {
-        applyForcedHDQuality(playerRef.current);
+    let mounted = true;
+    void probeConnectionBandwidth().then(() => {
+      if (mounted && playerRef.current) {
+        applyAdaptiveQualityToPlayer(playerRef.current);
       }
     });
-    return unsubscribe;
-  }, [applyForcedHDQuality]);
+    const unsubscribe = subscribeToNetworkQualityChanges(() => {
+      if (playerRef.current) {
+        applyAdaptiveQualityToPlayer(playerRef.current);
+      } else if (iframeRef.current?.contentWindow) {
+        const q = detectNetworkSpeed().suggestedQuality;
+        const maxBound = q === "hd2160" ? "highres" : q;
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "setPlaybackQuality", args: [q] }),
+          "*"
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: [q, maxBound] }),
+          "*"
+        );
+      }
+    });
+    return () => {
+      mounted = false;
+      unsubscribe();
+      if (bufferingStallTimerRef.current) {
+        clearTimeout(bufferingStallTimerRef.current);
+        bufferingStallTimerRef.current = null;
+      }
+    };
+  }, [applyAdaptiveQualityToPlayer]);
 
   // Applique l'état des sous-titres (activé/désactivé + taille) sur la
   // cible de lecture active (vidéo directe HTML5, lecteur YouTube API,
@@ -1216,7 +1248,7 @@ export default function PlayerModal({
             fs: 0,
             cc_load_policy: captionsOnRef.current ? 1 : 0,
             cc_lang_pref: "fr",
-            vq: "highres",
+            vq: detectNetworkSpeed().suggestedQuality,
             hd: 1,
             loop: 1,
             playlist: item.youtubeId,
@@ -1241,8 +1273,10 @@ export default function PlayerModal({
                   if (resumeTime > 0) {
                     e.target.seekTo(resumeTime, true);
                   }
-                  // Force Full HD 1080p+ immédiatement
-                  applyForcedHDQuality(e.target);
+                  // Applique automatiquement la qualité adaptée à la connexion (240p -> 4K)
+                  hasStartedPlaybackRef.current = false;
+                  bufferingTimestampsRef.current = [];
+                  applyAdaptiveQualityToPlayer(e.target);
                   // Vitesse de lecture par défaut (réglage utilisateur)
                   e.target.setPlaybackRate?.(playbackRateRef.current);
                   // Synchronise l'état des sous-titres (activés à l'ouverture jusqu'à désactivation manuelle)
@@ -1285,9 +1319,40 @@ export default function PlayerModal({
                 setBuffering(state === "buffering");
                 setPlaying(state === "playing");
 
-                // Lock Full HD 1080p+ on play / buffer
-                if (state === "playing" || state === "buffering") {
-                  applyForcedHDQuality(playerRef.current || e.target);
+                if (state === "playing") {
+                  hasStartedPlaybackRef.current = true;
+                  if (bufferingStallTimerRef.current) {
+                    clearTimeout(bufferingStallTimerRef.current);
+                    bufferingStallTimerRef.current = null;
+                  }
+                  resetBufferingStepDownIfStable();
+                  applyAdaptiveQualityToPlayer(playerRef.current || e.target);
+                } else if (state === "buffering") {
+                  const targetPlayer = playerRef.current || e.target;
+                  if (hasStartedPlaybackRef.current) {
+                    const now = Date.now();
+                    bufferingTimestampsRef.current = bufferingTimestampsRef.current.filter(
+                      (ts) => now - ts < 25_000
+                    );
+                    bufferingTimestampsRef.current.push(now);
+                    if (bufferingTimestampsRef.current.length >= 2) {
+                      bufferingTimestampsRef.current = [];
+                      stepDownQualityOnBuffering();
+                      applyAdaptiveQualityToPlayer(targetPlayer);
+                    }
+                  }
+                  if (bufferingStallTimerRef.current) {
+                    clearTimeout(bufferingStallTimerRef.current);
+                  }
+                  bufferingStallTimerRef.current = setTimeout(() => {
+                    if (!cancelled) {
+                      stepDownQualityOnBuffering();
+                      applyAdaptiveQualityToPlayer(playerRef.current || e.target);
+                    }
+                  }, 4500);
+                } else if (bufferingStallTimerRef.current) {
+                  clearTimeout(bufferingStallTimerRef.current);
+                  bufferingStallTimerRef.current = null;
                 }
 
                 if (state === "paused") {
@@ -1303,12 +1368,9 @@ export default function PlayerModal({
                 if (cancelled) return;
                 try {
                   const target = playerRef.current || e.target;
-                  const levels: string[] = target?.getAvailableQualityLevels?.() || [];
-                  const topTier =
-                    levels.find((l) => ["hd4320", "highres", "hd2160", "hd1440", "hd1080"].includes(l)) ||
-                    levels[0];
-                  if (topTier && e?.data && e.data !== topTier) {
-                    applyForcedHDQuality(target);
+                  const desired = selectAdaptiveQuality(target);
+                  if (desired && e?.data && e.data !== desired) {
+                    applyAdaptiveQualityToPlayer(target);
                   }
                 } catch {
                   // ignore
@@ -1997,7 +2059,7 @@ export default function PlayerModal({
         }
         if (playerRef.current) {
           setTimeout(() => {
-            applyForcedHDQuality(playerRef.current);
+            applyAdaptiveQualityToPlayer(playerRef.current);
           }, 350);
         }
       } catch {
@@ -2190,10 +2252,11 @@ export default function PlayerModal({
                   allowFullScreen
                 />
               </div>
-            ) : directStreamUrl ? (
+            ) : playableDirectStreamUrl ? (
               <video
+                key={`${useRawDirectStreamFallback ? "raw" : "clean"}-${playableDirectStreamUrl}`}
                 ref={videoRef}
-                src={directStreamUrl}
+                src={playableDirectStreamUrl}
                 autoPlay
                 playsInline
                 className={`w-full h-full ${
@@ -2208,6 +2271,11 @@ export default function PlayerModal({
                     videoRef.current.playbackRate = playbackRateRef.current;
                   }
                   applyCaptionsToTarget(captionsOnRef.current);
+                }}
+                onError={() => {
+                  if (!useRawDirectStreamFallback && directStreamUrl && playableDirectStreamUrl !== directStreamUrl) {
+                    setUseRawDirectStreamFallback(true);
+                  }
                 }}
                 onWaiting={() => setBuffering(true)}
                 onPlaying={() => {
@@ -2230,7 +2298,7 @@ export default function PlayerModal({
                 <iframe
                   ref={iframeRef}
                   key={item.youtubeId}
-                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&vq=highres&hd=1&cc_load_policy=${captionsOn ? 1 : 0}&cc_lang_pref=fr&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
+                  src={`https://www.youtube-nocookie.com/embed/${item.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&iv_load_policy=3&modestbranding=1&controls=0&disablekb=1&fs=0&vq=${detectNetworkSpeed().suggestedQuality}&hd=1&cc_load_policy=${captionsOn ? 1 : 0}&cc_lang_pref=fr&loop=1&playlist=${item.youtubeId}&origin=${encodeURIComponent(
                     typeof window !== "undefined" ? window.location.origin : ""
                   )}${resumeTime > 0 ? `&start=${Math.floor(resumeTime)}` : ""}`}
                   title={item.title}
@@ -2240,16 +2308,18 @@ export default function PlayerModal({
                   allowFullScreen
                   onLoad={() => {
                     try {
+                      const q = detectNetworkSpeed().suggestedQuality;
+                      const maxBound = q === "hd2160" ? "highres" : q;
                       iframeRef.current?.contentWindow?.postMessage(
                         JSON.stringify({ event: "listening" }),
                         "*"
                       );
                       iframeRef.current?.contentWindow?.postMessage(
-                        JSON.stringify({ event: "command", func: "setPlaybackQuality", args: ["highres"] }),
+                        JSON.stringify({ event: "command", func: "setPlaybackQuality", args: [q] }),
                         "*"
                       );
                       iframeRef.current?.contentWindow?.postMessage(
-                        JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: ["hd2160", "highres"] }),
+                        JSON.stringify({ event: "command", func: "setPlaybackQualityRange", args: [q, maxBound] }),
                         "*"
                       );
                     } catch {

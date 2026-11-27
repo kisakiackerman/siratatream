@@ -13,6 +13,7 @@ import {
   updateProfile,
   signOut as fbSignOut,
   onAuthStateChanged,
+  getAdditionalUserInfo,
   type User,
 } from "firebase/auth";
 import {
@@ -138,6 +139,7 @@ export {
   updateProfile,
   fbSignOut,
   onAuthStateChanged,
+  getAdditionalUserInfo,
   doc,
   setDoc,
   getDoc,

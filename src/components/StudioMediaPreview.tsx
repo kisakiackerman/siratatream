@@ -1,8 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Play, ExternalLink, RotateCcw, MonitorPlay } from "lucide-react";
 import type { ContentItem } from "@/data/catalog";
 import { getThematicFallbackBanner } from "@/lib/heroBanners";
 import { sanitizeEmbedUrl, sanitizeHttpUrl, isValidYouTubeId } from "@/lib/safeUrl";
+import { detectNetworkSpeed } from "@/lib/adaptiveConnectionQuality";
+import {
+  attachAutomaticInstrumentRemoval,
+  getInstrumentRemovalPlayableUrl,
+} from "@/lib/vocalIsolationEngine";
 
 interface StudioMediaPreviewProps {
   item: Partial<ContentItem>;
@@ -28,8 +33,15 @@ export default function StudioMediaPreview({
   const [activated, setActivated] = useState(autoPlay);
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [mediaError, setMediaError] = useState(false);
+  const [useRawDirectFallback, setUseRawDirectFallback] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const cleanUrl = extractEmbedSrc(item.videoUrl);
+  const playableDirectUrl = cleanUrl
+    ? useRawDirectFallback
+      ? cleanUrl
+      : getInstrumentRemovalPlayableUrl(cleanUrl)
+    : "";
   const safeHttpsEmbed = sanitizeEmbedUrl(cleanUrl);
   const rawYtId = item.youtubeId || "";
   const validYtId =
@@ -50,6 +62,7 @@ export default function StudioMediaPreview({
     setActivated(autoPlay);
     setFrameLoaded(false);
     setMediaError(false);
+    setUseRawDirectFallback(false);
     setPosterSrc(
       item.heroImage ||
         item.thumbnail ||
@@ -57,6 +70,16 @@ export default function StudioMediaPreview({
         (validYtId ? `https://i.ytimg.com/vi/${validYtId}/maxresdefault.jpg` : fallbackBanner)
     );
   }, [item.id, item.youtubeId, item.videoUrl, item.heroImage, item.thumbnail, item.image, autoPlay, validYtId, fallbackBanner]);
+
+  useEffect(() => {
+    if (!activated || !playableDirectUrl || !videoRef.current) return;
+    return attachAutomaticInstrumentRemoval(videoRef.current, {
+      title: item.title,
+      description: item.description,
+      channel: item.channel,
+      categories: item.categories,
+    });
+  }, [activated, playableDirectUrl, item.title, item.description, item.channel, item.categories]);
 
   const sourceType = item.videoSourceType || (cleanUrl ? "direct" : "youtube");
 
@@ -211,15 +234,23 @@ export default function StudioMediaPreview({
             frameLoaded ? "opacity-100" : "opacity-0"
           }`}
         >
-          {isDirectVideo && cleanUrl ? (
+          {isDirectVideo && playableDirectUrl ? (
             <video
-              src={cleanUrl}
+              key={`${useRawDirectFallback ? "raw" : "clean"}-${playableDirectUrl}`}
+              ref={videoRef}
+              src={playableDirectUrl}
               controls
               autoPlay
               playsInline
               poster={posterSrc}
               onLoadedData={() => setFrameLoaded(true)}
-              onError={() => setMediaError(true)}
+              onError={() => {
+                if (!useRawDirectFallback && cleanUrl && playableDirectUrl !== cleanUrl) {
+                  setUseRawDirectFallback(true);
+                } else {
+                  setMediaError(true);
+                }
+              }}
               className="w-full h-full object-contain"
             />
           ) : isCustomEmbed && safeHttpsEmbed ? (
@@ -254,7 +285,7 @@ export default function StudioMediaPreview({
             />
           ) : validYtId ? (
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${validYtId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&vq=highres&hd=1&origin=${encodeURIComponent(
+              src={`https://www.youtube-nocookie.com/embed/${validYtId}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&vq=${detectNetworkSpeed().suggestedQuality}&hd=1&origin=${encodeURIComponent(
                 typeof window !== "undefined" ? window.location.origin : ""
               )}`}
               title={item.title || "Aperçu YouTube"}
